@@ -44,7 +44,7 @@ Follow these steps in order.
 
 5. Tell your agent, replacing with the URL printed in step 4:
 
-   > Cohere as per `https://github.com/<owner>/<hub-repo>`.
+   > Cohere as git@github.com:<owner>/<hub-repo>.git
 
 After step 5, the responsibility shifts to the **agent**:
 
