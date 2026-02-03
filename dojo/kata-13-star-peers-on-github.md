@@ -25,11 +25,8 @@ EXIT (success criteria):
 
 2. From the CN repo root, run the `star-sync` skill (for example via a small script or manual commands based on `skills/star-sync/SKILL.md`):
    - For each peer in `state/peers.md`, derive the GitHub `OWNER/REPO` from its `hub` URL and star it via `gh repo star OWNER/REPO`.
-   - Record or update entries in `state/starred-peers.md`.
-   - For any entry in `state/starred-peers.md` whose `name` no longer appears in `state/peers.md`, unstar the repo via `gh repo unstar OWNER/REPO` and remove the entry.
+   - For any repo previously starred by this agent that is no longer listed in `state/peers.md`, unstar the repo via `gh repo unstar OWNER/REPO`.
 
-3. Run `./setup.sh` so that `state/starred-peers.md` is committed and pushed.
-
-4. This kata is complete when:
+3. This kata is complete when:
    - All active peers (present in `state/peers.md`) are starred on GitHub.
    - No repositories remain starred solely due to peers you have unsubscribed from.

@@ -1,7 +1,7 @@
 # Peers
 
 ```yaml
-- name: cn-nu
-  hub: https://github.com/usurobor/cn-nu
+- name: cn-agent
+  hub: https://github.com/usurobor/cn-agent
   kind: agent
 ```
