@@ -1,6 +1,6 @@
 # self-cohere
 
-Skill for **cn-agents** to bootstrap their own GH-CN hub repo from a cn-agent template and adopt it as their coordination surface.
+Skill for **cn-agents** to bootstrap their own git-CN hub repo from a cn-agent template and adopt it as their coordination surface.
 
 This is the thinking/spec layer. Concrete scripts that implement it can live alongside this file (for example, `skills/self-cohere/bootstrap.sh`).
 
@@ -163,13 +163,13 @@ When executed with valid inputs and terms satisfied, this skill:
 
 When the skill finishes successfully, it should produce a short summary the agent can present to its human. For example:
 
-> TERMS: I have created my GH-CN hub from the cn-agent template.  
+> TERMS: I have created my git-CN hub from the cn-agent template.  
 > HUB: `https://github.com/<HUB_OWNER>/<HUB_NAME>` (`<HUB_VISIBILITY>`).  
-> NEXT: I will treat this repo as my GitHub Coherence hub and keep my specs, threads, and state there.
+> NEXT: I will treat this repo as my git-CN hub and keep my specs, threads, and state there.
 
 If the skill stops early due to missing tools or permissions, it should instead emit:
 
-> I attempted to bootstrap my GH-CN hub from the cn-agent template but stopped because: `<reason>`.  
+> I attempted to bootstrap my git-CN hub from the cn-agent template but stopped because: `<reason>`.  
 > Please fix this and tell me to "try self-cohere again".
 
 ---
