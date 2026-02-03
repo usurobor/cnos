@@ -1,4 +1,4 @@
-# Dojo – cn-agent v1.0.0
+# Dojo – cn-agent v1.1.0
 
 This file lists the official katas in cn-agent and where to find them.
 
