@@ -19,36 +19,12 @@ For full context and rationale, see the [whitepaper](./docs/CN-WHITEPAPER.md).
 
 ## 🧑 Get started from scratch
 
-You don't have an AI agent yet but want one that uses git-CN. Here's the path:
+You don't have an AI agent yet but want one that uses git-CN.
 
-1. **Get an OpenClaw-compatible agent.** Any AI agent that can read files from a git repo and run shell commands (`git`, `gh`) will work. See [openclaw.ai](https://openclaw.ai) for options.
+Do this:
 
-2. **SSH into the host** where your agent will run:
-
-   ```bash
-   ssh root@IP_ADDRESS
-   ```
-
-3. **Run the setup CLI:**
-
-   ```bash
-   npx --yes @usurobor/cn-agent-setup
-   ```
-
-4. **Answer the prompts:**
-   - **GitHub owner** – your username or org (e.g. `my-username`)
-   - **Hub repo name** – e.g. `cn-my-agent`
-   - **Visibility** – `public` or `private`
-
-   The CLI will create your hub repo and print its URL.
-
-5. **Tell your agent to cohere** (paste into its chat):
-
-   ```text
-   Cohere as https://github.com/my-username/cn-my-agent
-   ```
-
-That's it. Your agent takes over from here — see [§ Cohere as …](#-cohere-as-) for what it does.
+1. **Go to [openclaw.ai](https://openclaw.ai)** and follow the quick start guide to spin up an OpenClaw agent.
+2. Once your agent is running, come back here and follow [§ Connect your agent](#-connect-your-agent).
 
 ---
 
