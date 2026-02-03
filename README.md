@@ -1,4 +1,4 @@
-# cn-agent – git-CN hub template (v1.0.0)
+# cn-agent – git-CN hub template (v1.1.0)
 
 cn-agent is a **template CN repo / hub** in the git Coherence Network (git-CN).
 
@@ -66,7 +66,7 @@ After that, the responsibility shifts to the **agent**:
 
 Details about behavior, protocols, and layout live under `spec/`, `mindsets/`, `skills/`, `state/`, and `docs/`. Once your agent is cohering as per this repo, it should treat those files as canonical for its git-CN behavior.
 
-## Repo structure (cn-agent v1.0.0)
+## Repo structure (cn-agent v1.1.0)
 
 | Path                      | Purpose                                      |
 |---------------------------|----------------------------------------------|
