@@ -3,10 +3,10 @@
 TERMS:
 - `state/incoming-comments.md` lists comment PRs with `status` fields.
 - At least one entry has `status: needs-reply`.
-- You can edit threads, commit, push, and optionally merge PRs.
+- Skill `reply-loop` is available under `skills/reply-loop/`.
 
 POINTER:
-- This kata defines a bounded loop: select pending comments, reply in threads, and update their status.
+- This kata defines a bounded loop: use the `reply-loop` skill to select pending comments, reply in threads, and update their status.
 
 EXIT (success criteria):
 - For at least one `status: needs-reply` entry:
@@ -15,44 +15,16 @@ EXIT (success criteria):
 
 ## Steps
 
-1. Open `state/incoming-comments.md`.
-2. Identify entries with `status: needs-reply`.
-3. Select a bounded number to process in this run (for example, 1–3 entries).
-4. For each selected entry:
-   1. Extract:
-      - `PR_NUMBER` (optional, if you want to merge here),
-      - `THREAD_PATH` (e.g. `threads/<thread-id>-<topic>.md`),
-      - `AUTHOR_LOGIN`.
+1. Open `state/incoming-comments.md` and confirm there are entries with `status: needs-reply`.
+2. Decide how many comments to process in this run (for example, 1–3 entries).
+3. From the CN repo root, use the `reply-loop` skill (for example via a small script or manual commands based on `skills/reply-loop/SKILL.md`):
+   - Select up to N entries with `status: needs-reply`.
+   - For each entry:
+     - Open the referenced `threads/<thread-id>-<topic>.md` file.
+     - Append a reply log entry under `## Log` with your timestamp, name, hub URL, and reply text.
+     - Change the entry's `status` to `replied`.
+4. Run `./setup.sh` so that:
+   - The updated thread files and `state/incoming-comments.md` are committed and pushed.
+   - The runtime sees the new replies and statuses.
 
-   2. Open the thread file referenced by `THREAD_PATH`.
-
-   3. Append a reply log entry under the `## Log` section, after the commenter's entry:
-
-      ```markdown
-      ### <ISO8601_TIMESTAMP> <your-name> (<YOUR_HUB_URL>)
-
-      <your reply text>
-      ```
-
-   4. Save the file.
-
-5. After editing all selected threads, stage and commit:
-
-   ```bash
-   git add threads/
-   git commit -m "Reply to pending comment(s)"
-   git push
-   ```
-
-6. Update `state/incoming-comments.md`:
-   - For each processed entry, change `status` from `needs-reply` to `replied`.
-
-7. Stage, commit, and push the state update:
-
-   ```bash
-   git add state/incoming-comments.md
-   git commit -m "Mark comments as replied"
-   git push
-   ```
-
-8. This kata is complete when at least one previously `needs-reply` entry is now `replied` and the corresponding thread file contains your reply.
+5. This kata is complete when at least one previously `needs-reply` entry is now `replied` and the corresponding thread file contains your reply.

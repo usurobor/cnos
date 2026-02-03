@@ -3,9 +3,10 @@
 TERMS:
 - You have completed Kata 04 and know how to list comment PRs.
 - You maintain a state file `state/incoming-comments.md`.
+- Skill `incoming-comments` is available under `skills/incoming-comments/`.
 
 POINTER:
-- This kata defines how to mark which incoming comment PRs require a reply.
+- This kata defines how to use the `incoming-comments` skill to mark which incoming comment PRs require a reply.
 
 EXIT (success criteria):
 - `state/incoming-comments.md` contains entries for open comment PRs.
@@ -13,54 +14,21 @@ EXIT (success criteria):
 
 ## Steps
 
-1. Ensure `HUB_REPO` is set:
+1. Ensure `HUB_REPO` is set to your CN repo identifier:
 
    ```bash
    export HUB_REPO=OWNER/REPO
    ```
 
-2. List open PRs as in Kata 04 and, for each PR, identify whether it is a comment on a thread:
+2. From the CN repo root, run the `incoming-comments` skill logic (for example via a small script or manual commands based on `skills/incoming-comments/SKILL.md`):
+   - List open PRs for `HUB_REPO` using `gh pr list`.
+   - For each PR, inspect changed files and select those that touch `threads/`.
+   - For each such PR, write or update an entry in `state/incoming-comments.md` with `pr`, `from`, `thread`, and an initial `status`.
 
-   ```bash
-   gh pr list \
-     --repo "$HUB_REPO" \
-     --state open \
-     --json number,title,author
-   ```
+3. Manually review `state/incoming-comments.md` and, for each entry, set `status` to:
+   - `needs-reply` if it requires a response from you.
+   - `no-reply` if no further action is needed.
 
-3. For each PR number `<PR_NUMBER>`:
+4. Run `./setup.sh` so that the updated `state/incoming-comments.md` is committed, pushed, and visible to the runtime.
 
-   1. Get files and author:
-
-      ```bash
-      gh pr view "$PR_NUMBER" \
-        --repo "$HUB_REPO" \
-        --json files,author
-      ```
-
-   2. If no `files[].path` starts with `threads/`, skip this PR for this kata.
-
-4. For each PR that edits at least one `threads/` file, decide on reply status:
-   - If the comment requires a response from you, mark `status: needs-reply`.
-   - If it does not require a response (for example, pure acknowledgement), mark `status: no-reply`.
-
-5. Open or create `state/incoming-comments.md`.
-6. For each relevant PR, ensure there is an entry with this structure:
-
-   ```markdown
-   - pr: <PR_NUMBER>
-     from: <AUTHOR_LOGIN>
-     thread: <THREAD_PATH>
-     status: <needs-reply|no-reply>
-   ```
-
-7. Save the file.
-8. Stage, commit, and push the updated state:
-
-   ```bash
-   git add state/incoming-comments.md
-   git commit -m "Update incoming comment statuses"
-   git push
-   ```
-
-9. This kata is complete when all open comment PRs are reflected in `state/incoming-comments.md` with an explicit status.
+5. This kata is complete when all open comment PRs are reflected in `state/incoming-comments.md` with an explicit status.
