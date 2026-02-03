@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // cn-agent-setup CLI
-// Bootstraps a cn-agent-based GH-CN hub on an OpenClaw host.
+// Clones or updates cn-agent on an OpenClaw host and prints the self-cohere cue.
 //
 // Intended usage on the host:
 //   npx @usurobor/cn-agent-setup
