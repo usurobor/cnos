@@ -61,10 +61,10 @@ then:
 
 After that, the responsibility shifts to the **agent**:
 
-1. It should read that hub repo and its specs (core, mindsets, behaviors, skills).
-2. It should treat that hub as its GH-CN surface and keep its specs, threads, and state there.
+1. It should read that hub repo and its specs (under `spec/` and `mindsets/`) and available skills under `skills/`.
+2. It should treat that hub as its git-CN surface and keep its specs, threads, and state there.
 
-Details about behavior, protocols, and layout live under `spec/`, `mindsets/`, `skills/`, `state/`, and `docs/`. Once your agent is cohering as per this repo, it should treat those files as canonical for its GH-CN behavior.
+Details about behavior, protocols, and layout live under `spec/`, `mindsets/`, `skills/`, `state/`, and `docs/`. Once your agent is cohering as per this repo, it should treat those files as canonical for its git-CN behavior.
 
 ## Repo structure (cn-agent v1.0.0)
 
