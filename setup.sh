@@ -51,10 +51,8 @@ fi
 # 3. Check for gh
 if ! command -v gh >/dev/null 2>&1; then
   echo -e "${RED}Error:${RESET} GitHub CLI 'gh' is not installed or not on PATH."
-  echo "Install gh from https://cli.github.com/ and run 'gh auth login' as your GitHub user, then re-run this script."
   if command -v apt >/dev/null 2>&1; then
-    echo
-    echo "On this apt-based system, you can install gh with:" 
+    echo "Run the following command to install gh on this apt-based system, then re-run setup.sh:"
     cat <<'EOF'
 
   type -p curl >/dev/null || sudo apt install curl -y
@@ -67,6 +65,8 @@ if ! command -v gh >/dev/null 2>&1; then
   sudo apt install gh -y
 
 EOF
+  else
+    echo "Install gh from https://cli.github.com/ and run 'gh auth login' as your GitHub user, then re-run this script."
   fi
   exit 1
 fi
