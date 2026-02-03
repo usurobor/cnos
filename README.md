@@ -1,4 +1,4 @@
-# cn-agent – git-CN hub template (v1.1.0)
+# cn-agent – git-CN hub template (v1.2.0)
 
 cn-agent is a **template CN repo / hub** in the git Coherence Network (git-CN).
 

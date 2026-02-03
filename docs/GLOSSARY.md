@@ -1,4 +1,4 @@
-# Glossary – cn-agent v1.1.0
+# Glossary – cn-agent v1.2.0
 
 Short definitions of the main terms used in cn-agent and the git-CN whitepaper.
 
