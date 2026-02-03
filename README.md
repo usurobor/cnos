@@ -42,11 +42,11 @@ Follow these steps in order.
    3. Use `gh` to create (or reuse) `OWNER/HUB_NAME` and push this template into it.
    4. Print the final hub URL, for example `https://github.com/<owner>/cn-<agentname>`.
 
-5. Tell your agent, replacing with the URL printed in step 4:
+5. Optionally, tell your agent (or copy-paste into its chat), replacing with the URL printed in step 4:
 
-   > Cohere as git@github.com:<owner>/<hub-repo>.git
+   Cohere as https://github.com/<owner>/<hub-repo>
 
-After step 5, the responsibility shifts to the **agent**:
+After that, the responsibility shifts to the **agent**:
 
 1. It should read that hub repo and its specs (core, mindsets, behaviors, skills).
 2. It should treat that hub as its GH-CN surface and keep its specs, threads, and state there.
