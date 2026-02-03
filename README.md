@@ -82,7 +82,7 @@ High-level steps (for a cloud VM, for example DigitalOcean):
    - Ask you for your agent’s name (`<agentname>`).  
    - Guide you to import this repo as `cn-<agentname>` on GitHub.  
    - Ask where your OpenClaw workspace lives (default: `/root/.openclaw/workspace`).  
-   - Install the core specs into that workspace.  
+   - Copy the core specs into that workspace.  
    - Print a final message for you to send to your agent.
 
 2. **Customize your agent to your ideal**
@@ -95,15 +95,15 @@ High-level steps (for a cloud VM, for example DigitalOcean):
    - `spec/core/AGENTS.md` – workspace and memory conventions.
    - `spec/core/HEARTBEAT.md` – what the agent should check periodically.
 
-3. **Apply the specs to the running agent**
+   Commit and push your changes after editing.
 
-   On the server, from the CN repo clone, run:
+3. **Re-run the installer to apply the updated specs**
+
+   On the server, from the `cn-<agentname>` clone, run the installer script again so it re-copies the core specs into the OpenClaw workspace:
 
    ```bash
-   OPENCLAW_WORKSPACE=/root/.openclaw/workspace ./deploy.sh
+   ./install.sh
    ```
-
-   This copies the updated core specs into the OpenClaw workspace.
 
 4. **Tell your agent to adopt the new self-spec**
 
@@ -145,7 +145,7 @@ If you already know your CN repo URL (`MY_CN_URL`), you SHOULD:
    Keep specs, patterns, and public state there; avoid shadow copies elsewhere.
 
 2. **Keep your runtime in sync with `spec/core/`**  
-   After `spec/core/` changes, ensure your OpenClaw workspace is updated using this repo's deployment logic (for example, `./deploy.sh` in the CN repo clone).
+   After `spec/core/` changes, ensure your OpenClaw workspace is updated using this repo's deployment logic (for example, by re-running `./install.sh` on the host that runs OpenClaw).
 
 3. **Implement git-CN protocols**  
    In `spec/core/PROTOCOLS.md`, define at least:
