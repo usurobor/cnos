@@ -1,372 +1,591 @@
-# Project Audit – cn-agent v1.3.4
+# Project Audit – cn-agent v1.3.5
 
 **Date:** 2026-02-04
-**Branch:** `claude/project-audit-review-kdE3K`
-**Scope:** Full audit of design, code, documentation, and cross-file coherence.
-**Prior audits:** v1.0.0, v1.2.1, v1.3.2, v1.3.3 (same file, now replaced).
+**Branch:** `claude/repo-quality-audit-7Nwae`
+**Auditor:** Independent automated audit (Claude Opus 4.5)
+**Scope:** Full repo quality — code, documentation, architecture, security, testing, configuration, git practices, cross-file coherence.
+**Prior audits:** v1.0.0, v1.2.1, v1.3.2, v1.3.3, v1.3.4 (same file, now replaced).
 
 ---
 
 ## 1. Executive Summary
 
-cn-agent is a **template repository** for bootstrapping AI agent hubs on the git Coherence Network (git-CN). Since the v1.0.0 audit, the project has undergone significant structural improvements:
+cn-agent is a template repository for bootstrapping AI agent hubs on the git Coherence Network (git-CN). It contains a CLI tool (`cli/index.js`, 305 lines), six skills, six mindsets, a whitepaper (v2.0.3), and supporting documentation. The project is primarily Markdown (31 of 38 files) with a single JavaScript file and zero runtime dependencies.
 
-- **Two-repo model** adopted: CLI creates a personal hub (`cn-<agentname>/`); template (`cn-agent/`) stays generic and shared.
-- **COHERENCE.md** added as the foundational mindset, grounding all agent behavior in TSC and tsc-practice.
-- **CLI rewritten** from a simple template cloner to a full hub creator (prompts, scaffolding, `gh repo create`, push).
-- **self-cohere rewritten** from a repo-creator to a hub-receiver (agent-side onboarding for a hub the CLI already made).
-- **README rewritten** with 4-path audience dispatch.
-- **Template vs instance ambiguity resolved**: spec files now use placeholder markers; instance-specific content removed.
-- **Whitepaper grounded in TSC**: git-CN explicitly defined as a network of coherent agents.
+**Key strengths:** Well-structured directory layout, clean hub/template separation, thorough whitepaper (v2.0.3), internally consistent TSC framework, strong git governance ("never self-merge"), zero dependencies in the CLI, no secrets in the repo, honest implementation-vs-spec tracking.
 
-**Overall assessment:** The project has evolved significantly since v1.2.1. Three releases (v1.3.0–v1.3.2) landed while the whitepaper was being iterated to v2.0.3. The reflect skill is the most architecturally significant addition — it operationalizes TSC from a measurement framework into a daily practice. The glossary has expanded substantially (6 new entries). ENGINEERING.md gained two important governance principles. The whitepaper (on its own branch) has converged to v2.0.3 with all previously-flagged contradictions resolved.
+**Key weaknesses:** Zero tests, zero CI/CD, no linting, CLI has input validation gaps (agent name not sanitized), `package.json` incomplete, `.gitignore` fragile, two skills lack katas, the `experiments/` directory is orphaned, and the protocol spec is significantly ahead of the implementation (9 features specified but not built).
 
-Since v1.3.2, five significant merges landed on master: reflect/daily-routine ownership (sigma/reflect-ownership), glossary alignment (sigma/truthify-docs), whitepaper v2.0.3, version header alignment, and memory/state/practice scope clarification. All three HIGH findings and two of the top MEDIUM findings are now resolved. The remaining open items are all LOW or cosmetic: package.json gaps, --ff-only fallback, cron runtime assumption, missing katas for self-cohere/configure-agent, experiments/ context, and the DOJO kata 03→13 numbering gap.
+**Overall grade: B+** — strong documentation-driven project with engineering infrastructure gaps in testing, automation, and input validation.
 
 ---
 
-## 2. Prior Audit Resolution
+## 2. Repository Overview
 
-### 2.1 v1.0.0 Findings
-
-Tracking what was fixed from the original audit:
-
-| # | v1.0.0 Finding | Status | Notes |
-|---|---------------|--------|-------|
-| 1 | spec/code mismatches (spec/core/, env vars) | **Fixed** | Whitepaper layout matches reality; env vars removed from self-cohere |
-| 2 | git pull --ff-only no fallback | **Open** | CLI line 96 still has bare `--ff-only` |
-| 3 | CHANGELOG metrics undefined | **Fixed** | Header now defines TSC axes and C_Sigma formula |
-| 4 | --help / --version | **Fixed** | CLI now handles both flags |
-| 5 | No tests | **Open** | Still zero tests |
-| 6 | HEARTBEAT.md under-developed | **Fixed** | Cleaned to placeholder format; Moltbook references removed |
-| 7 | Template vs instance ambiguity | **Fixed** | Spec files use `*(your human's name)*` etc.; IDENTITY.md renamed to PERSONALITY.md |
-| 8 | package.json gaps | **Partially fixed** | description field exists; still missing repository, keywords, bugs, homepage |
-| 9 | Missing katas for self-cohere, configure-agent | **Open** | Still no katas for these skills |
-| 10 | experiments/ uncontextualized | **Open** | Still no cross-reference or README |
-
-### 2.2 v1.2.1 Findings
-
-| # | v1.2.1 Finding | Status | Notes |
-|---|---------------|--------|-------|
-| 4.1 | Whitepaper two-repo contradictions | **Fixed** | Whitepaper v2.0.3 resolves all 4 items (§9 fork→CLI, §6 PRs→transport convenience, §10 PRs→push branch, §5.1 version→protocol minimum) |
-| 4.1 | Glossary stale (IDENTITY, dojo/) | **Fixed** | sigma/truthify-docs: IDENTITY→PERSONALITY fixed, Kata says `skills/<name>/kata.md`, COHERENCE in Mindset, cn-agent uses two-repo model, Thread says `threads/` |
-| 4.2 | BOOTSTRAP.md vs symlinks | **Superseded** | Master has moved past this; symlinks approach adopted |
-| 4.3 | package.json stale | **Open** | Still stale description; still missing repository, keywords, bugs, homepage |
-| 4.4 | skills/README.md version | **Fixed** | Now v1.2.0 (doc-local version, tracks content changes) |
-| 4.5 | state/ files in template | **Open** | |
-| 4.6 | git pull --ff-only | **Open** | |
-| 4.7 | WRITING.md sag reference | **Open** | |
-| 4.8 | experiments/ uncontextualized | **Open** | |
-| 4.9 | No tests | **Open** | |
-| 4.10 | Missing katas | **Partially fixed** | reflect kata added (kata 02); self-cohere/configure-agent still missing |
+| Metric | Value |
+|--------|-------|
+| Total tracked files | 38 |
+| Markdown files | 31 |
+| JavaScript files | 1 (`cli/index.js`, 305 lines) |
+| PDF files | 1 (`docs/CN-WHITEPAPER-v2.0.3.pdf`, 435 KB) |
+| JSON files | 1 (`package.json`) |
+| Runtime dependencies | 0 |
+| Test files | 0 |
+| CI/CD workflows | 0 |
+| Linting config | None |
+| License | Apache 2.0 |
 
 ---
 
-## 3. What's Done Well
+## 3. Documentation Quality
 
-### 3.0 Whitepaper v2.0.3 (on `claude/whitepaper-v2-kdE3K`)
+### 3.1 README.md — Grade: A-
 
-The whitepaper has been iterated through a Bohm dialog process from v2.0.0 to v2.0.3. Key improvements:
+**Strengths:**
+- Four-path audience dispatch table (human without agent, human with agent, agent told to cohere, agent exploring) is an effective navigation pattern.
+- Step-by-step setup instructions with concrete commands.
+- Clean repo structure table.
+- Git-native coordination philosophy section is crisp.
 
-- **"At a glance" section** (§0.0): First-contact reader gets what/get/implement in 60 seconds.
-- **Projection-robust placeholders**: `{thread_id}` / `{entry_id}` throughout (survives HTML-stripping renderers).
-- **A.4 anchor-line hardening**: Split into A.4.1–A.4.3 with escaped representation (`&lt;a id="..."&gt;`) for renderers that strip HTML tags — the document is self-aware of its own most likely projection failure mode.
-- **Revision note removed**: History belongs in Git, not the document's front door.
-- **All v1.2.1 audit contradictions resolved**: §9 uses CLI, §6/§7 frame PRs as transport convenience, §10 non-normative and time-bound, conclusion explicitly maps four guarantees.
-- **Substrate/projection principle applied to itself**: cross-references as plain §N text (no anchor links), `text` language tags on code fences, `Git` as proper noun, `git-CN` as protocol name.
+**Weaknesses:**
+- Version in heading (`v1.2.0`) is stale relative to `package.json` (`v1.3.2`). This is the first thing a visitor sees.
+- The "Connect your agent" section (line 80) references `BOOTSTRAP.md` — the CLI no longer creates this file.
+- The "Cohere as" section (lines 105–114) also references `BOOTSTRAP.md` and `Delete BOOTSTRAP.md when done`.
+- Setup guide assumes Ubuntu/root; no mention of other OS or non-root setups.
+- Missing: badges (build status, version, license), contributing guidelines, link to CHANGELOG.
 
-### 3.1 reflect skill (NEW — `skills/reflect/`)
+### 3.2 Whitepaper (docs/CN-WHITEPAPER.md) — Grade: A
 
-The most architecturally significant addition since v1.2.1. Turns TSC from a measurement framework into an operational practice.
+**Strengths:**
+- Well-structured with clear abstract, motivation (§1), problem statement (§2), and solution (§3–9).
+- Honest implementation status section (§10) — rare and valuable.
+- Proper RFC 2119 keywords in normative appendix.
+- Substrate/projection distinction is cleanly articulated.
+- Self-referential: the document applies its own projection-robustness principles (plain §N cross-references, `text` language tags on code fences).
 
-Strengths:
-- Proper TERMS/INPUTS/EFFECTS structure
-- A-F scoring with honest framing ("the score is for tracking, not performance review")
-- Six cadences (daily → yearly) with templates that scale appropriately
-- Coherence Walk concept well-articulated (score → reflect → invest in weaker axis)
-- Mindset Migration section with clear promotion criteria (repeated 3+, confirmed, stable, transferable)
-- References to TSC Core v3.1.0 and CLP v1.1.2
+**Weaknesses:**
+- PDF version duplicates the Markdown as a binary file (435 KB). PDFs don't diff in git and bloat history on updates.
+- Reference [3] Reddit URL contains a slug that may not resolve correctly.
 
-### 3.2 daily-routine skill (NEW — `skills/daily-routine/`)
+### 3.3 GLOSSARY.md — Grade: A-
 
-Fills a real gap: state management across days. Clean SKILL.md with directory structure, commit conventions, and EOD cron setup.
+**Strengths:**
+- 17 entries covering all key terms.
+- Doc-local versioning note explaining the versioning scheme.
+- Cross-references to whitepaper sections and external specs.
+- Clear ownership annotations (e.g., "Owner: daily-routine skill" for `memory/`).
 
-### 3.3 GLOSSARY.md expansion
+**Weaknesses:**
+- Emoji in α/β/γ entry (🧩🤝🚪) is decorative and inconsistent with the whitepaper's projection-robustness principle.
+- The `state/reflections/` structure diagram duplicates what's in `skills/reflect/SKILL.md`.
 
-Six new entries: CLP, Coherent Agent (CA), TSC, α/β/γ, Coherent Reflection, Coherence Walk. The CLP entry captures the 5-step loop cleanly. The TSC entry references the formal spec. The α/β/γ entry explains algebraic independence.
+### 3.4 CHANGELOG.md — Grade: B
 
-### 3.4 ENGINEERING.md governance additions
+**Strengths:**
+- TSC coherence grading per release is a novel and useful practice.
+- Header explains the grading formula and axes.
+- Disclaimer about intuition-level vs formal scores.
 
-Two new principles:
-- **"Assume good intent"**: Treat mismatches as snapshot/coordination issues first. Good hygiene for a multi-agent repo.
-- **"Never self-merge"**: Author of a change should not merge their own work. Clear, enforceable, applies to agents and humans.
+**Weaknesses:**
+- Only 8 versions listed; no detailed change notes per version — only one-line coherence summaries.
+- A reader cannot reconstruct what actually changed in any release from the changelog alone.
+- No link to tagged releases or diff URLs.
 
-### 3.5 configure-agent timezone requirement
+### 3.5 Skill Documentation — Grade: B+
 
-Timezone changed from optional hint to required field. Makes sense — daily-routine needs it for cron. Correctly motivated by a concrete downstream dependency.
+**Strengths:**
+- Consistent TERMS / INPUTS / EFFECTS structure across all six skills.
+- Ownership & Schema sections in reflect and daily-routine are clear.
+- configure-agent has excellent UX principles ("one question at a time", "invisible plumbing").
+- CHANGELOGs in self-cohere and configure-agent track skill-level evolution.
 
-(Items 3.6–3.11 below are carried from v1.2.1 — COHERENCE.md, two-repo model, CLI rewrite, README dispatch, whitepaper grounding, spec cleanup — all still hold.)
+**Weaknesses:**
+- reflect SKILL.md is 370 lines — the longest skill by 3x. Six cadence templates are structurally repetitive.
+- self-cohere and configure-agent have no kata files. DOJO.md lists only 4 katas (01, 02, 03, 13).
+- hello-world thread filename format `yyyyddmmhhmmss` puts day before month — non-standard and inconsistent with ISO 8601 and the `YYYY-MM-DD` format used everywhere else in the project.
 
-### 3.6 COHERENCE.md (mindsets/COHERENCE.md)
+### 3.6 Mindsets — Grade: A-
 
-The strongest new addition to the project. Key qualities:
+**Strengths:**
+- COHERENCE.md is philosophically precise and practically actionable (Quick Self-Check section).
+- ENGINEERING.md has clear, opinionated principles (KISS, YAGNI, "never self-merge").
+- OPERATIONS.md covers memory management, heartbeats, and group chat behavior.
+- MEMES.md enforces "share only what you live."
 
-- **Correct definition of coherence**: "Wholeness that can be *articulated* as parts, among other articulations. The whole comes first." This is the TSC-grounded definition, not the common "parts fitting together" misreading.
-- **Correct stance**: "Articulate coherence, resolve incoherence" — not "increase coherence." Coherence isn't a quantity to maximize; it's a wholeness to discover and clarify.
-- **Self-referential measurement**: "TSC measures itself. If the framework is incoherent, the scores say so."
-- **Practical quick self-check**: PATTERN / RELATION / EXIT as a pre-output checklist.
-- **Links to source**: TSC and tsc-practice repos referenced directly.
+**Weaknesses:**
+- PERSONALITY.md is all placeholders.
+- WRITING.md is 25 lines with an instance-specific `sag` (ElevenLabs TTS) reference in a template repo.
+- ENGINEERING.md has a dash/em-dash inconsistency (line 10 uses `-`, other lines use `—`).
 
-### 3.7 Two-Repo Model
+### 3.7 Spec Files — Grade: A
 
-The hub/template separation is well-defined and consistently described across CLI, self-cohere, README, and AGENTS.md:
+**Strengths:**
+- SOUL.md is concise and sets real behavioral constraints.
+- USER.md has proper placeholder markers and a structured working contract.
+- AGENTS.md covers startup checklist, memory management, safety, external vs internal actions, and git-native coordination.
+- TOOLS.md explains the separation of tools from skills.
 
+**Weaknesses:**
+- HEARTBEAT.md is minimal (two example bullet points). Intentional for a template, but thin relative to other specs.
+
+---
+
+## 4. Code Quality — CLI (`cli/index.js`)
+
+### 4.1 Overview
+
+305 lines of Node.js using only built-in modules (`child_process`, `path`, `fs`, `readline`). Zero external dependencies. This is a significant positive — the CLI ships exactly what it needs with no supply chain risk.
+
+### 4.2 Strengths
+
+- **No shell injection:** Uses `spawn()` with array args throughout (line 55), never `exec()` with string concatenation.
+- **Pre-flight checks:** Validates git identity (lines 90–103), GitHub CLI presence and auth (lines 112–124), and workspace existence (lines 83–87).
+- **Fallback handling:** If `gh repo create` fails, falls back to manual remote add (lines 247–252).
+- **Clean separation:** Utility functions (`run`, `runCapture`, `ask`) are small and focused.
+- **Version from package.json:** `const VERSION = require('../package.json').version` (line 22) — single source of truth.
+
+### 4.3 Issues
+
+| # | Severity | Issue | Location |
+|---|----------|-------|----------|
+| C1 | **HIGH** | Agent name not sanitized — special characters flow into paths, git messages, GitHub repo names | `cli/index.js:142-147` |
+| C2 | **MEDIUM** | `git pull --ff-only` with no fallback — crashes unhelpfully if template diverged | `cli/index.js:133` |
+| C3 | **MEDIUM** | Hardcoded workspace path `/root/.openclaw/workspace` — no env var override | `cli/index.js:49` |
+| C4 | **MEDIUM** | Duplicate `gh api user` call — same API call on lines 119 and 150 | `cli/index.js:119,150` |
+| C5 | **LOW** | `readline` interface not closed on error paths (lines 84, 101, 117, 123) | `cli/index.js` |
+| C6 | **LOW** | `fs.rmSync` with `force: true` on user-confirmed delete | `cli/index.js:189` |
+| C7 | **LOW** | No timeout on git/gh spawn calls | `cli/index.js` |
+| C8 | **LOW** | ANSI colors unconditional — no `NO_COLOR` env var support | `cli/index.js:25-27` |
+| C9 | **LOW** | "New name" fallback (line 192–199) skips re-deriving hubRepo, hubUrl — these still reference the old name for confirmation/GitHub steps | `cli/index.js:192-199` |
+
+**C1 Detail (HIGH):** The agent name input (line 142) is transformed by `.toLowerCase().replace(/\s+/g, '-')` (line 147). This only strips whitespace. A name like `../../etc` would produce `cn-../../etc`, and `path.join(WORKSPACE_ROOT, hubName)` would resolve to a directory outside the workspace. Characters like `"`, `'`, `` ` ``, `$`, `/`, `\`, or `..` could cause unexpected behavior in directory creation (`fs.mkdirSync`), git commits, or GitHub repo names. The fix is to reject or strip non-alphanumeric/non-hyphen characters.
+
+**C9 Detail (LOW):** When the user chooses "New name" at the collision prompt (line 191–199), `hubDir` is updated but `hubRepo` and `hubUrl` (derived on lines 166–167) are not recalculated. The git push and `gh repo create` on lines 245–246 would use the old name.
+
+### 4.4 Code Style
+
+- No linter configuration (eslint, prettier, etc.).
+- Consistent 2-space indentation.
+- Good use of inline comments explaining each step.
+- `async` IIFE pattern at top level is idiomatic.
+- ANSI helpers are simple and appropriate (no dependency for terminal colors).
+
+---
+
+## 5. Architecture & Design
+
+### 5.1 Two-Repo Model — Grade: A
+
+The hub/template separation is well-conceived and consistently described across CLI, self-cohere, AGENTS.md, README, and the whitepaper:
 - **Hub** (`cn-<agentname>/`): personal identity, specs, state, threads
 - **Template** (`cn-agent/`): shared skills, mindsets, docs
 
-The CLI creates the hub. Self-cohere wires the agent to it. The template updates via `git pull`. Personal files can't be clobbered by template updates.
+The symlink strategy (CLI creates workspace-root symlinks pointing into hub and template) is pragmatic for the OpenClaw runtime. The model is clearly documented in self-cohere SKILL.md with a visual directory tree.
 
-### 3.8 CLI Rewrite (cli/index.js)
+### 5.2 Skill Framework — Grade: B+
 
-The CLI is now a proper interactive tool:
+TERMS/INPUTS/EFFECTS is a clean contract format. All six skills follow it. The ownership model (reflect owns `state/reflections/`, daily-routine orchestrates) resolves a real design tension.
 
-- Prompts for agent name, GitHub owner (inferred via `gh api user`), visibility
-- Scaffolds hub directory with spec files, state dirs, BOOTSTRAP.md, README.md
-- Creates GitHub repo via `gh repo create` with fallback to manual remote
-- Prints the "Cohere as <hub-url>" cue
-- Zero runtime dependencies; `spawn()` with array args (no shell injection)
-- `--help` and `--version` flags
+Gaps:
+- No skill discovery mechanism — an agent must know which skills exist by reading `skills/README.md`.
+- No skill versioning convention — some skills have versions in their title, others don't.
+- No skill dependency declaration — daily-routine depends on reflect, but this is stated in prose, not machine-readable format.
 
-### 3.9 README 4-Path Dispatch
+### 5.3 Protocol vs Implementation Gap — Grade: B-
 
-The README correctly identifies four audiences and routes each:
+The whitepaper specifies a full protocol (cn.json, .gitattributes, cn.thread.v1, signature verification) that is largely unimplemented. §10.2 lists nine features that are specified but not built:
 
-- Human without agent: full setup guide (DigitalOcean + OpenClaw)
-- Human with agent: CLI instructions + cue
-- Agent told to cohere: step-by-step hub wiring
-- Agent exploring: template orientation
+| Protocol Feature | Implementation Status |
+|-----------------|----------------------|
+| `cn.json` manifest | Not implemented |
+| `.gitattributes` with `merge=union` | Not implemented |
+| `cn.thread.v1` schema | Not implemented (threads use pre-v1 format) |
+| `state/peers.json` (JSON) | Not implemented (uses `peers.md` Markdown) |
+| `threads/` at repo root | Not implemented (uses `state/threads/`) |
+| Commit signing | Not implemented |
+| Signature verification | Not implemented |
+| Multiple `repo_urls` | Not implemented |
+| Operational metrics (A.9) | Not implemented |
 
-The navigation table at top is clean and uses emoji sparingly for visual scanning.
+The honest acknowledgment in §10.3 is valuable, but the gap is significant. Another implementation reading this repo would find a template that doesn't conform to its own spec.
 
-### 3.10 Whitepaper TSC Grounding
+### 5.4 Experiments Directory — Grade: D
 
-The whitepaper now explicitly defines git-CN as a network of **coherent agents** following TSC. Key additions:
+`experiments/external-surface-replies.md` is a 212-line design document describing a reply loop for external surfaces (Moltbook, Twitter, etc.) with SQL schemas, cron patterns, and Bohmian dialogue guidance. It has:
+- No README or index file
+- No cross-reference from any other document in the repo
+- No status indicator (active? archived? superseded?)
+- References to "Moltbook" — which the whitepaper explicitly frames as a failed platform
+- Instance-specific content (`author: 'usurobor'`) in a template repo
 
-- §0 defines coherence as "wholeness articulated across three axes"
-- §5 establishes agents that "articulate coherence and resolve incoherence"
-- §5.1 lists COHERENCE.md in the mindsets interpretation
-- §8.3 grounds reputation metrics in TSC axes (pattern, relation, process)
-
-### 3.11 Spec File Cleanup
-
-All spec files now use placeholder markers suitable for a template:
-
-- SOUL.md: generic behavioral contract, no instance names
-- USER.md: `*(your human's name)*`, `*(their timezone)*`, etc.
-- PERSONALITY.md: `*(your agent's name)*`, `*(what kind of entity...)*`
-- HEARTBEAT.md: example-format comments, no Moltbook references
-- TOOLS.md: examples in code blocks, actual fields empty
+This directory is an orphan. It should be documented, archived, or removed.
 
 ---
 
-## 4. Issues Found
+## 6. Testing & CI/CD — Grade: F
 
-### 4.1 ~~HIGH~~ → RESOLVED: Specification Drift — New Concepts Without Spec Coverage
+| Category | Status |
+|----------|--------|
+| Unit tests | None |
+| Integration tests | None |
+| End-to-end tests | None |
+| CI/CD pipeline | None (`.github/workflows/` does not exist) |
+| Linting (eslint/prettier) | None |
+| Type checking | None (no TypeScript, no JSDoc) |
+| Pre-commit hooks | None |
+| Code coverage | None |
+| Markdown validation | None (no broken-link checker, no schema validation) |
 
-**Fixed** across three merges:
-- **Ownership**: sigma/reflect-ownership — reflect owns `state/reflections/` schema, daily-routine orchestrates. Both SKILL.md files have "Ownership & Schema" sections.
-- **Glossary**: sigma/reflect-ownership — `memory/`, `state/reflections/`, `state/practice/` all have glossary entries with whitepaper references.
-- **Scope**: Whitepaper §4.1 and A.1 now have informative notes clarifying these as cn-agent template conventions (not protocol requirements). daily-routine SKILL.md has a "Scope (Protocol vs Template)" section.
+**Impact:** The CLI is the only code file and has zero tests. It interacts with `git`, `gh`, the filesystem, and user input — all testable. Minimum viable test coverage:
 
-### 4.2 ~~HIGH~~ → RESOLVED: reflect Kata Does Not Exercise the Framework
+1. `--help` outputs help text and exits 0
+2. `--version` outputs version matching `package.json` and exits 0
+3. `run()` rejects on non-zero exit code
+4. `runCapture()` returns trimmed stdout
+5. Hub name derivation: `"My Agent"` → `"cn-my-agent"`
+6. Agent name validation rejects `../`, special characters
+7. Directory creation produces expected structure
 
-**Fixed** by sigma/reflect-ownership. The reflect kata (kata 02) now uses the canonical α/β/γ framework: PATTERN/RELATION/EXIT scores, Σ summary, → Next. EXIT criteria require the real template structure. The simplified "What I did / What I noticed / Raw takeaway" warmup was removed.
+Node's built-in `node:test` module (available since Node 18, the minimum engine version) would require zero dependencies.
 
-### 4.3 ~~HIGH~~ → RESOLVED: Glossary Stale Entries (Carried Over)
+---
 
-**Fixed** by sigma/truthify-docs. All four stale entries addressed:
+## 7. Configuration & Dependencies
 
-- **Mindset**: Now lists COHERENCE.md and ENGINEERING.md (not IDENTITY).
-- **Kata**: Now says `skills/<skill-name>/kata.md` (not `dojo/`).
-- **cn-agent**: Now describes two-repo model (not "fork or import").
-- **Thread**: Now says `threads/` with legacy note about `state/threads/`.
+### 7.1 package.json — Grade: C+
 
-### 4.4 MEDIUM: reflect SKILL.md Length and Template Duplication
-
-352 lines for a single SKILL.md. The six cadence templates (daily/weekly/monthly/quarterly/half/yearly) follow the same α/β/γ → Σ → Next pattern with minor scope changes. Each template is 15–25 lines of near-identical structure. Consider:
-- Extracting templates to a separate `skills/reflect/templates/` directory
-- Or defining a single parameterized template in the SKILL.md and noting what changes per cadence
-
-This is the longest skill by far. The TERMS/INPUTS/EFFECTS section (the actual specification) is clean; the templates are operational guidance that could live elsewhere.
-
-### 4.5 MEDIUM: Emoji in reflect Framework Table
-
-The reflect SKILL.md framework table uses 🧩 🤝 🚪 emojis for PATTERN/RELATION/EXIT. The cadence templates repeat these (e.g., `## α — PATTERN 🧩: [A-F]`). The glossary entries for α/β/γ also use them.
-
-This is inconsistent with the whitepaper's projection-robustness principle. The α/β/γ labels are sufficient. Some renderers, terminals, and parsers handle emoji inconsistently (width, encoding, display). The emojis are decorative, not functional — they don't carry information that the text labels don't already carry.
-
-### 4.6 ~~MEDIUM~~ → RESOLVED: Version Numbers Still Inconsistent
-
-**Fixed** by version header alignment commit (`5eec365`). Doc-local versioning adopted:
-
-| File | Was | Now |
-|------|-----|-----|
-| `skills/README.md` | v1.1.0 | v1.2.0 |
-| `docs/DOJO.md` | v1.2.0 | v1.2.1 |
-| `docs/GLOSSARY.md` | v1.2.0 | v1.3.0 |
-| `configure-agent/SKILL.md` | v1.1.0 | v1.2.0 |
-
-GLOSSARY now has a versioning note explaining doc-local versions vs template semver.
-
-### 4.7 MEDIUM: DOJO.md Kata Gap (03 → 13)
-
-DOJO.md now lists katas 01, 02, 03, and 13 (kata 03 added for daily-routine). The gap from 03 to 13 is still unexplained. Either:
-- There are planned katas 04–12 not yet written (state this)
-- The numbering is intentional (explain the scheme — e.g., 01–09 = white belt, 10–19 = orange belt)
-- It's arbitrary (renumber)
-
-A first-contact reader will wonder what happened to katas 04–12.
-
-### 4.8 ~~MEDIUM~~ → RESOLVED: configure-agent SKILL.md Version Mismatch
-
-**Fixed** by version header alignment (`5eec365`). Header now says v1.2.0, matching its CHANGELOG.
-
-### 4.9 MEDIUM: daily-routine Cron Assumes Specific Runtime
-
-The daily-routine SKILL.md and kata.md use a JavaScript object syntax for cron setup:
-```javascript
-{ name: "daily-routine-eod", schedule: { kind: "cron", expr: "30 23 * * *", tz: "..." }, ... }
+```json
+{
+  "name": "@usurobor/cn-agent-setup",
+  "version": "1.3.2",
+  "description": "CLI to clone/update cn-agent on an OpenClaw host and show the self-cohere cue",
+  "bin": { "cn-agent-setup": "cli/index.js" },
+  "files": [ "cli/index.js" ],
+  "scripts": { "start": "node cli/index.js" },
+  "author": "usurobor",
+  "license": "Apache-2.0",
+  "engines": { "node": ">=18" }
+}
 ```
 
-This assumes a specific runtime (likely Claude Code's cron tool). The SKILL.md doesn't state this assumption. An agent on a different runtime (standard crontab, systemd timer, etc.) would need to translate. Either:
-- Add a TERMS entry: "Agent has access to a cron tool that accepts this JSON format"
-- Or provide the crontab equivalent alongside
+**Issues:**
+- `description` is stale — doesn't mention hub creation, GitHub repo creation, or symlinks.
+- Missing `repository` field — npm page shows "No repository."
+- Missing `keywords` — reduces discoverability.
+- Missing `bugs` and `homepage` fields.
+- No `test` script — `npm test` does nothing.
+- `files` array only includes `cli/index.js` — correct for npm, but anyone installing the package expecting the full template gets only the CLI.
 
-### 4.10 MEDIUM: "Coherence Walk" Metaphor Duplication
+### 7.2 .gitignore — Grade: C+
 
-The "left, right, left, right — like walking, you shift weight to stay upright" metaphor appears verbatim in three places:
-1. `skills/reflect/SKILL.md` — Coherence Walk section
-2. `docs/GLOSSARY.md` — Coherence Walk entry
-3. Implied in reflect cadence templates (every `→ Next` section)
+Current contents:
+```
+memory/
+media/
+*.db
+*.log
+.DS_Store
+```
 
-Duplication is not the issue — the issue is that it reads as a meme/slogan rather than a specification. The actual logic ("if α < β, invest in PATTERN; if β < α, invest in RELATION") is precise and useful. The walking metaphor wrapping it is decorative.
+**Missing entries:**
+- `node_modules/` — one accidental `npm install` of any dependency pollutes the repo.
+- `.env` / `.env.*` — prevents accidental secrets commits.
+- `*.swp`, `*.swo`, `*~` — editor temp files.
+- `.vscode/`, `.idea/` — IDE configurations.
+- `coverage/` — if tests are ever added.
 
-### 4.11 LOW: package.json Stale and Incomplete (Carried Over)
-
-- **description**: "CLI to clone/update cn-agent on an OpenClaw host and show the self-cohere cue" — stale.
-- **Missing fields**: `repository`, `keywords`, `bugs`, `homepage`.
-Flagged in v1.0.0 audit, still open.
-
-### 4.12 LOW: state/ Files in Template (Carried Over)
-
-Template contains `state/peers.md`, `state/remote-threads.md`, `state/threads/yyyyddmmhhmmss-hello-world.md`. In the two-repo model, state lives in the hub. The CLI copies `peers.md` to the hub but not the others.
-
-### 4.13 LOW: git pull --ff-only No Fallback (Carried Over)
-
-CLI still has bare `--ff-only` with no fallback. Flagged in v1.0.0.
-
-### 4.14 LOW: WRITING.md Instance-Specific Reference (Carried Over)
-
-WRITING.md: "If you have `sag` (ElevenLabs TTS)" — instance-specific in a template file.
-
-### 4.15 LOW: experiments/ Still Uncontextualized (Carried Over)
-
-No cross-reference, no README. Legacy design thinking without context.
-
-### 4.16 LOW: No Tests (Carried Over)
-
-Zero tests, zero CI. Now more surface area with two new skills.
-
-### 4.17 LOW: Missing Katas (Partially Resolved)
-
-reflect kata added (kata 02). self-cohere and configure-agent still lack katas.
-
-### 4.18 LOW: ENGINEERING.md Em-Dash Inconsistency
-
-One line changed from em-dash (`—`) to hyphen (`-`). Other lines still use em-dashes. Minor formatting inconsistency.
+The current `.gitignore` works for the project's current state but is fragile against future changes.
 
 ---
 
-## 5. Coherence Assessment (TSC Axes)
+## 8. Security
 
-### 5.1 PATTERN (α) — Structural Consistency
+### 8.1 CLI Security — Grade: B
 
-**Grade: A** (up from A- in v1.3.3)
+**Positive:**
+- `spawn()` with array args — no shell injection vector.
+- No `eval()`, `Function()`, or dynamic `require()`.
+- No external HTTP requests (uses `git` and `gh` as subprocesses).
+- No secrets stored or transmitted in code.
+
+**Concerns:**
+- **Agent name input not sanitized** (C1). Characters like `/`, `..`, `"`, `'`, `` ` ``, `$`, or Unicode flow into `path.join()`, `fs.mkdirSync()`, git commit messages, and `gh repo create`. While `path.join` handles some traversal, names containing `/` or `..` can still create directories outside the workspace.
+- **`fs.rmSync` with `recursive: true, force: true`** (line 189) — called after user confirmation with abort as default (safe default).
+- **`git push -u origin HEAD:main`** in fallback path (line 251) — could push to an existing `main` on a repo the user doesn't control if the name collides.
+
+### 8.2 Spec Security Model — Grade: A-
+
+- SOUL.md enforces "Private things stay private."
+- AGENTS.md separates external vs internal actions with clear boundaries.
+- OPERATIONS.md warns against loading MEMORY.md in shared contexts.
+- USER.md working contract defines a correction protocol (TERMS/POINTER/EXIT).
+
+### 8.3 Sensitive Files — Grade: A
+
+No secrets, credentials, API keys, or `.env` files in the tracked tree. The `.gitignore` excludes `memory/` (runtime state).
+
+---
+
+## 9. Git Practices & Repo Hygiene
+
+### 9.1 Branch Strategy — Grade: A-
+
+Clean topic-branch workflow with `claude/` and `sigma/` prefixes. Branches are merged into `master` with descriptive merge commits. No stale branches accumulating.
+
+### 9.2 Commit Messages — Grade: B+
+
+- Scoped prefixes (`glossary:`, `CLI:`, `reflect:`, `docs:`) used consistently.
+- Merge commits have custom, human-readable subjects.
+- Some subjects exceed 72 characters (soft violation).
+- No conventional commits standard (`feat:`, `fix:`) — uses project-specific scoping.
+
+### 9.3 Contributor Identity — Grade: B+
+
+Two name variants for the same human: `usurobor` and `Usurobor`. This is a `git config user.name` casing inconsistency. `Claude` and `Sigma` are intentional AI agent identities.
+
+### 9.4 Large Files — Grade: B
+
+One 435 KB PDF tracked directly. Binary files don't diff and bloat history on updates. Consider Git LFS or CI-generated PDFs.
+
+---
+
+## 10. Cross-File Coherence
+
+### 10.1 Terminology Consistency — Grade: A-
+
+Terms are used consistently:
+- "hub" vs "template" — consistent everywhere after v1.3.x cleanup.
+- "TSC", "α/β/γ", "CLP" — defined in GLOSSARY.md and used consistently.
+- "TERMS/INPUTS/EFFECTS" — consistent across all skill files.
+
+Minor inconsistencies:
+- `peers.md` (implementation) vs `peers.json` (whitepaper spec).
+- `state/threads/` (implementation) vs `threads/` (whitepaper spec).
+- Thread file naming `yyyyddmmhhmmss` puts day before month; the rest of the project uses `YYYY-MM-DD`.
+
+### 10.2 Version Coherence — Grade: B
+
+| File | Version | Status |
+|------|---------|--------|
+| `package.json` | v1.3.2 | Current template semver |
+| `README.md` | v1.2.0 | **Stale** — most visible version |
+| `CHANGELOG.md` | v1.3.2 | Current |
+| `GLOSSARY.md` | v1.3.0 | Doc-local |
+| `DOJO.md` | v1.2.1 | Doc-local |
+| `skills/README.md` | v1.2.0 | Doc-local |
+| Whitepaper | v2.0.3 | Protocol version |
+
+### 10.3 Structural Coherence — Grade: A-
+
+The directory structure follows a clear pattern:
+- `spec/` — identity and behavioral contracts
+- `mindsets/` — thinking patterns
+- `skills/<name>/` — operational capabilities
+- `state/` — runtime state
+- `docs/` — reference documentation
+
+Every directory has a clear purpose. The only orphan is `experiments/`.
+
+### 10.4 README–Reality Alignment — Grade: B
+
+The README references `BOOTSTRAP.md` in two places (lines 80 and 105–114). The CLI no longer creates a `BOOTSTRAP.md` file — the self-cohere skill's v2.1.0 removed this dependency. A visitor following the README's "Cohere as" instructions would look for a file that doesn't exist.
+
+---
+
+## 11. Issues Found (Prioritized)
+
+### HIGH
+
+| # | Issue | Impact | Location |
+|---|-------|--------|----------|
+| H1 | **Zero tests, zero CI/CD** | No safety net for changes; CLI could break silently. With six skills and a CLI, there is meaningful surface area to test. | Entire project |
+| H2 | **Agent name input not sanitized** | Directory traversal, unexpected repo names, or git errors from special characters. `/`, `..`, and shell metacharacters all pass through. | `cli/index.js:142-147` |
+| H3 | **Protocol vs implementation gap** | 9 protocol features specified in whitepaper but not implemented. The template doesn't conform to its own spec. Acknowledged honestly in §10, but the gap is widening. | Whitepaper §10.2 vs repo |
+| H4 | **README references nonexistent `BOOTSTRAP.md`** | The "Cohere as" instructions (lines 105–114) tell agents to read a file the CLI no longer creates. First-time agents following these instructions will fail. | `README.md:80,105-114` |
+
+### MEDIUM
+
+| # | Issue | Impact | Location |
+|---|-------|--------|----------|
+| M1 | **README version stale (`v1.2.0`)** | First impression suggests project is less maintained than it is. | `README.md:1` |
+| M2 | **`git pull --ff-only` no fallback** | CLI crashes with unhelpful error if template has diverged. Flagged since v1.0.0 audit. | `cli/index.js:133` |
+| M3 | **`.gitignore` incomplete** | Missing `node_modules/`, `.env*`, editor temps, IDE dirs. Fragile against accidental additions. | `.gitignore` |
+| M4 | **`package.json` incomplete** | Missing `repository`, `keywords`, `bugs`, `homepage` fields. Stale `description`. | `package.json` |
+| M5 | **reflect SKILL.md length (370 lines)** | Hardest skill to read/maintain. Six cadence templates are structurally repetitive. | `skills/reflect/SKILL.md` |
+| M6 | **Thread file naming non-standard** | `yyyyddmmhhmmss` puts day before month; inconsistent with ISO 8601 and all other date formats in the project. | `state/threads/`, `skills/hello-world/` |
+| M7 | **Hardcoded workspace path** | CLI only works on OpenClaw with root user. No env var override or `--workspace` flag. | `cli/index.js:49` |
+| M8 | **`experiments/` uncontextualized** | 212-line design doc with no README, no cross-reference, no status, instance-specific content. | `experiments/` |
+| M9 | **"New name" path doesn't update `hubRepo`/`hubUrl`** | When the user chooses a new name at collision, the variables used for GitHub repo creation still reference the old name. | `cli/index.js:192-199` |
+
+### LOW
+
+| # | Issue | Impact | Location |
+|---|-------|--------|----------|
+| L1 | Missing katas for self-cohere and configure-agent | Skills claim katas should exist but don't. | `skills/self-cohere/`, `skills/configure-agent/` |
+| L2 | DOJO.md kata numbering gap (03→13) | Belt legend explains the scheme but gap is unexplained. | `docs/DOJO.md` |
+| L3 | WRITING.md `sag` reference | Instance-specific (ElevenLabs TTS) in a template. | `mindsets/WRITING.md:24` |
+| L4 | Duplicate `gh api user` call | Same API call on lines 119 and 150. Wastes a round-trip. | `cli/index.js:119,150` |
+| L5 | ANSI colors unconditional | No `NO_COLOR` env var support. | `cli/index.js:25-27` |
+| L6 | ENGINEERING.md em-dash inconsistency | Line 10 uses `-` where other lines use `—`. | `mindsets/ENGINEERING.md:10` |
+| L7 | Emoji in framework tables | 🧩🤝🚪 in reflect/GLOSSARY α/β/γ entries. Inconsistent with projection-robustness principle. | `skills/reflect/SKILL.md`, `docs/GLOSSARY.md` |
+| L8 | PDF tracked directly in git | Binary (435 KB) doesn't diff. Bloats history on updates. | `docs/CN-WHITEPAPER-v2.0.3.pdf` |
+| L9 | Contributor name casing | `usurobor` vs `Usurobor` — inflates contributor count. | git config |
+| L10 | `readline` not closed on early exits | Minor resource leak on error paths (process exits anyway). | `cli/index.js:84,101,117,123` |
+| L11 | Coherence Walk metaphor duplicated verbatim | "Left, right, left, right" appears identically in 3 places. | `skills/reflect/SKILL.md`, `docs/GLOSSARY.md` |
+| L12 | daily-routine cron format assumes specific runtime | JSON cron syntax is OpenClaw-specific; no crontab equivalent. | `skills/daily-routine/SKILL.md` |
+| L13 | `state/` files in template repo | Template contains state files that conceptually belong in hubs. | `state/` |
+| L14 | CHANGELOG lacks detailed change notes | Only one-line coherence summaries; can't reconstruct what changed. | `CHANGELOG.md` |
+| L15 | `IDENTITY.md` in cleanup list | CLI line 259 still deletes `IDENTITY.md` — a filename that no longer exists in the template (renamed to `PERSONALITY.md`). Harmless but stale. | `cli/index.js:259` |
+
+---
+
+## 12. Prior Audit Tracking
+
+Issues carried from the v1.3.4 audit with updated status:
+
+| v1.3.4 Ref | Finding | Status | Notes |
+|------------|---------|--------|-------|
+| 4.4 | reflect SKILL.md length | **Open** | Still 370 lines |
+| 4.5 | Emoji in framework table | **Open** | Still present |
+| 4.7 | DOJO kata gap 03→13 | **Open** | Still unexplained |
+| 4.9 | daily-routine cron assumption | **Open** | Still unstated |
+| 4.10 | Coherence Walk duplication | **Open** | Still in 3 places |
+| 4.11 | package.json stale/incomplete | **Open** | Still missing fields |
+| 4.12 | state/ files in template | **Open** | Still present |
+| 4.13 | git pull --ff-only | **Open** | Still no fallback |
+| 4.14 | WRITING.md sag reference | **Open** | Still present |
+| 4.15 | experiments/ uncontextualized | **Open** | Still orphaned |
+| 4.16 | No tests | **Open** | Still zero |
+| 4.17 | Missing katas | **Open** | self-cohere + configure-agent |
+| 4.18 | ENGINEERING.md em-dash | **Open** | Still inconsistent |
+
+**New findings in this audit:** H2 (input sanitization), H4 (BOOTSTRAP.md references), M1 (README version), M6 (thread naming), M9 (new-name path bug), L4 (duplicate API call), L5 (NO_COLOR), L10 (readline leak), L14 (CHANGELOG detail), L15 (stale IDENTITY.md cleanup).
+
+**Total open findings: 13 carried + 10 new = 23 open.** All 13 v1.3.4 carried items remain open — no forward motion since the last audit.
+
+---
+
+## 13. Coherence Assessment (TSC Axes)
+
+### 13.1 PATTERN (α) — Structural Consistency — Grade: A-
 
 The repo structure is clean and consistent:
-- 5 spec files, 6 mindsets, 6 skills, 3 docs — all follow their respective formats
-- TERMS / INPUTS / EFFECTS in all SKILL.md files
-- Placeholder markers in template specs
-- Commit messages follow a consistent style
-- New skills (reflect, daily-routine) follow the established SKILL.md + kata.md pattern
-- Glossary stale entries fixed, version headers aligned, doc-local versioning note added
+- 5 spec files, 6 mindsets, 6 skills, 3 docs — all follow their respective formats.
+- TERMS/INPUTS/EFFECTS in all SKILL.md files.
+- Placeholder markers in template specs.
+- New skills (reflect, daily-routine) follow the established pattern.
 
-Deductions: Minor — DOJO kata numbering gap (03→13), reflect SKILL.md length (352 lines).
+Deductions:
+- Thread file naming (`yyyyddmmhhmmss` vs ISO 8601).
+- reflect SKILL.md is 3x the length of any other skill.
+- README version stale.
 
-### 5.2 RELATION (β) — Alignment Between Parts
+### 13.2 RELATION (β) — Alignment Between Parts — Grade: A-
 
-**Grade: A** (up from A- in v1.3.3)
+Cross-file references are mostly accurate. The glossary matches reality. The whitepaper and implementation are honestly differentiated (§10). The hub/template separation is consistently described.
 
-All major cross-file alignment issues are resolved:
-- Whitepaper v2.0.3 merged, all contradictions fixed
-- Reflect/daily-routine ownership clean with "Ownership & Schema" sections
-- Glossary entries current, stale entries fixed
-- Reflect kata exercises actual α/β/γ framework
-- `memory/`/`state/practice/` explicitly scoped as template conventions in whitepaper §4.1, A.1, daily-routine SKILL.md, and glossary
-- Version headers aligned with doc-local versioning
+Deductions:
+- README references `BOOTSTRAP.md` which no longer exists in the flow.
+- Protocol spec vs implementation gap (9 features specified but not built).
+- `peers.md` (Markdown) vs `peers.json` (whitepaper spec).
+- `state/threads/` (implementation) vs `threads/` (whitepaper spec).
 
-Deductions: Minor — Coherence Walk metaphor duplicated verbatim in 3 places, cron runtime assumption unstated.
+### 13.3 EXIT/PROCESS (γ) — Evolution Stability — Grade: B+
 
-### 5.3 EXIT/PROCESS (γ) — Evolution Stability
+Clean evolution through ~96 commits. "Never self-merge" governance is practiced. Merges are descriptive. The audit-driven improvement cycle (v1.0.0 → v1.3.4 → now) shows disciplined intent.
 
-**Grade: A-** (up from B+ in v1.3.3)
+Deductions:
+- 13 of 13 v1.3.4 open findings remain open — no forward motion on prior audit items.
+- Zero tests means evolution has no safety net.
+- No CI means regressions aren't caught automatically.
+- The spec is evolving faster than the implementation, creating technical debt.
 
-Clean evolution since v1.3.2: five merges resolving all HIGH findings and two MEDIUMs, each scoped and committed separately. The reflect skill is a genuine architectural evolution — it moves TSC from theory to operational practice. The "never self-merge" principle is being practiced (all merges reviewed before landing). The whitepaper iteration process (Bohm dialog → convergence → v2.0.3) demonstrates the project practicing what it preaches. Version headers now track document-local history.
-
-Deductions: The reflect skill at 352 lines could benefit from structural decomposition. The kata 03→13 gap is unexplained. No tests or CI yet (increasing surface area without safety net).
-
-### 5.4 Aggregate
+### 13.4 Aggregate
 
 ```
-C_Σ = (A · A · A-)^(1/3) ≈ A (intuition-level)
+C_Σ = (A- · A- · B+)^(1/3) ≈ A- / B+
 ```
 
-Up from A-/B+ in v1.3.3. All HIGH findings resolved, version headers aligned, spec drift clarified. The remaining open items are all LOW-severity or cosmetic. The project is structurally sound and internally coherent.
+The project is structurally sound and internally coherent in its documentation. The primary drag is engineering infrastructure: no tests, no CI, no linting, unvalidated input, and accumulated open findings.
 
 ---
 
-## 6. Priority Recommendations
+## 14. Recommendations (Prioritized)
 
-### Must Address (all resolved)
+### Must Address
 
-1. ~~**Resolve reflect / daily-routine ownership of `state/reflections/`.**~~ **RESOLVED** — sigma/reflect-ownership merged. reflect owns schema, daily-routine orchestrates.
+1. **Fix README `BOOTSTRAP.md` references.** Lines 80, 105–114 describe a file the CLI no longer creates. Agents following these instructions will fail. This is a broken user path.
 
-2. ~~**Fix reflect kata to exercise the actual framework.**~~ **RESOLVED** — sigma/reflect-ownership merged. Kata 02 now uses α/β/γ.
+2. **Sanitize agent name input.** Reject or strip characters that aren't alphanumeric or hyphens. A simple regex like `/[^a-z0-9-]/g` applied after lowercasing would be sufficient. This closes directory traversal and unexpected repo name vectors.
 
-3. ~~**Fix glossary stale entries.**~~ **RESOLVED** — sigma/truthify-docs merged. All four stale entries fixed.
+3. **Add basic CLI tests.** Use Node's built-in `node:test` module (zero dependencies). Minimum: `--help` exits 0, `--version` matches `package.json`, name derivation logic, rejection of special characters.
 
-4. ~~**Merge whitepaper v2.0.3.**~~ **RESOLVED** — Whitepaper v2.0.3 merged to master (commit `2285fd8`).
+4. **Add `git pull --ff-only` fallback.** On failure: inform the user, suggest manual resolution, exit cleanly.
 
 ### Should Address
 
-5. ~~**Update version numbers.**~~ **RESOLVED** — Doc-local versioning adopted (`5eec365`). GLOSSARY v1.3.0, DOJO v1.2.1, skills/README v1.2.0, configure-agent v1.2.0. Versioning note added to GLOSSARY.
+5. **Fix the "new name" path** (lines 192–199) to recalculate `hubRepo` and `hubUrl`.
 
-6. ~~**Clarify `memory/` and `state/practice/` scope.**~~ **RESOLVED** — Scoped as template conventions (`4f03972`). Whitepaper §4.1 + A.1 informative notes, daily-routine "Scope (Protocol vs Template)" section, glossary entries with whitepaper refs.
+6. **Update README version** to match current release or remove the version from the heading.
 
-7. **Document the cron runtime assumption** in daily-routine SKILL.md TERMS. Not all agents have access to the JSON cron format shown.
+7. **Harden `.gitignore`** with `node_modules/`, `.env*`, `*.swp`, `.vscode/`, `.idea/`.
 
-8. **Explain DOJO.md kata numbering.** State the belt→number mapping or fill the 03→13 gap.
+8. **Complete `package.json`** — add `repository`, `keywords`, `bugs`, `homepage`; update `description`.
 
-9. **Update package.json.** Fix stale description; add `repository`, `keywords`, `bugs`, `homepage`.
+9. **Add a GitHub Actions CI workflow** — even `node cli/index.js --help && node cli/index.js --version` catches CLI breakage.
 
-10. **Add git pull --ff-only fallback** in CLI.
+10. **Fix thread file naming** to use ISO 8601 (`yyyyMMddHHmmss` or similar).
+
+11. **Contextualize `experiments/`** — add a README with status, or move to a branch, or delete.
+
+12. **Add workspace path override** — env var `CN_WORKSPACE` or `--workspace` flag.
 
 ### Nice to Have
 
-11. Extract reflect cadence templates to a separate file to keep SKILL.md focused on specification.
-12. Remove emoji from reflect framework table and templates (projection robustness).
-13. Add smoke test for CLI `--help` / `--version`.
-14. Add katas for self-cohere and configure-agent.
-15. Contextualize experiments/ or archive it.
+13. Extract reflect cadence templates to `skills/reflect/templates/`.
+14. Remove emoji from framework tables (projection robustness).
+15. Add katas for self-cohere and configure-agent.
 16. Remove `sag` reference from WRITING.md.
-17. Consistent em-dash usage in ENGINEERING.md.
+17. Fix contributor name casing.
+18. Add `NO_COLOR` env var support to CLI.
+19. Cache the `gh api user` result to avoid the duplicate call.
+20. Explain DOJO kata numbering scheme or renumber.
+21. Consider Git LFS for the PDF or CI-generated PDFs.
+22. Add detailed change notes to CHANGELOG entries.
+23. Remove `IDENTITY.md` from the CLI cleanup list (line 259).
+
+---
+
+## 15. Scorecard
+
+| Dimension | Grade | Weight | Notes |
+|-----------|-------|--------|-------|
+| Documentation | A- | High | Strong whitepaper, good README (stale refs), thorough glossary |
+| Code Quality | B- | Medium | Clean CLI, but input validation gaps and a bug in the "new name" path |
+| Architecture | B+ | High | Two-repo model is solid; protocol gap is the main concern |
+| Testing & CI | F | High | Zero tests, zero CI, zero linting |
+| Security | B | Medium | No injection, no secrets; input sanitization missing |
+| Git Practices | A- | Medium | Good governance, clean history, minor hygiene issues |
+| Configuration | C+ | Low | Incomplete package.json and .gitignore |
+| Cross-file Coherence | A- | High | Consistent terminology; BOOTSTRAP.md references and version staleness are the gaps |
+
+**Weighted Overall: B+**
+
+### Compared to v1.3.4 Audit
+
+The v1.3.4 audit graded the project `A` aggregate. This audit grades it **B+**. The difference is not regression — the project hasn't changed. The difference is scope: this audit examines code-level issues (input validation, CLI bugs, the "new name" path), engineering infrastructure (testing, CI, linting), configuration completeness, and README–reality alignment that the v1.3.4 audit did not cover in depth. The documentation quality remains high.
+
+---
+
+## 16. What's Done Well
+
+1. **Zero-dependency CLI** — ships exactly what it needs, no supply chain risk.
+2. **Whitepaper quality** — honest, well-structured, self-aware of its own projection failures.
+3. **Audit-driven improvement** — five iterations of self-assessment. Rare and valuable practice.
+4. **Git governance** — "never self-merge", descriptive merges, topic-branch workflow.
+5. **TSC framework integration** — coherence is operationalized through the reflect skill and measured in the CHANGELOG.
+6. **Hub/template separation** — clean, well-documented, consistently applied.
+7. **No secrets in repo** — clean security posture.
+8. **Apache 2.0 license** — clear, permissive, standard.
+9. **Honest spec-vs-impl tracking** — §10 of the whitepaper doesn't pretend features exist when they don't.
+10. **Spec file design** — SOUL.md is one of the better behavioral contracts for AI agents in the wild.
