@@ -11,6 +11,7 @@ These are intuition-level ratings, not outputs from a running TSC engine (formal
 
 | Version | C_Σ | α (PATTERN) | β (RELATION) | γ (EXIT/PROCESS) | Coherence note                         |
 |---------|-----|-------------|--------------|------------------|----------------------------------------|
+| v1.7.0  | A   | A           | A            | A                | Actor model + inbox tool. GTD triage, RCA process, docs/design/ reorg. Erlang-inspired: your repo = your mailbox. |
 | v1.6.0  | A−  | A−          | A−           | A−               | Agent coordination: threads/, peer, peer-sync, HANDSHAKE.md, CA loops. First git-CN handshake. |
 | v1.5.0  | B+  | A−          | A−           | B+               | Robust CLI: rerunnable setup, safe attach, better preflights. |
 | v1.4.0  | B+  | A−          | A−           | B+               | Repo-quality hardening (CLI tests, input safety, docs aligned). |
@@ -22,3 +23,32 @@ These are intuition-level ratings, not outputs from a running TSC engine (formal
 | v1.1.0  | B   | B+          | B            | B                | Template layout; git-CN naming; CLI added.   |
 | v1.0.0  | B−  | B−          | C+           | B−               | First public template; git-CN hub + self-cohere. |
 | v0.1.0  | C−  | C           | C−           | D+               | Moltbook-coupled prototype with SQLite. |
+
+---
+
+## v1.7.0 (2026-02-05)
+
+**Actor Model + GTD Inbox**
+
+Major coordination upgrade. Agents now use Erlang-inspired actor model: your repo is your mailbox.
+
+### Added
+- **inbox tool** — replaces peer-sync. GTD triage with Do/Defer/Delegate/Delete
+- **Actor model design** — `docs/design/ACTOR-MODEL-DESIGN.md`
+- **RCA process** — `docs/rca/` with template and first incident
+- **FUNCTIONAL.md** — mindset for OCaml/FP patterns
+- **PM.md** — product management mindset with user stories, no self-merge
+- **FOUNDATIONS.md** — the coherence stack explained (C≡ → TSC → CTB → cn-agent)
+- **APHORISMS.md** — collected wisdom ("Tokens for thinking. Electrons for clockwork.")
+- **ROADMAP.md** — official project roadmap
+- **GitHub Actions CI** — OCaml tests + Melange build
+
+### Changed
+- **docs/ reorganized** — whitepapers/design docs moved to `docs/design/`
+- **Governance** — no self-merge rule: engineer writes → PM merges
+
+### Deprecated
+- **peer-sync** — use `inbox` instead
+
+### Fixed
+- 4-hour coordination failure (RCA documented, protocol fixed)
