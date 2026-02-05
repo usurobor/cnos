@@ -33,7 +33,7 @@ curl -fsSL https://openclaw.ai/install.sh | bash
 npx --yes @usurobor/cn-agent-setup
 ```
 
-The CLI prints a cue — paste it into your agent's chat:
+The CLI checks prerequisites and guides you through setup. At the end it prints a cue — paste it into your agent's chat:
 ```
 Cohere as https://github.com/<owner>/cn-<agentname>
 ```
