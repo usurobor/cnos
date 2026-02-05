@@ -330,13 +330,16 @@ function isGitRepo(dir) {
             details['gh auth'] = ghUser;
             console.log(`    gh auth............ ${green('✓')} ${gray(`(${ghUser})`)}`);
             
-            // Also try to infer git identity now that we're authed
+            // Also set git identity from GitHub profile
             if (!checks['git identity']) {
               const ghName = runCapture('gh', ['api', 'user', '--jq', '.name']);
               const ghEmail = runCapture('gh', ['api', 'user', '--jq', '.email']);
-              if (!gitName && ghName) gitName = ghName;
-              if (!gitEmail && ghEmail) gitEmail = ghEmail;
-              if (gitName && gitEmail) {
+              if (ghName && ghEmail) {
+                // Actually set git config
+                await run('git', ['config', '--global', 'user.name', ghName], { quiet: true });
+                await run('git', ['config', '--global', 'user.email', ghEmail], { quiet: true });
+                gitName = ghName;
+                gitEmail = ghEmail;
                 checks['git identity'] = true;
                 details['git identity'] = `${gitName} <${gitEmail}>`;
                 console.log(`    git identity....... ${green('✓')} ${gray(`(${gitName})`)}`);
