@@ -83,6 +83,31 @@ git for-each-ref --sort=-committerdate refs/remotes/ \
 | Branches for all work? | No direct master commits without approval |
 | Threads for decisions? | Major changes have adhoc threads |
 
+### 7. Design Doc Compliance
+
+Design docs are the spec. Code is the implementation. Check for drift.
+
+| Design Doc | Check Against |
+|------------|---------------|
+| `ACTOR-MODEL-DESIGN.md` | inbox tool implements actor model? Push TO peer? |
+| `AGILE-PROCESS.md` | Workflow states followed? Backlog structure matches? |
+| `CN-WHITEPAPER.md` | Hub structure matches spec? Protocol compliance? |
+
+```bash
+# List design docs
+ls docs/design/*.md
+
+# For each: read spec, verify implementation matches
+```
+
+**Questions to ask:**
+- Does the code do what the doc says?
+- Does the doc describe what the code does?
+- Are there features in code not in docs? (undocumented)
+- Are there specs in docs not in code? (unimplemented)
+
+**Fix:** Update code to match spec, or update spec to match reality (with CLP).
+
 ---
 
 ## Output
