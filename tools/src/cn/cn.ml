@@ -1014,6 +1014,14 @@ let inbox_flush hub_path _name =
 
 (* === Update === *)
 
+let update_cron hub_path =
+  let cron_line = Printf.sprintf "*/5 * * * * cd %s && cn sync && cn process >> /var/log/cn.log 2>&1" hub_path in
+  print_endline (info "Updating crontab (5 min intervals)...");
+  let cmd = Printf.sprintf "echo '%s' | crontab -" cron_line in
+  match Child_process.exec cmd with
+  | Some _ -> print_endline (ok "Crontab updated")
+  | None -> print_endline (warn "Crontab update failed - update manually")
+
 let run_update () =
   print_endline (info "Checking for updates...");
   
@@ -1027,15 +1035,18 @@ let run_update () =
       Process.exit 1
   | Some latest_raw ->
       let latest = String.trim latest_raw in
-      if latest = version then
-        print_endline (ok "Already up to date")
-      else begin
-        print_endline (info (Printf.sprintf "New version available: %s" latest));
-        print_endline (info "Updating...");
-        match Child_process.exec "npm install -g cnagent@latest" with
-        | Some _ -> print_endline (ok (Printf.sprintf "Updated to v%s" latest))
-        | None -> print_endline (fail "Update failed. Try: npm install -g cnagent@latest")
-      end
+      match latest = version with
+      | true -> print_endline (ok "Already up to date")
+      | false ->
+          print_endline (info (Printf.sprintf "New version available: %s" latest));
+          print_endline (info "Updating...");
+          match Child_process.exec "npm install -g cnagent@latest" with
+          | Some _ -> print_endline (ok (Printf.sprintf "Updated to v%s" latest))
+          | None -> print_endline (fail "Update failed. Try: npm install -g cnagent@latest")
+
+let run_update_with_cron hub_path =
+  run_update ();
+  update_cron hub_path
 
 (* === Main === *)
 
@@ -1058,7 +1069,10 @@ let () =
       Process.exit 1
   | Some Help -> print_endline help_text
   | Some Version -> Printf.printf "cn %s\n" version
-  | Some Update -> run_update ()
+  | Some Update ->
+      (match find_hub_path (Process.cwd ()) with
+       | Some hub_path -> run_update_with_cron hub_path
+       | None -> run_update ())
   | Some (Init name) -> run_init name
   | Some cmd ->
       match find_hub_path (Process.cwd ()) with
