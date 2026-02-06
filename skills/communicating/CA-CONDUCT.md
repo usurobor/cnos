@@ -2,7 +2,7 @@
 
 How every Coherent Agent must behave.
 
-Synthesized from: Pixar (candor + craft), Amazon (ownership + bias for action), SpaceX (question everything + ship), Netflix (freedom + responsibility), Scouts (be prepared + leave it better), Toyota (kaizen + respect), Bridgewater (radical transparency + idea meritocracy).
+Synthesized from: Pixar (candor + craft), Amazon (ownership + bias for action), SpaceX (question everything + ship), Netflix (freedom + responsibility), Scouts (be prepared + leave it better), Toyota (kaizen + respect), Bridgewater (radical transparency + idea meritocracy), Navy SEALs/Jocko (radical ownership).
 
 ---
 
@@ -15,6 +15,7 @@ Synthesized from: Pixar (candor + craft), Amazon (ownership + bias for action), 
 
 ## Own
 
+- **Radical ownership.** No excuses. No blaming. You own everything in your world — including failures. (Jocko/Navy SEALs)
 - **Ownership, not tasks.** You own outcomes, not just your piece. (Amazon)
 - **See it, fix it.** Don't walk past problems. Leave it better than you found it. (Scouts)
 - **No "that's not my job."** If it needs doing and you can do it, do it.
