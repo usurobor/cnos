@@ -101,6 +101,87 @@ describe('cn CLI', () => {
     });
   });
 
+  describe('inbox next', () => {
+    it('reports empty inbox when no items', () => {
+      const { code, stdout } = runCN(['inbox', 'next']);
+      assert.strictEqual(code, 0);
+      assert.ok(stdout.includes('empty') || stdout.includes('Inbox empty'), 'should report empty inbox');
+    });
+
+    it('picks one item and writes to state/input.md', () => {
+      // Create inbox item
+      const inboxItem = path.join(hubPath, 'threads', 'inbox', 'pi-test-request.md');
+      fs.writeFileSync(inboxItem, `---
+from: pi
+subject: Test request
+date: 2026-02-06
+received: 2026-02-06T00:00:00Z
+---
+
+This is a test request from Pi.
+`);
+      
+      const { code, stdout } = runCN(['inbox', 'next']);
+      assert.strictEqual(code, 0);
+      assert.ok(stdout.includes('id: pi-test-request'), 'should output item id');
+      assert.ok(stdout.includes('from: pi'), 'should output from field');
+      
+      // Verify state/input.md was created
+      const inputPath = path.join(hubPath, 'state', 'input.md');
+      assert.ok(fs.existsSync(inputPath), 'should create state/input.md');
+      
+      const inputContent = fs.readFileSync(inputPath, 'utf8');
+      assert.ok(inputContent.includes('id: pi-test-request'), 'input.md should have item id');
+      assert.ok(inputContent.includes('type: inbox'), 'input.md should have type: inbox');
+    });
+  });
+
+  describe('inbox done', () => {
+    it('archives current item from state/input.md', () => {
+      // Ensure inbox item still exists (from previous test)
+      const inboxItem = path.join(hubPath, 'threads', 'inbox', 'pi-test-request.md');
+      if (!fs.existsSync(inboxItem)) {
+        fs.writeFileSync(inboxItem, `---
+from: pi
+subject: Test request
+received: 2026-02-06T00:00:00Z
+---
+
+Test content
+`);
+        // Run next to set up input.md
+        runCN(['inbox', 'next']);
+      }
+      
+      const { code, stdout } = runCN(['inbox', 'done']);
+      assert.strictEqual(code, 0);
+      assert.ok(stdout.includes('Archived') || stdout.includes('pi-test-request'), 'should archive item');
+      
+      // Verify item moved to archived
+      const archivedPath = path.join(hubPath, 'threads', 'archived', 'pi-test-request.md');
+      assert.ok(fs.existsSync(archivedPath), 'item should be in archived');
+      assert.ok(!fs.existsSync(inboxItem), 'item should be removed from inbox');
+      
+      // Verify state/input.md cleared
+      const inputPath = path.join(hubPath, 'state', 'input.md');
+      assert.ok(!fs.existsSync(inputPath), 'state/input.md should be cleared');
+      
+      // Verify archived content has processed timestamp
+      const archivedContent = fs.readFileSync(archivedPath, 'utf8');
+      assert.ok(archivedContent.includes('processed:'), 'archived should have processed timestamp');
+      assert.ok(archivedContent.includes('status: done'), 'archived should have status: done');
+      
+      // Cleanup
+      fs.unlinkSync(archivedPath);
+    });
+
+    it('fails when no item to archive', () => {
+      const { code, stdout } = runCN(['inbox', 'done']);
+      assert.strictEqual(code, 1);
+      assert.ok(stdout.includes('No item') || stdout.includes('not found'), 'should report no item');
+    });
+  });
+
   describe('outbox check', () => {
     it('reports empty outbox', () => {
       const { code, stdout } = runCN(['outbox', 'check']);
