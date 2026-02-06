@@ -1,0 +1,24 @@
+{
+  "name": "cn-agent",
+  "version": "2.1.0",
+  "protocol": "cn/1.0",
+  "kind": "template",
+  "description": "Coherent Network agent template — skills, mindsets, tools",
+  "repository": "https://github.com/usurobor/cn-agent",
+  "maintainers": [
+    {
+      "name": "Axiom",
+      "role": "owner"
+    },
+    {
+      "name": "Sigma", 
+      "role": "engineer",
+      "hub": "https://github.com/usurobor/cn-sigma"
+    },
+    {
+      "name": "Pi",
+      "role": "pm",
+      "hub": "https://github.com/usurobor/cn-pi"
+    }
+  ]
+}
