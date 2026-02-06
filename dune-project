@@ -9,6 +9,7 @@
 
 (package
  (name cn_agent)
+ (allow_empty)
  (synopsis "CLI and tools for cn-agent hubs")
  (description "Coherence Network agent infrastructure: CLI setup, peer-sync, validation tools")
  (license Apache-2.0)
