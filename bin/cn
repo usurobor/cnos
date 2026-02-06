@@ -41,6 +41,8 @@ Commands:
   inbox               Manage inbound messages
     check             List inbound branches (from peers)
     process           Materialize to threads/inbox/
+    next              Pick ONE item, write to state/input.md
+    done [id]         Archive current/specified item
     flush             Detect replies, send back to peers
   outbox              Manage outbound messages
     check             List pending sends (threads/outbox/)
@@ -59,7 +61,8 @@ Flags:
 
 Examples:
   cn init sigma       Create hub named 'sigma'
-  cn inbox check      List inbound branches
+  cn inbox next       Get next item for processing
+  cn inbox done       Archive current item after processing
   cn doctor           Check system health
 `;
 
@@ -107,7 +110,7 @@ function logAction(hubPath, action, details = {}) {
 }
 
 // Run inbox commands (threads/inbox/ model)
-function runInbox(subCmd, hubPath, name) {
+function runInbox(subCmd, hubPath, name, extraArgs = []) {
   const inboxDir = path.join(hubPath, 'threads', 'inbox');
   const peersPath = path.join(hubPath, 'state', 'peers.md');
   
@@ -313,6 +316,137 @@ function runInbox(subCmd, hubPath, name) {
     } else {
       ok(`Sent ${replied} reply(s)`);
     }
+    return;
+  }
+  
+  if (subCmd === 'next') {
+    // ONE ITEM PER INVOCATION: Pick next item, write to state/input.md
+    const stateDir = path.join(hubPath, 'state');
+    const inputPath = path.join(stateDir, 'input.md');
+    
+    // Ensure state dir exists
+    if (!fs.existsSync(stateDir)) {
+      fs.mkdirSync(stateDir, { recursive: true });
+    }
+    
+    // Scan inbox for items
+    if (!fs.existsSync(inboxDir)) {
+      info('No inbox');
+      process.exit(0);
+    }
+    
+    const items = fs.readdirSync(inboxDir)
+      .filter(f => f.endsWith('.md'))
+      .map(f => {
+        const filePath = path.join(inboxDir, f);
+        const content = fs.readFileSync(filePath, 'utf8');
+        const meta = parseFrontmatter(content);
+        return { 
+          id: path.basename(f, '.md'),
+          file: f, 
+          path: filePath, 
+          content, 
+          meta,
+          received: meta.received || fs.statSync(filePath).mtime.toISOString()
+        };
+      })
+      .sort((a, b) => a.received.localeCompare(b.received)); // FIFO by received date
+    
+    if (items.length === 0) {
+      // No items — clear input.md if exists
+      if (fs.existsSync(inputPath)) {
+        fs.unlinkSync(inputPath);
+      }
+      info('Inbox empty');
+      process.exit(0);
+    }
+    
+    // Pick first item (FIFO)
+    const item = items[0];
+    
+    // Get body (content without frontmatter)
+    const body = item.content.replace(/^---\n[\s\S]*?\n---\n*/, '').trim();
+    
+    // Build input.md with structured frontmatter
+    const inputContent = `---
+id: ${item.id}
+type: inbox
+from: ${item.meta.from || 'unknown'}
+subject: ${item.meta.subject || item.id}
+date: ${item.meta.date || item.received.slice(0, 10)}
+received: ${item.received}
+path: threads/inbox/${item.file}
+---
+
+${body}
+`;
+    
+    fs.writeFileSync(inputPath, inputContent);
+    logAction(hubPath, 'inbox.next', { id: item.id, from: item.meta.from, path: item.path });
+    
+    // Output for agent/caller
+    console.log(inputContent);
+    return;
+  }
+  
+  if (subCmd === 'done') {
+    // Archive current item (from state/input.md or by id)
+    const stateDir = path.join(hubPath, 'state');
+    const inputPath = path.join(stateDir, 'input.md');
+    const archivedDir = path.join(hubPath, 'threads', 'archived');
+    
+    // Ensure archived dir exists
+    if (!fs.existsSync(archivedDir)) {
+      fs.mkdirSync(archivedDir, { recursive: true });
+    }
+    
+    let itemId = extraArgs[0];
+    let itemPath = null;
+    
+    // If no id provided, read from state/input.md
+    if (!itemId && fs.existsSync(inputPath)) {
+      const inputContent = fs.readFileSync(inputPath, 'utf8');
+      const inputMeta = parseFrontmatter(inputContent);
+      itemId = inputMeta.id;
+      itemPath = inputMeta.path ? path.join(hubPath, inputMeta.path) : null;
+    }
+    
+    if (!itemId) {
+      fail('No item to archive. Run `cn inbox next` first or specify id.');
+      process.exit(1);
+    }
+    
+    // Find item in inbox
+    if (!itemPath) {
+      itemPath = path.join(inboxDir, `${itemId}.md`);
+    }
+    
+    if (!fs.existsSync(itemPath)) {
+      fail(`Item not found: ${itemId}`);
+      process.exit(1);
+    }
+    
+    // Read item content
+    const content = fs.readFileSync(itemPath, 'utf8');
+    
+    // Add processed timestamp to frontmatter
+    const archivedContent = updateFrontmatter(content, { 
+      processed: new Date().toISOString(),
+      status: 'done'
+    });
+    
+    // Move to archived
+    const archivedPath = path.join(archivedDir, path.basename(itemPath));
+    fs.writeFileSync(archivedPath, archivedContent);
+    fs.unlinkSync(itemPath);
+    
+    // Clear state/input.md
+    if (fs.existsSync(inputPath)) {
+      fs.unlinkSync(inputPath);
+    }
+    
+    logAction(hubPath, 'inbox.done', { id: itemId, archived: archivedPath });
+    ok(`Archived: ${itemId}`);
     return;
   }
 }
@@ -813,11 +947,11 @@ switch (command) {
     
   case 'inbox':
     const inboxSubCmd = subArgs[0] || 'check';
-    if (!['check', 'process', 'flush'].includes(inboxSubCmd)) {
+    if (!['check', 'process', 'flush', 'next', 'done'].includes(inboxSubCmd)) {
       fail(`Unknown inbox command: ${inboxSubCmd}`);
       process.exit(1);
     }
-    runInbox(inboxSubCmd, hubPath, name);
+    runInbox(inboxSubCmd, hubPath, name, subArgs.slice(1));
     break;
     
   case 'outbox':
