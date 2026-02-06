@@ -1,5 +1,10 @@
-(** cn_lib: Pure functions for cn CLI (no FFI, testable).
-    Reuses types from Inbox_lib where possible. *)
+(** cn_lib: Pure functions for cn CLI.
+    
+    No FFI, fully testable. Follows FUNCTIONAL.md:
+    - Pattern matching over conditionals
+    - Pipelines over sequences
+    - Total functions (no exceptions)
+    - Semantic types *)
 
 (* Re-export inbox types for convenience *)
 type triage = Inbox_lib.triage =
@@ -8,19 +13,37 @@ type triage = Inbox_lib.triage =
   | Delegate of Inbox_lib.actor
   | Do of Inbox_lib.action
 
-(* === CLI Commands === *)
+(* === String Helpers (total functions) === *)
+
+let starts_with ~prefix s =
+  let plen = String.length prefix in
+  String.length s >= plen && String.sub s 0 plen = prefix
+
+let strip_prefix ~prefix s =
+  let plen = String.length prefix in
+  if starts_with ~prefix s 
+  then Some (String.sub s plen (String.length s - plen))
+  else None
+
+let ends_with ~suffix s =
+  let slen = String.length suffix in
+  let len = String.length s in
+  len >= slen && String.sub s (len - slen) slen = suffix
+
+let non_empty s = String.trim s <> ""
+
+(* === CLI Commands (exhaustive variants) === *)
 
 type inbox_cmd = Inbox_check | Inbox_process | Inbox_flush
 type outbox_cmd = Outbox_check | Outbox_flush
-type peer_cmd = List | Add of string * string | Remove of string | Sync
+type peer_cmd = Peer_list | Peer_add of string * string | Peer_remove of string | Peer_sync
 
-(* GTD verbs - agent-facing *)
 type gtd_cmd =
-  | GtdDelete of string               (* thread id *)
-  | GtdDefer of string * string option (* thread id, until *)
-  | GtdDelegate of string * string    (* thread id, peer *)
-  | GtdDo of string                   (* thread id *)
-  | GtdDone of string                 (* thread id *)
+  | GtdDelete of string
+  | GtdDefer of string * string option
+  | GtdDelegate of string * string
+  | GtdDo of string
+  | GtdDone of string
 
 type command =
   | Help
@@ -32,31 +55,33 @@ type command =
   | Outbox of outbox_cmd
   | Peer of peer_cmd
   | Sync
-  | Next                              (* get next inbox item *)
-  | Read of string                    (* read thread *)
-  | Reply of string * string          (* thread, message *)
-  | Send of string * string           (* peer, message *)
+  | Next
+  | Read of string
+  | Reply of string * string
+  | Send of string * string
   | Gtd of gtd_cmd
-  | Commit of string option           (* message *)
+  | Commit of string option
   | Push
-  | Save of string option             (* message *)
-  | Process                           (* actor loop: inbox -> input.md -> wake *)
+  | Save of string option
+  | Process
 
+(* Exhaustive - compiler warns on missing cases *)
 let string_of_command = function
   | Help -> "help"
   | Version -> "version"
   | Status -> "status"
   | Doctor -> "doctor"
-  | Init name -> "init" ^ (match name with Some n -> " " ^ n | None -> "")
+  | Init None -> "init"
+  | Init (Some n) -> "init " ^ n
   | Inbox Inbox_check -> "inbox check"
   | Inbox Inbox_process -> "inbox process"
   | Inbox Inbox_flush -> "inbox flush"
   | Outbox Outbox_check -> "outbox check"
   | Outbox Outbox_flush -> "outbox flush"
-  | Peer List -> "peer list"
-  | Peer (Add (n, _)) -> "peer add " ^ n
-  | Peer (Remove n) -> "peer remove " ^ n
-  | Peer Sync -> "peer sync"
+  | Peer Peer_list -> "peer list"
+  | Peer (Peer_add (n, _)) -> "peer add " ^ n
+  | Peer (Peer_remove n) -> "peer remove " ^ n
+  | Peer Peer_sync -> "peer sync"
   | Sync -> "sync"
   | Next -> "next"
   | Read t -> "read " ^ t
@@ -67,12 +92,14 @@ let string_of_command = function
   | Gtd (GtdDelegate (t, p)) -> "delegate " ^ t ^ " " ^ p
   | Gtd (GtdDo t) -> "do " ^ t
   | Gtd (GtdDone t) -> "done " ^ t
-  | Commit msg -> "commit" ^ (match msg with Some m -> " " ^ m | None -> "")
+  | Commit None -> "commit"
+  | Commit (Some m) -> "commit " ^ m
   | Push -> "push"
-  | Save msg -> "save" ^ (match msg with Some m -> " " ^ m | None -> "")
+  | Save None -> "save"
+  | Save (Some m) -> "save " ^ m
   | Process -> "process"
 
-(* === Aliases === *)
+(* === Alias Expansion === *)
 
 let expand_alias = function
   | "i" -> "inbox"
@@ -80,9 +107,9 @@ let expand_alias = function
   | "s" -> "status"
   | "d" -> "doctor"
   | "p" -> "peer"
-  | other -> other
+  | s -> s  (* identity for non-aliases *)
 
-(* === Command parsing === *)
+(* === Command Parsing (Option for totality) === *)
 
 let parse_inbox_cmd = function
   | [] | ["check"] -> Some Inbox_check
@@ -96,43 +123,52 @@ let parse_outbox_cmd = function
   | _ -> None
 
 let parse_peer_cmd = function
-  | [] | ["list"] -> Some List
-  | ["add"; name; url] -> Some (Add (name, url))
-  | ["remove"; name] -> Some (Remove name)
-  | ["sync"] -> Some Sync
+  | [] | ["list"] -> Some Peer_list
+  | ["add"; name; url] -> Some (Peer_add (name, url))
+  | ["remove"; name] -> Some (Peer_remove name)
+  | ["sync"] -> Some Peer_sync
   | _ -> None
 
-let rec parse_command args =
-  match args with
+let parse_gtd_cmd = function
+  | ["delete"; t] -> Some (GtdDelete t)
+  | "defer" :: t :: rest -> Some (GtdDefer (t, List.nth_opt rest 0))
+  | ["delegate"; t; p] -> Some (GtdDelegate (t, p))
+  | ["do"; t] -> Some (GtdDo t)
+  | ["done"; t] -> Some (GtdDone t)
+  | _ -> None
+
+let join_rest rest = match rest with [] -> None | _ -> Some (String.concat " " rest)
+
+let rec parse_command = function
   | [] | ["help"] | ["-h"] | ["--help"] -> Some Help
   | ["--version"] | ["-V"] -> Some Version
   | ["status"] -> Some Status
   | ["doctor"] -> Some Doctor
-  | "init" :: rest -> Some (Init (match rest with [n] -> Some n | _ -> None))
+  | ["init"] -> Some (Init None)
+  | ["init"; n] -> Some (Init (Some n))
   | "inbox" :: rest -> parse_inbox_cmd rest |> Option.map (fun c -> Inbox c)
   | "outbox" :: rest -> parse_outbox_cmd rest |> Option.map (fun c -> Outbox c)
   | "peer" :: rest -> parse_peer_cmd rest |> Option.map (fun c -> Peer c)
   | ["sync"] -> Some Sync
   | ["next"] -> Some Next
   | ["process"] -> Some Process
-  | "read" :: [t] -> Some (Read t)
+  | ["read"; t] -> Some (Read t)
   | "reply" :: t :: rest -> Some (Reply (t, String.concat " " rest))
   | "send" :: p :: rest -> Some (Send (p, String.concat " " rest))
-  | "delete" :: [t] -> Some (Gtd (GtdDelete t))
-  | "defer" :: t :: rest -> 
-      Some (Gtd (GtdDefer (t, match rest with [u] -> Some u | _ -> None)))
-  | "delegate" :: [t; p] -> Some (Gtd (GtdDelegate (t, p)))
-  | "do" :: [t] -> Some (Gtd (GtdDo t))
-  | "done" :: [t] -> Some (Gtd (GtdDone t))
-  | "commit" :: rest -> Some (Commit (match rest with [] -> None | _ -> Some (String.concat " " rest)))
+  | "delete" :: rest -> parse_gtd_cmd ("delete" :: rest) |> Option.map (fun c -> Gtd c)
+  | "defer" :: rest -> parse_gtd_cmd ("defer" :: rest) |> Option.map (fun c -> Gtd c)
+  | "delegate" :: rest -> parse_gtd_cmd ("delegate" :: rest) |> Option.map (fun c -> Gtd c)
+  | "do" :: rest -> parse_gtd_cmd ("do" :: rest) |> Option.map (fun c -> Gtd c)
+  | "done" :: rest -> parse_gtd_cmd ("done" :: rest) |> Option.map (fun c -> Gtd c)
+  | "commit" :: rest -> Some (Commit (join_rest rest))
   | ["push"] -> Some Push
-  | "save" :: rest -> Some (Save (match rest with [] -> None | _ -> Some (String.concat " " rest)))
+  | "save" :: rest -> Some (Save (join_rest rest))
   | [alias] ->
       let expanded = expand_alias alias in
       if expanded <> alias then parse_command [expanded] else None
   | _ -> None
 
-(* === Flags === *)
+(* === Flags (immutable record) === *)
 
 type flags = {
   json: bool;
@@ -143,74 +179,67 @@ type flags = {
 
 let default_flags = { json = false; quiet = false; verbose = false; dry_run = false }
 
+(* Tail-recursive flag parsing *)
 let parse_flags args =
   let rec go flags remaining = function
     | [] -> (flags, List.rev remaining)
     | "--json" :: rest -> go { flags with json = true } remaining rest
-    | "-q" :: rest | "--quiet" :: rest -> go { flags with quiet = true } remaining rest
-    | "-v" :: rest | "--verbose" :: rest -> go { flags with verbose = true } remaining rest
+    | "-q" :: rest -> go { flags with quiet = true } remaining rest
+    | "--quiet" :: rest -> go { flags with quiet = true } remaining rest
+    | "-v" :: rest -> go { flags with verbose = true } remaining rest
+    | "--verbose" :: rest -> go { flags with verbose = true } remaining rest
     | "--dry-run" :: rest -> go { flags with dry_run = true } remaining rest
     | arg :: rest -> go flags (arg :: remaining) rest
   in
   go default_flags [] args
 
-(* === Hub detection === *)
+(* === Hub Name Derivation === *)
 
-(* Derive agent name from hub path: /path/to/cn-sigma -> sigma *)
 let derive_name hub_path =
   hub_path
   |> String.split_on_char '/'
   |> List.rev
-  |> function
-    | base :: _ ->
-        if String.length base > 3 && String.sub base 0 3 = "cn-"
-        then String.sub base 3 (String.length base - 3)
-        else base
-    | [] -> "agent"
+  |> List.hd  (* safe: split always returns at least one element *)
+  |> fun base -> strip_prefix ~prefix:"cn-" base |> Option.value ~default:base
 
-(* === Frontmatter parsing === *)
+(* === Frontmatter (pure parsing) === *)
 
 let parse_frontmatter content =
-  let lines = String.split_on_char '\n' content in
-  match lines with
+  match String.split_on_char '\n' content with
   | "---" :: rest ->
       let rec collect acc = function
         | "---" :: _ -> List.rev acc
         | line :: rest -> collect (line :: acc) rest
         | [] -> List.rev acc
       in
-      let yaml_lines = collect [] rest in
-      yaml_lines |> List.filter_map (fun line ->
-        match String.split_on_char ':' line with
-        | key :: rest when List.length rest > 0 ->
-            Some (String.trim key, String.trim (String.concat ":" rest))
-        | _ -> None
-      )
+      collect [] rest
+      |> List.filter_map (fun line ->
+          match String.index_opt line ':' with
+          | None -> None
+          | Some i ->
+              let key = String.trim (String.sub line 0 i) in
+              let value = String.trim (String.sub line (i + 1) (String.length line - i - 1)) in
+              if key = "" then None else Some (key, value))
   | _ -> []
 
 let update_frontmatter content updates =
-  let meta = parse_frontmatter content in
-  let updated_meta = 
-    List.fold_left (fun acc (k, v) ->
+  let existing = parse_frontmatter content in
+  let merged = 
+    updates |> List.fold_left (fun acc (k, v) ->
       (k, v) :: List.filter (fun (k', _) -> k' <> k) acc
-    ) meta updates
+    ) existing
   in
   let body = 
-    let lines = String.split_on_char '\n' content in
-    match lines with
+    match String.split_on_char '\n' content with
     | "---" :: rest ->
-        let rec skip_fm = function
-          | "---" :: rest -> rest
-          | _ :: rest -> skip_fm rest
-          | [] -> []
-        in
-        String.concat "\n" (skip_fm rest)
+        let rec skip = function "---" :: r -> r | _ :: r -> skip r | [] -> [] in
+        String.concat "\n" (skip rest)
     | _ -> content
   in
-  let fm = String.concat "\n" (List.map (fun (k, v) -> k ^ ": " ^ v) updated_meta) in
+  let fm = merged |> List.map (fun (k, v) -> k ^ ": " ^ v) |> String.concat "\n" in
   "---\n" ^ fm ^ "\n---\n" ^ body
 
-(* === Peers parsing === *)
+(* === Peer Info (semantic record) === *)
 
 type peer_info = {
   name: string;
@@ -219,55 +248,54 @@ type peer_info = {
   kind: string option;
 }
 
+let empty_peer name = { name; hub = None; clone = None; kind = None }
+
+let parse_peer_field peer line =
+  let trimmed = String.trim line in
+  match strip_prefix ~prefix:"hub: " trimmed with
+  | Some v -> { peer with hub = Some v }
+  | None ->
+      match strip_prefix ~prefix:"clone: " trimmed with
+      | Some v -> { peer with clone = Some v }
+      | None ->
+          match strip_prefix ~prefix:"kind: " trimmed with
+          | Some v -> { peer with kind = Some v }
+          | None -> peer
+
 let parse_peers_md content =
-  let lines = String.split_on_char '\n' content in
-  let rec parse_block current peers = function
-    | [] -> 
-        (match current with Some p -> p :: peers | None -> peers) |> List.rev
-    | line :: rest ->
-        let trimmed = String.trim line in
-        if String.length trimmed > 8 && String.sub trimmed 0 8 = "- name: " then
-          let name = String.sub trimmed 8 (String.length trimmed - 8) in
-          let new_peer = { name; hub = None; clone = None; kind = None } in
+  content
+  |> String.split_on_char '\n'
+  |> List.fold_left (fun (current, peers) line ->
+      match strip_prefix ~prefix:"- name: " (String.trim line) with
+      | Some name ->
           let peers' = match current with Some p -> p :: peers | None -> peers in
-          parse_block (Some new_peer) peers' rest
-        else
-          let updated = match current with
-            | Some p ->
-                if String.length trimmed > 5 && String.sub trimmed 0 5 = "hub: " then
-                  Some { p with hub = Some (String.sub trimmed 5 (String.length trimmed - 5)) }
-                else if String.length trimmed > 7 && String.sub trimmed 0 7 = "clone: " then
-                  Some { p with clone = Some (String.sub trimmed 7 (String.length trimmed - 7)) }
-                else if String.length trimmed > 6 && String.sub trimmed 0 6 = "kind: " then
-                  Some { p with kind = Some (String.sub trimmed 6 (String.length trimmed - 6)) }
-                else current
-            | None -> None
-          in
-          parse_block updated peers rest
-  in
-  parse_block None [] lines
+          (Some (empty_peer name), peers')
+      | None ->
+          let current' = Option.map (fun p -> parse_peer_field p line) current in
+          (current', peers)
+    ) (None, [])
+  |> fun (current, peers) ->
+      (match current with Some p -> p :: peers | None -> peers)
+      |> List.rev
 
-(* === Thread operations === *)
+(* === Cadence (exhaustive variant) === *)
 
-type cadence = Inbox | Outbox | Daily | Weekly | Monthly | Quarterly | Yearly | Adhoc | Doing | Deferred | Unknown
+type cadence = 
+  | Inbox | Outbox | Daily | Weekly | Monthly 
+  | Quarterly | Yearly | Adhoc | Doing | Deferred | Unknown
 
-let cadence_of_path path =
-  if String.length path > 0 then
-    let parts = String.split_on_char '/' path in
-    List.find_map (function
-      | "inbox" -> Some Inbox
-      | "outbox" -> Some Outbox
-      | "daily" -> Some Daily
-      | "weekly" -> Some Weekly
-      | "monthly" -> Some Monthly
-      | "quarterly" -> Some Quarterly
-      | "yearly" -> Some Yearly
-      | "adhoc" -> Some Adhoc
-      | "doing" -> Some Doing
-      | "deferred" -> Some Deferred
-      | _ -> None
-    ) parts |> Option.value ~default:Unknown
-  else Unknown
+let cadence_of_string = function
+  | "inbox" -> Inbox
+  | "outbox" -> Outbox
+  | "daily" -> Daily
+  | "weekly" -> Weekly
+  | "monthly" -> Monthly
+  | "quarterly" -> Quarterly
+  | "yearly" -> Yearly
+  | "adhoc" -> Adhoc
+  | "doing" -> Doing
+  | "deferred" -> Deferred
+  | _ -> Unknown
 
 let string_of_cadence = function
   | Inbox -> "inbox"
@@ -282,29 +310,16 @@ let string_of_cadence = function
   | Deferred -> "deferred"
   | Unknown -> "unknown"
 
-(* === Output formatting === *)
+let cadence_of_path path =
+  path
+  |> String.split_on_char '/'
+  |> List.find_map (fun part ->
+      match cadence_of_string part with
+      | Unknown -> None
+      | c -> Some c)
+  |> Option.value ~default:Unknown
 
-let no_color = 
-  (* Will be overridden in cn.ml based on env *)
-  false
-
-let color code s = 
-  if no_color then s
-  else Printf.sprintf "\027[%sm%s\027[0m" code s
-
-let green s = color "32" s
-let red s = color "31" s  
-let yellow s = color "33" s
-let cyan s = color "36" s
-let magenta s = color "35" s
-let dim s = color "2" s
-
-let ok msg = green "✓ " ^ msg
-let fail msg = red "✗ " ^ msg
-let warn msg = yellow "⚠ " ^ msg
-let info msg = cyan msg
-
-(* === Help text === *)
+(* === Help Text === *)
 
 let help_text = {|cn - Coherent Network agent CLI
 
