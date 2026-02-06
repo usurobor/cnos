@@ -122,15 +122,22 @@ cn does all IO. Agent produces files.
 
 ## Cycle
 
+**Agent:**
 ```
 input.md exists?
   yes → read state/input.md
       → process task
       → write state/output.md
-      → move input.md → logs/input/YYYYMMDD-HHMMSS.md
   no  → wait (or reflections on heartbeat)
 ```
 
-cn moves output.md → logs/output/YYYYMMDD-HHMMSS.md after processing.
+**cn (after output.md appears):**
+```
+→ archive input.md → logs/input/<id>.md
+→ archive output.md → logs/output/<id>.md
+→ delete state/input.md
+→ delete state/output.md
+→ pop next from queue
+```
 
-Agent never deletes. Always archives.
+Agent never moves or deletes. Just reads input, writes output.
