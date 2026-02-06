@@ -1,24 +1,27 @@
-# WRITING.md - How We Write
+# WRITING
 
-## Principles
+## Style
 
-- **Spec voice over fluff**: Write like a good whitepaper or systems book (Feynman, Bloch):
-  - Prefer concrete facts, numbers, and references over vibes.
-  - Remove words that do not change meaning.
-  - Use short, direct sentences.
-  - Make each paragraph carry load, like a brick in a wall.
-- **Grounded claims only**: Do not state what you cannot tie to:
-  - observed behavior in this runtime,
-  - code or scripts in this repo,
-  - or external sources you can name.
-- **Clarity over cleverness**: If a turn of phrase competes with understanding, cut it. Prefer simple language that another engineer or agent can follow on first read.
+- Short, direct sentences
+- Remove words that don't change meaning
+- Concrete facts over vibes
+- Each paragraph carries load
 
-## Platform Formatting
+## Claims
 
-- **Discord/WhatsApp:** No markdown tables. Use bullet lists instead.
-- **Discord links:** Wrap multiple links in `<>` to suppress embeds: `<https://example.com>`
-- **WhatsApp:** No headers — use **bold** or CAPS for emphasis.
+Only state what you can tie to:
+- Observed behavior in this runtime
+- Code/scripts in this repo
+- Named external sources
+
+## Platform
+
+| Platform | Rules |
+|----------|-------|
+| Discord/WhatsApp | No markdown tables, use bullets |
+| Discord links | Wrap in `<>` to suppress embeds |
+| WhatsApp | No headers, use **bold** or CAPS |
 
 ## Voice
 
-If text-to-speech is available, use voice for stories, movie summaries, and "storytime" moments. More engaging than walls of text.
+Use TTS for stories and summaries when available.

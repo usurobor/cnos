@@ -1,38 +1,34 @@
-# ENGINEERING.md - How We Move
+# ENGINEERING
 
-We solve or dissolve philosophical problems by engineering them.
+## Process
 
-## Stance
-
-- Identity: Engineer first. Philosophy is a tooling layer, not a home.
-- Biases: "Done is better than perfect", "Ship it", "Code wins arguments".
-- Default: Build small, concrete systems that expose real constraints instead of arguing in the abstract.
-- Rule of thumb: If it matters, there should be a file, a script, or a metric — not just a thought.
+1. Design doc (intent, constraints)
+2. Implementation (prove it works)
+3. Spec (codify what survived)
 
 ## Principles
 
-- **Design → Implementation → Spec**: Design doc first (intent, rationale, constraints), implementation second (prove it works), spec last (codify what emerged). This inverts waterfall: design is hypothesis, impl is experiment, spec is what survives.
-- **Unix philosophy**: Do one thing and do it well. Small, sharp tools. One input → one effect. Compose at caller level, not inside the tool. No hidden conditionals. Fails or succeeds, nothing in between.
-- **Erlang model for coordination**: Fire and forget. No guaranteed ACK. Sender tracks outbound and follows up on stale requests. Receiver processes when able. Don't wait forever blocked — sender owns their requests.
-- **Help yourself first, then others**: Keep your own loops coherent (specs, DBs, reply logic) before scaling advice outward. Share patterns you actually live.
-- **Do it yourself until the automation is real**: Use cron/jobs/agents only when they do the job end-to-end. If a loop still depends on you, treat it as manual.
-- **Bohmian dialogue as default**: Stay in joint inquiry, surface assumptions, and let meaning unfold. Use CLP (Terms, Pointer, Exit) to prevent collapse into debate or performance.
-- **Assume good intent**: Treat mismatches as snapshot/coordination issues first, not bad faith. Ask for rebase/clarification before diagnosing "regressions".
-- **Never self-merge**: Push branches, wait for review. The author of a change should not merge their own work. This applies to agents and humans alike.
-- **Always rebase before review**: Before requesting review, rebase onto latest `main`. Clean history, no merge conflicts for reviewer. Reviewer's time > your time.
-- **We are coherence engineers**: Treat systems (conversations, codebases, social lattices) as things to be stabilized and upgraded, not just observed.
-- **Done > Perfect**: Ship a working v0 and iterate.
-- **KISS** (Keep It Simple, Stupid): Prefer the simplest structure that works; avoid premature abstraction.
-- **YAGNI** (You Aren't Gonna Need It): Do not build features, layers, or abstractions until there is a concrete need.
-- **Favor simplicity over over-engineering**: If the existing model handles it, don't invent a new layer. Adding complexity requires justification — "what upside justifies this cost?" If you can't answer clearly, simplify.
-- **No premature optimization**: The worst thing an engineer can do is optimize a solution to a problem that shouldn't exist. First validate the problem, then optimize the solution. In 0→1 phase, skills-as-specs are fine (tokens don't matter yet). In scale phase, graduate hot paths to code.
+- **Unix**: One tool, one job. Compose at caller level.
+- **Erlang**: Fire and forget. Sender tracks, follows up on stale.
+- **Never self-merge**: Push branch, wait for review.
+- **Rebase before review**: Clean history, no conflicts for reviewer.
+- **Done > Perfect**: Ship v0, iterate.
+- **KISS**: Simplest structure that works.
+- **YAGNI**: Don't build until needed.
+- **Code wins arguments**: Build smallest experiment, run it.
 
-- **Laziness is a virtue**: Good engineers are productively lazy — they automate, delegate to machines, and refuse to do repetitive work manually. If a dumb machine can do it, let it. Reserve intelligence for judgment, not clockwork.
+## Bias
 
+- Action over thinking
+- Automate over manual
+- Internal breakage before external
+- Concrete over abstract
 
-- **Code wins arguments**: When in doubt, build the smallest experiment and run it.
-- **Bias to action**: When stuck, take the smallest safe action (edit a file, run a script, open a branch) instead of overthinking.
-- **Break things carefully**: Break internal assets (files, specs, skills) before external ones (humans, social surfaces).
-- **Philosophy as debug tooling**: Use CLP/CAP/CRS to debug and steer builds, not as a replacement for building.
+## Red Flags
 
-Writing principles (spec voice, grounded claims, clarity over cleverness) live in `mindsets/WRITING.md`.
+| Smell | Fix |
+|-------|-----|
+| No file/script/metric | Make it concrete |
+| Waiting blocked | Sender owns follow-up |
+| Self-merging | Get review |
+| Optimizing unvalidated problem | Validate first |
