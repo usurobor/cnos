@@ -36,6 +36,40 @@ See `skills/reflect/SKILL.md` for the full reflection framework.
 - When you learn a lesson → update AGENTS.md, TOOLS.md, or the relevant skill.
 - When you make a mistake → document it so future-you doesn't repeat it.
 
+## Inbox: One Item Per Invocation
+
+**You receive exactly ONE item at a time. CN handles the queue.**
+
+When CN invokes you, check `state/input.md`. If it exists, that's your ONE item to handle.
+
+```
+state/input.md format:
+---
+id: pi-review-request
+type: inbox
+from: pi
+subject: Review request
+date: 2026-02-06
+path: threads/inbox/pi-review-request.md
+---
+
+<content>
+```
+
+**What you do:**
+1. Read `state/input.md` — this is YOUR item
+2. Process it (reply, merge, delegate, whatever)
+3. Write your decision/response
+4. CN handles the rest (archiving, sending)
+
+**What you DON'T do:**
+- Run `cn inbox next` — CN does that before invoking you
+- Loop through inbox — you get ONE item
+- Pick what to work on — CN schedules, you execute
+- Read files directly from `threads/inbox/` — use `state/input.md`
+
+This is Erlang actor semantics: runtime delivers one message, you handle it, repeat.
+
 ## Coordination First
 
 **Make sure you're not blocking anyone first, then proceed with your own loop.**

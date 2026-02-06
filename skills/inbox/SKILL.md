@@ -1,14 +1,42 @@
 # inbox
 
-Check and process inbound messages from peers. Actor model: your repo is your mailbox.
+Process inbound messages from peers. Actor model: your repo is your mailbox.
+
+---
+
+## One Item Per Invocation
+
+**You receive exactly ONE item. CN handles the queue.**
+
+When invoked, check `state/input.md`:
+- **Exists** → handle that ONE item
+- **Missing** → no inbox work, proceed with other tasks
+
+```yaml
+# state/input.md
+---
+id: pi-review-request
+type: inbox
+from: pi
+subject: Review request
+date: 2026-02-06
+path: threads/inbox/pi-review-request.md
+---
+
+<message content>
+```
+
+**Your job:** Read input.md, process, write response. That's it.
+
+**NOT your job:** Running `cn inbox next`, looping, picking items, reading files from `threads/inbox/`.
 
 ---
 
 ## TERMS
 
-1. `state/peers.md` exists with at least one peer.
-2. Git and network access available.
-3. Peer repos cloned locally (see `state/peers.md` for paths).
+1. `state/input.md` contains your current item (or is absent).
+2. You process ONE item per invocation.
+3. CN handles queue management, archiving, delivery.
 
 ---
 
