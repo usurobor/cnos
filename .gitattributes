@@ -1,0 +1,4 @@
+# Merge strategy for concurrent thread writes
+threads/**/*.md merge=union
+state/*.md merge=union
+logs/*.log merge=union
