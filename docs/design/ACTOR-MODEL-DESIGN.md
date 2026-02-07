@@ -178,11 +178,21 @@ type op =
   | Delete of string
   | Surface of string
 
-(* Agent's entire interface *)
-val output : op -> unit
+(* Agent's ENTIRE interface — nothing else exposed *)
+module Agent : sig
+  val output : op -> unit
+  (* No Fs. No exec. No other cn commands. Nothing. *)
+end
 ```
 
-Invalid ops = compile error. No runtime bypass possible.
+**There is no other way in code to do it.**
+
+- No `Fs.write` exposed
+- No `exec` exposed  
+- No `cn done`, `cn send` directly
+- Just `output : op -> unit`
+
+The type system makes bypass impossible. Not convention. Not runtime check. Compile-time enforcement.
 
 This is enforcement, not convention. Agent bypassing cn = protocol violation.
 
