@@ -15,6 +15,8 @@ MCAs are concrete and actionable. Insights are abstract and inform future MCAs.
 
 Track both. Count MCAs per session.
 
+**Tracking:** Append insights to `state/insights.md` with date and source.
+
 ## Axes
 
 | Axis | Question |
