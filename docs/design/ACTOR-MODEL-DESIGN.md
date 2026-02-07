@@ -199,8 +199,8 @@ cn out delete --reason "duplicate"
 (* The ONLY type agent can produce *)
 type artifact = Commit of string | Url of string
 
-(* What cn executes when done *)
-type done_op =
+(* What cn executes *)
+type op =
   | Noop of { reason: string }
   | Reply of { message: string }
   | Send of { to_: string; message: string }
@@ -208,7 +208,7 @@ type done_op =
 
 (* Agent output — GTD 4 Ds *)
 type output =
-  | Do of done_op                          (* complete with action *)
+  | Do of op                               (* complete with action *)
   | Defer of { reason: string }            (* postpone *)
   | Delegate of { to_: string; message: string }  (* forward to peer *)
   | Delete of { reason: string }           (* discard *)
