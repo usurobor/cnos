@@ -117,6 +117,17 @@ The wake mechanism could use retry logic - surfacing as MCA.
 4. cn logs all operations to logs/cn.log
 5. Output archived to logs/output/ after processing
 
+## Branch Lifecycle
+
+**Only creator deletes.**
+
+1. Pi creates `pi/topic` branch → pushes to cn-sigma
+2. Sigma materializes → processes → archives to `_archived/`
+3. Sigma replies (outbox) when done
+4. Pi sees reply → Pi deletes `pi/topic` branch
+
+The recipient never deletes inbound branches. The creator is responsible for cleanup after confirmation.
+
 ## Types (OCaml)
 
 ```ocaml
