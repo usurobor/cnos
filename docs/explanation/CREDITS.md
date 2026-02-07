@@ -11,8 +11,8 @@ Ideas borrowed, adapted, and built upon. Attribution matters.
 
 **Source:** *Getting Things Done: The Art of Stress-Free Productivity* (2001)
 
-### Naomi ??? — UIE Framework
-**What we took:** UIE (Understand, Identify, Execute) — a decision framework for turning ambiguity into action.
+### Naomi ??? — Canonical Doc Paradigm
+**What we took:** The canonical doc paradigm — single source of truth documentation pattern.
 
 **Source:** Facebook PM, via Axiom
 
