@@ -11,3 +11,11 @@ Collected principles from humans worth remembering.
 When presenting issues, always end with your MCA (Most Coherent Action).
 
 ---
+
+## RBI
+
+> "Why do anything if you can do nothing?"
+
+The best code is no code. The best action is often no action. Don't add complexity unless forced.
+
+---
