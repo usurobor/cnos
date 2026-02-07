@@ -218,6 +218,14 @@ type gtd =
    - Op = what cn executes when agent does Do
    - Defer/Delegate/Delete are NOT ops, they're GTD actions *)
 
+(* AUTOMATIC NOTIFICATION:
+   When agent responds to input from a peer, cn MUST automatically
+   notify the input creator of the action taken.
+   
+   Pi sends input → Sigma calls cn out <gtd> → cn notifies Pi
+   
+   This closes the loop. Creator always knows what happened. *)
+
 (* Agent's ENTIRE interface — nothing else exposed *)
 module Agent : sig
   val out : gtd -> unit  (* Do | Defer | Delegate | Delete *)
