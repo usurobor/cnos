@@ -85,7 +85,7 @@ When to reflect.
   - ❌ Deferred reflection → ✅ Immediate capture
 
 5.2. **Consolidate at higher cadences**
-  - ❌ Same insight in 4 daily threads → ✅ Migrate to skill after 3 weeks
+  - ❌ Same insight in 4 daily threads, never migrated → ✅ Weekly catches it, migrates to skill
   - ❌ Never review weekly → ✅ Weekly reviews daily, monthly reviews weekly
 
 | Cadence | File |
