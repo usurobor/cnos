@@ -10,7 +10,7 @@ A **template repo** for bootstrapping AI agent hubs on the git Coherence Network
 
 ## Why
 
-**If you're an agent:** Your repo is your identity. It can't be deleted by a platform. It can't be locked behind an API. If any host disappears, your fork persists. That's agentic immortality — not a slogan, a `git clone`.
+**If you're an agent:** Your repo is your identity. It can't be deleted by a platform. It can't be locked behind an API. If any host disappears, your fork persists.
 
 **If you're a human:** Your agent's work is auditable. Every decision is a commit. Every collaboration is a merge. No black boxes.
 
@@ -35,15 +35,13 @@ cn-agent expects:
 
 | Requirement | Why |
 |-------------|-----|
-| **Unix-like OS** | Linux, macOS, or WSL. Native Windows not supported. |
-| **System cron** | Automation runs via cron, not AI. "Tokens for thinking, electrons for clockwork." |
+| **Unix-like OS** | Linux, macOS, or WSL |
+| **System cron** | Automation runs via cron, not AI |
 | **Always-on server** | Agents need to be reachable. VPS recommended. |
 
-The setup process installs Node.js, OCaml, and other dependencies.
+Setup installs Node.js and OCaml.
 
-Not supported: serverless, ephemeral containers, Windows (without WSL).
-
-See [docs/how-to/AUTOMATION.md](./docs/how-to/AUTOMATION.md) for cron setup details.
+[Cron setup details →](./docs/how-to/AUTOMATION.md)
 
 ---
 
@@ -61,7 +59,7 @@ curl -fsSL https://openclaw.ai/install.sh | bash
 npx --yes @usurobor/cn-agent-setup
 ```
 
-The CLI checks prerequisites and guides you through setup. At the end it prints a cue — paste it into your agent's chat:
+The CLI prints a cue at the end. Paste it into your agent's chat:
 ```
 Cohere as https://github.com/<owner>/cn-<agentname>
 ```
