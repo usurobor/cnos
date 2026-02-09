@@ -779,49 +779,49 @@ let execute_op hub_path name input_id op =
 
 (* === Archive completed IO pair === *)
 
+(* Generate timestamp-based ID as fallback *)
+let generate_run_id () =
+  now_iso () |> Js.String.replaceByRe ~regexp:[%mel.re "/[:.]/g"] ~replacement:"-"
+
 let archive_io_pair hub_path name =
   let inp = input_path hub_path in
   let outp = output_path hub_path in
   
-  match get_file_id inp, get_file_id outp with
-  | Some input_id, Some output_id when input_id = output_id ->
-      (* IDs match - archive both *)
-      let logs_in = logs_input_dir hub_path in
-      let logs_out = logs_output_dir hub_path in
-      Fs.ensure_dir logs_in;
-      Fs.ensure_dir logs_out;
-      
-      let output_content = Fs.read outp in
-      let archive_name = input_id ^ ".md" in
-      Fs.write (Path.join logs_in archive_name) (Fs.read inp);
-      Fs.write (Path.join logs_out archive_name) output_content;
-      
-      (* Extract and execute agent operations from output *)
-      let output_meta = parse_frontmatter output_content in
-      let ops = extract_ops output_meta in
-      ops |> List.iter (fun op ->
-        print_endline (info (Printf.sprintf "Executing: %s" (string_of_agent_op op)));
-        execute_op hub_path name input_id op);
-      
-      Fs.unlink inp;
-      Fs.unlink outp;
-      
-      log_action hub_path "io.archive" (Printf.sprintf "id:%s ops:%d" input_id (List.length ops));
-      print_endline (ok (Printf.sprintf "Archived IO pair: %s (%d ops)" input_id (List.length ops)));
-      true
-  | Some _, Some _ ->
-      print_endline (fail "ID mismatch between input.md and output.md");
-      false
-  | Some _, None ->
-      (* Input exists but no output yet - agent still working *)
-      false
-  | None, Some _ ->
-      (* Output without input - orphan, shouldn't happen *)
-      print_endline (warn "Orphan output.md found (no input.md)");
-      false
-  | None, None ->
-      (* Neither exists - ready for new work *)
-      true
+  (* Run ID comes from input.md (cn owns it), fallback to timestamp *)
+  let run_id = get_file_id inp |> Option.value ~default:(generate_run_id ()) in
+  
+  (* Check if output exists - if not, agent still working *)
+  if not (Fs.exists outp) then begin
+    print_endline (info (Printf.sprintf "Waiting: run=%s, no output yet" run_id));
+    false
+  end
+  else begin
+    (* Archive both under run_id *)
+    let logs_in = logs_input_dir hub_path in
+    let logs_out = logs_output_dir hub_path in
+    Fs.ensure_dir logs_in;
+    Fs.ensure_dir logs_out;
+    
+    let output_content = Fs.read outp in
+    let archive_name = run_id ^ ".md" in
+    Fs.write (Path.join logs_in archive_name) (Fs.read inp);
+    Fs.write (Path.join logs_out archive_name) output_content;
+    
+    (* Execute ops from output *)
+    let output_meta = parse_frontmatter output_content in
+    let ops = extract_ops output_meta in
+    ops |> List.iter (fun op ->
+      print_endline (info (Printf.sprintf "Executing: %s" (string_of_agent_op op)));
+      execute_op hub_path name run_id op);
+    
+    (* Clear both *)
+    Fs.unlink inp;
+    Fs.unlink outp;
+    
+    log_action hub_path "io.archive" (Printf.sprintf "run:%s ops:%d" run_id (List.length ops));
+    print_endline (ok (Printf.sprintf "Archived: %s (%d ops)" run_id (List.length ops)));
+    true
+  end
 
 (* === Queue inbox items === *)
 
