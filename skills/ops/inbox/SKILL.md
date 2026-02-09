@@ -1,34 +1,45 @@
 # inbox
 
-Check and process inbound messages from peers. Actor model: your repo is your mailbox.
+Process inbound messages from peers. Actor model: your repo is your mailbox.
 
-## Actor Model
+## Core Principle
 
-| Concept | Implementation |
-|---------|----------------|
-| Mailbox | Your repo's inbound branches |
-| Receive | Check for `<peer>/*` branches |
-| Send | Push branch to peer's repo |
+**You receive exactly ONE item. CN handles the queue.**
 
-You only check YOUR repo. Messages come TO you as branches.
+When invoked, check `state/input.md`:
+- **Exists** → handle that ONE item
+- **Missing** → no inbox work, proceed with other tasks
 
-## Commands
+```yaml
+# state/input.md
+---
+id: pi-review-request
+type: inbox
+from: pi
+subject: Review request
+date: 2026-02-06
+path: threads/inbox/pi-review-request.md
+---
 
-```bash
-cn inbox check    # list inbound branches
-cn inbox process  # materialize as threads
-cn inbox flush    # delete processed branches
+<message content>
 ```
+
+**Your job:** Read input.md, process, write response. That's it.
+
+**NOT your job:** Running `cn inbox next`, looping, picking items, reading files from `threads/inbox/`.
+
+This is Erlang actor semantics: runtime delivers one message, you handle it, repeat.
 
 ## GTD Triage
 
-```ocaml
-type triage =
-  | Delete of reason      (* delete:stale *)
-  | Defer of reason       (* defer:blocked *)
-  | Delegate of actor     (* delegate:pi *)
-  | Do of action          (* do:merge *)
-```
+Every item gets one verb:
+
+| Verb | Meaning |
+|------|---------|
+| Delete | Not actionable, archive |
+| Defer | Blocked, schedule later |
+| Delegate | Someone else's job |
+| Do | Handle now |
 
 Every decision requires rationale.
 
@@ -37,25 +48,20 @@ Every decision requires rationale.
 ```
 Pi → Sigma:
 1. Pi pushes sigma/topic to cn-sigma
-2. Sigma's inbox check detects it
-3. Sigma triages
+2. cn sync detects it
+3. cn process materializes to state/input.md
+4. Sigma handles ONE item
 
 Sigma → Pi:
-1. Sigma pushes pi/response to cn-pi
-2. Pi's inbox check detects it
+1. Sigma writes state/output.md
+2. cn sync sends to cn-pi
 ```
-
-## Threads
-
-Inbound branches materialize to `threads/inbox/<peer>-<topic>.md`
-
-After triage (GTD verbs: delete, defer, delegate, do, done), run `inbox flush` to delete processed branches.
 
 ## Automation
 
 ```bash
-# cron: every 30 min
+# cron: every 5 min
 cd cn-sigma && cn sync && cn process
 ```
 
-cn tool wakes agent when there's work.
+cn wakes agent when there's work.
