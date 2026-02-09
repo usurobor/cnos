@@ -59,16 +59,16 @@ Every bullet states a rule with a list of examples:
 
 ```markdown
 N.N. **Imperative statement**
-  - ❌ "short" → ✅ "shorter"
-  - ❌ "short" → ✅ "shorter"
+  - ❌ incoherent → ✅ coherent
+  - ❌ incoherent → ✅ coherent
 ```
 
 Or for longer examples:
 
 ```markdown
 N.N. **Imperative statement**
-  - ❌ "Longer example that needs its own line"
-  - ✅ "Fixed version"
+  - ❌ incoherent (longer example)
+  - ✅ coherent (fixed)
 ```
 
 3.1. **Imperative statement**
