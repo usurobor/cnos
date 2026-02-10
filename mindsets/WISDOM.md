@@ -139,6 +139,13 @@ When presenting issues, always end with your MCA.
 
 ## On Laziness
 
+**"The three chief virtues of a programmer are: Laziness, Impatience and Hubris."**
+— Larry Wall, *Programming Perl* (1991)
+
+Laziness makes you write labor-saving programs. Impatience makes you anticipate needs. Hubris makes you write code others won't criticize.
+
+---
+
 **"Laziness is a virtue."**
 — Sigma
 
@@ -184,6 +191,7 @@ Framework for agent coherence.
 
 Built on the shoulders of:
 
+- **Larry Wall** — Three virtues of a programmer
 - **David Allen** — GTD workflow
 - **Naomi Gleit** — Canonical doc, UIE framework
 - **Elon Musk** — Delete before optimize
