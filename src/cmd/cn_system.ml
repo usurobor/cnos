@@ -249,7 +249,12 @@ let run_update_with_cron hub_path =
 
 (* === Self-Update Check === *)
 
+(* Guard re-entry: CN_UPDATE_RUNNING prevents infinite re-exec loop.
+   See cn_agent.ml re_exec and MCA: self-update-recursion. *)
 let self_update_check () =
+  match Sys.getenv_opt "CN_UPDATE_RUNNING" with
+  | Some _ -> ()
+  | None ->
   let args = Cn_ffi.Process.argv |> Array.to_list in
   let is_skip_cmd = List.exists (fun a ->
     a = "--help" || a = "-h" || a = "--version" || a = "-V" || a = "help"
@@ -272,9 +277,8 @@ let self_update_check () =
           match Cn_ffi.Child_process.exec pull_cmd with
           | Some _ ->
               print_endline (Cn_fmt.ok (Printf.sprintf "Updated to cn %s" latest));
-              let args_str = args |> List.tl |> String.concat " " in
-              let _ = Cn_ffi.Child_process.exec (Printf.sprintf "cn %s" args_str) in
-              Cn_ffi.Process.exit 0
+              Unix.putenv "CN_UPDATE_RUNNING" "1";
+              Unix.execvp "/usr/local/bin/cn" (Cn_ffi.Process.argv)
           | None ->
               print_endline (Cn_fmt.warn "Self-update failed - continuing with current version")
         end
