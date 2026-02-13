@@ -25,7 +25,8 @@ let update_runtime hub_path =
     | Some c -> String.trim c
     | None -> "unknown"
   in
-  let cn_commit = match Cn_ffi.Child_process.exec "git -C $(npm root -g)/cnagent rev-parse --short HEAD 2>/dev/null" with
+  (* 1.2/1.4: explicit path to cnos install dir, not npm — cn is native OCaml *)
+  let cn_commit = match Cn_ffi.Child_process.exec "git -C /usr/local/lib/cnos rev-parse --short HEAD 2>/dev/null" with
     | Some c -> String.trim c
     | None -> "unknown"
   in
@@ -217,16 +218,21 @@ let run_update () =
       Cn_ffi.Process.exit 1
   | Some latest_raw ->
       let latest = String.trim latest_raw in
-      match latest = version with
-      | true -> print_endline (Cn_fmt.ok "Already up to date")
-      | false ->
+      (* 1.1: semantic version comparison, not string equality *)
+      match Cn_agent.is_newer_version latest version with
+      | false -> print_endline (Cn_fmt.ok "Already up to date")
+      | true ->
           print_endline (Cn_fmt.info (Printf.sprintf "New version available: %s" latest));
           print_endline (Cn_fmt.info "Updating via git...");
-          let install_dir = "/usr/local/lib/cnos" in
+          (* 2.9: validate before destroy — pull, build, verify *)
           let pull_cmd = Printf.sprintf "cd %s && git pull --ff-only 2>&1" install_dir in
           match Cn_ffi.Child_process.exec pull_cmd with
-          | Some _ -> print_endline (Cn_fmt.ok (Printf.sprintf "Updated to v%s" latest))
           | None -> print_endline (Cn_fmt.fail "Update failed. Try: cd /usr/local/lib/cnos && git pull")
+          | Some _ ->
+              let build_cmd = Printf.sprintf "cd %s && opam exec -- dune build 2>/dev/null && opam exec -- dune install 2>/dev/null" install_dir in
+              match Cn_ffi.Child_process.exec build_cmd with
+              | Some _ -> print_endline (Cn_fmt.ok (Printf.sprintf "Updated to v%s" latest))
+              | None -> print_endline (Cn_fmt.fail "Build failed after pull. Source updated but binary is stale.")
 
 let run_update_with_cron hub_path =
   run_update ();
@@ -249,7 +255,12 @@ let run_update_with_cron hub_path =
 
 (* === Self-Update Check === *)
 
+(* Guard re-entry: CN_UPDATE_RUNNING prevents infinite re-exec loop.
+   See cn_agent.ml re_exec and MCA: self-update-recursion. *)
 let self_update_check () =
+  match Sys.getenv_opt "CN_UPDATE_RUNNING" with
+  | Some _ -> ()
+  | None ->
   let args = Cn_ffi.Process.argv |> Array.to_list in
   let is_skip_cmd = List.exists (fun a ->
     a = "--help" || a = "-h" || a = "--version" || a = "-V" || a = "help"
@@ -266,15 +277,16 @@ let self_update_check () =
     | None -> ()
     | Some latest_raw ->
         let latest = String.trim latest_raw in
-        if latest <> version && latest <> "" then begin
+        (* 1.1: semantic version comparison, not string inequality.
+           String cmp would trigger "update" to an older version. *)
+        if Cn_agent.is_newer_version latest version then begin
           print_endline (Cn_fmt.info (Printf.sprintf "Updating cn %s → %s..." version latest));
           let pull_cmd = Printf.sprintf "cd %s && git pull --ff-only 2>/dev/null" install_dir in
           match Cn_ffi.Child_process.exec pull_cmd with
           | Some _ ->
               print_endline (Cn_fmt.ok (Printf.sprintf "Updated to cn %s" latest));
-              let args_str = args |> List.tl |> String.concat " " in
-              let _ = Cn_ffi.Child_process.exec (Printf.sprintf "cn %s" args_str) in
-              Cn_ffi.Process.exit 0
+              Unix.putenv "CN_UPDATE_RUNNING" "1";
+              Unix.execvp "/usr/local/bin/cn" (Cn_ffi.Process.argv)
           | None ->
               print_endline (Cn_fmt.warn "Self-update failed - continuing with current version")
         end
@@ -365,7 +377,7 @@ Agents and repos this hub communicates with.
   update_runtime hub_dir;
 
   let _ = Cn_ffi.Child_process.exec_in ~cwd:hub_dir "git add -A" in
-  let _ = Cn_ffi.Child_process.exec_in ~cwd:hub_dir (Printf.sprintf "git commit -m 'Initialize %s hub'" hub_name) in
+  let _ = Cn_ffi.Child_process.exec_in ~cwd:hub_dir (Printf.sprintf "git commit -m %s" (Filename.quote (Printf.sprintf "Initialize %s hub" hub_name))) in
 
   print_endline (Cn_fmt.ok (Printf.sprintf "Created hub: %s" hub_dir));
   print_endline (Cn_fmt.info "Next steps:");
