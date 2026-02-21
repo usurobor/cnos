@@ -9,6 +9,11 @@
     Uses atomic file locking (O_CREAT|O_EXCL) to prevent cron overlap
     and daemon race conditions on state/input.md and state/output.md.
 
+    Prompt contract (Option B):
+    - LLM is invoked with the body below frontmatter (packed context only).
+    - state/input.md frontmatter is runtime metadata (id, from, chat_id, date).
+    - logs/input/ archives the full file for audit (metadata + prompt).
+
     Recovery model: process_one handles three entry states under lock:
     1. output.md exists → finalize existing cycle
     2. input.md exists (no output) → resume: call LLM, then finalize
@@ -45,6 +50,44 @@ let acquire_lock hub_path =
 let release_lock hub_path fd =
   (try Unix.close fd with _ -> ());
   (try Cn_ffi.Fs.unlink (lock_path hub_path) with _ -> ())
+
+(* === Helpers === *)
+
+(** Extract the original inbound message from packed context.
+    Cn_context.pack always emits "## Inbound Message\n\n" as the last
+    section. On recovery paths, extract_body returns the full packed
+    context, so we slice out just the inbound part for conversation. *)
+let extract_inbound_message packed_body =
+  match String.split_on_char '\n' packed_body
+        |> List.fold_left (fun (found, acc) line ->
+             if found then (true, line :: acc)
+             else if line = "## Inbound Message" then (true, acc)
+             else (false, acc)
+           ) (false, [])
+  with
+  | (true, lines) ->
+      let text = lines |> List.rev |> String.concat "\n" |> String.trim in
+      (* Skip the **From**: and **ID**: metadata lines *)
+      let lines = String.split_on_char '\n' text in
+      let body_lines = lines |> List.filter (fun l ->
+        let trimmed = String.trim l in
+        not (String.length trimmed >= 8 && String.sub trimmed 0 8 = "**From**")
+        && not (String.length trimmed >= 6 && String.sub trimmed 0 6 = "**ID**")) in
+      String.concat "\n" body_lines |> String.trim
+  | (false, _) -> packed_body (* fallback: no marker found *)
+
+(** Derive the Telegram payload from resolved ops and body.
+    Priority: body (if present) > first Reply msg > "(acknowledged)" *)
+let telegram_payload (ops : agent_op list) body =
+  match body with
+  | Some b -> b
+  | None ->
+      (* Look for a Reply op with a message *)
+      let reply_msg = ops |> List.find_map (fun op ->
+        match op with Reply (_, msg) -> Some msg | _ -> None) in
+      match reply_msg with
+      | Some msg -> msg
+      | None -> "(acknowledged)"
 
 (* === Conversation persistence === *)
 
@@ -101,7 +144,7 @@ let cleanup_state hub_path =
 (* === Input construction === *)
 
 (** Build state/input.md with frontmatter + packed context.
-    The file content IS the LLM prompt — audit-correct by construction. *)
+    Frontmatter is runtime metadata; the body below is the LLM prompt. *)
 let build_input_md ~trigger_id ~from ~chat_id_opt ~packed_content =
   let buf = Buffer.create (String.length packed_content + 128) in
   Buffer.add_string buf "---\n";
@@ -117,9 +160,10 @@ let build_input_md ~trigger_id ~from ~chat_id_opt ~packed_content =
 
 (* === Finalize: archive → execute → project → conversation → cleanup === *)
 
-(** Run the post-LLM pipeline on an existing input.md + output.md pair. *)
+(** Run the post-LLM pipeline on an existing input.md + output.md pair.
+    inbound_message is the original user message (not the full packed context). *)
 let finalize ~(config : Cn_config.config) ~hub_path ~name
-      ~trigger_id ~from ~message ~output_content =
+      ~trigger_id ~from ~inbound_message ~output_content =
   (* 1. Archive raw BEFORE effects *)
   archive_raw hub_path ~trigger_id;
 
@@ -147,7 +191,7 @@ let finalize ~(config : Cn_config.config) ~hub_path ~name
            if k = "chat_id" then Some v else None) |> Option.value ~default:"" in
          (match int_of_string_opt chat_id_str with
           | Some chat_id ->
-              let payload = match body with Some b -> b | None -> output_content in
+              let payload = telegram_payload ops body in
               (match Cn_telegram.send_message ~token ~chat_id ~text:payload with
                | Ok () ->
                    Cn_hub.log_action hub_path "process.telegram_reply"
@@ -163,9 +207,10 @@ let finalize ~(config : Cn_config.config) ~hub_path ~name
      | None ->
          Cn_hub.log_action hub_path "process.telegram_skip" "no token");
 
-  (* 5. Append to conversation history (body, not raw frontmatter) *)
+  (* 5. Append to conversation history *)
   let assistant_text = match body with Some b -> b | None -> output_content in
-  append_conversation hub_path ~user_msg:message ~assistant_msg:assistant_text;
+  append_conversation hub_path
+    ~user_msg:inbound_message ~assistant_msg:assistant_text;
 
   (* 6. Cleanup state files *)
   cleanup_state hub_path;
@@ -176,10 +221,8 @@ let finalize ~(config : Cn_config.config) ~hub_path ~name
 
 (* === Pipeline === *)
 
-(** Process one cycle. Handles three entry states under lock:
-    1. output.md exists → finalize existing cycle
-    2. input.md exists (no output) → resume: call LLM, then finalize
-    3. neither exists → dequeue, pack, call, finalize
+(** Process one cycle. Handles inbox queueing, update checks, and three
+    recovery states, all under lock.
     Returns Ok () on success or when idle. Error on LLM/processing failure. *)
 let process_one ~(config : Cn_config.config) ~hub_path ~name =
   match acquire_lock hub_path with
@@ -201,12 +244,15 @@ let process_one ~(config : Cn_config.config) ~hub_path ~name =
           if key = k then Some v else None) |> Option.value ~default:"unknown" in
         let trigger_id = get "id" in
         let from = get "from" in
-        let message = match extract_body input_content with
+        (* On recovery, extract_body is the full packed context.
+           Extract just the inbound message for conversation history. *)
+        let packed_body = match extract_body input_content with
           | Some b -> b | None -> "" in
+        let inbound_message = extract_inbound_message packed_body in
         Cn_hub.log_action hub_path "process.resume_finalize"
           (Printf.sprintf "id:%s" trigger_id);
         finalize ~config ~hub_path ~name
-          ~trigger_id ~from ~message ~output_content
+          ~trigger_id ~from ~inbound_message ~output_content
 
       (* === State 2: input.md exists, no output → resume LLM call === *)
       end else if Cn_ffi.Fs.exists inp then begin
@@ -216,16 +262,17 @@ let process_one ~(config : Cn_config.config) ~hub_path ~name =
           if key = k then Some v else None) |> Option.value ~default:"unknown" in
         let trigger_id = get "id" in
         let from = get "from" in
-        let message = match extract_body input_content with
+        let packed_body = match extract_body input_content with
           | Some b -> b | None -> "" in
+        let inbound_message = extract_inbound_message packed_body in
 
         Cn_hub.log_action hub_path "process.resume_llm"
           (Printf.sprintf "id:%s from:%s" trigger_id from);
 
-        (* Call LLM with the input.md body — it IS the packed context *)
+        (* Call LLM with the input.md body (= packed context, Option B) *)
         match Cn_llm.call ~api_key:config.anthropic_key
                 ~model:config.model ~max_tokens:config.max_tokens
-                ~content:message with
+                ~content:packed_body with
         | Error msg ->
             Cn_hub.log_action hub_path "process.llm_error"
               (Printf.sprintf "id:%s error:%s" trigger_id msg);
@@ -237,10 +284,17 @@ let process_one ~(config : Cn_config.config) ~hub_path ~name =
                  trigger_id response.input_tokens response.output_tokens
                  response.stop_reason);
             finalize ~config ~hub_path ~name
-              ~trigger_id ~from ~message ~output_content:response.content
+              ~trigger_id ~from ~inbound_message
+              ~output_content:response.content
 
-      (* === State 3: neither exists → dequeue + full pipeline === *)
+      (* === State 3: neither exists → queue inbox + dequeue + pipeline === *)
       end else begin
+        (* Queue inbox items under lock to prevent overlap races *)
+        let queued = Cn_agent.queue_inbox_items hub_path in
+        if queued > 0 then
+          print_endline (Cn_fmt.ok
+            (Printf.sprintf "Queued %d inbox item(s)" queued));
+
         match Cn_agent.queue_pop hub_path with
         | None ->
             print_endline (Cn_fmt.ok "Queue empty");
@@ -253,22 +307,23 @@ let process_one ~(config : Cn_config.config) ~hub_path ~name =
             let from = get "from" in
             let chat_id_opt = meta |> List.find_map (fun (k, v) ->
               if k = "chat_id" then int_of_string_opt v else None) in
-            let message = match extract_body raw_content with
+            let inbound_message = match extract_body raw_content with
               | Some b -> b | None -> "" in
 
             Cn_hub.log_action hub_path "process.start"
               (Printf.sprintf "id:%s from:%s" trigger_id from);
 
             (* Pack context *)
-            let packed = Cn_context.pack ~hub_path ~trigger_id ~message ~from in
+            let packed = Cn_context.pack ~hub_path ~trigger_id
+              ~message:inbound_message ~from in
 
-            (* Write input.md = frontmatter + packed content (= what LLM sees) *)
+            (* Write input.md = frontmatter + packed content *)
             let input_doc = build_input_md ~trigger_id ~from ~chat_id_opt
               ~packed_content:packed.content in
             Cn_ffi.Fs.ensure_dir (Cn_ffi.Path.join hub_path "state");
             Cn_ffi.Fs.write inp input_doc;
 
-            (* Call LLM *)
+            (* Call LLM with packed body (Option B: body-only prompt) *)
             match Cn_llm.call ~api_key:config.anthropic_key
                     ~model:config.model ~max_tokens:config.max_tokens
                     ~content:packed.content with
@@ -283,23 +338,16 @@ let process_one ~(config : Cn_config.config) ~hub_path ~name =
                      trigger_id response.input_tokens response.output_tokens
                      response.stop_reason);
                 finalize ~config ~hub_path ~name
-                  ~trigger_id ~from ~message ~output_content:response.content
+                  ~trigger_id ~from ~inbound_message
+                  ~output_content:response.content
       end
     with
     | result -> finally (); result
     | exception exn -> finally (); raise exn
 
-(** Cron/daemon entry point. Queues inbox items, runs update check,
-    then calls process_one (which handles all recovery states under lock). *)
+(** Cron/daemon entry point. Runs update check when idle, then calls
+    process_one which handles all state mutation under lock. *)
 let run_cron ~(config : Cn_config.config) ~hub_path ~name =
-  (* Queue inbox items *)
-  let queued = Cn_agent.queue_inbox_items hub_path in
-  if queued > 0 then
-    print_endline (Cn_fmt.ok (Printf.sprintf "Queued %d inbox item(s)" queued));
-
-  Cn_hub.log_action hub_path "cron.start"
-    (Printf.sprintf "queue=%d" (Cn_agent.queue_count hub_path));
-
   (* Auto-update check (only when idle — no input.md/output.md) *)
   let inp = Cn_agent.input_path hub_path in
   let outp = Cn_agent.output_path hub_path in
@@ -327,5 +375,5 @@ let run_cron ~(config : Cn_config.config) ~hub_path ~name =
         | _ -> ()
   end;
 
-  (* process_one handles all recovery states under lock *)
+  (* process_one handles inbox queueing + all recovery states under lock *)
   ignore (process_one ~config ~hub_path ~name)
