@@ -10,6 +10,8 @@
     - Cn_telegram.parse_update (Telegram update JSON extraction)
     - Cn_context.tokenize (keyword extraction)
     - Cn_context.score_skill (keyword overlap scoring)
+    - Cn_runtime.extract_inbound_message (message slicing from packed context)
+    - Cn_runtime.telegram_payload (Telegram reply fallback chain)
 
     Note: Most cn_cmd functions do I/O (Cn_ffi.Fs, git). Those need
     integration tests with temp directories. This file covers the
@@ -355,3 +357,93 @@ let%expect_test "load_conversation: parses conversation JSON fixture" =
     assistant: Hi there!
     user: How are you?
   |}]
+
+
+(* === Cn_runtime: extract_inbound_message === *)
+
+let%expect_test "extract_inbound_message: extracts message from packed context" =
+  let packed = {|## Identity
+
+You are Sigma.
+
+## Inbound Message
+
+**From**: telegram
+**ID**: tg-42
+
+Hello, how are you?
+|} in
+  let msg = Cn_runtime.extract_inbound_message packed in
+  Printf.printf "%s\n" msg;
+  [%expect {| Hello, how are you? |}]
+
+let%expect_test "extract_inbound_message: multiline message body" =
+  let packed = {|## Identity
+
+Core identity here.
+
+## Inbound Message
+
+**From**: pi
+**ID**: pi-review
+
+Please review this code.
+It has three files.
+Thanks!
+|} in
+  let msg = Cn_runtime.extract_inbound_message packed in
+  Printf.printf "%s\n" msg;
+  [%expect {|
+    Please review this code.
+    It has three files.
+    Thanks!
+  |}]
+
+let%expect_test "extract_inbound_message: no marker returns full input" =
+  let text = "Just some raw text without any sections" in
+  let msg = Cn_runtime.extract_inbound_message text in
+  Printf.printf "%s\n" msg;
+  [%expect {| Just some raw text without any sections |}]
+
+let%expect_test "extract_inbound_message: empty packed body" =
+  let msg = Cn_runtime.extract_inbound_message "" in
+  Printf.printf "%S\n" msg;
+  [%expect {| "" |}]
+
+let%expect_test "extract_inbound_message: message with no metadata lines" =
+  let packed = "## Inbound Message\n\nJust the message\n" in
+  let msg = Cn_runtime.extract_inbound_message packed in
+  Printf.printf "%s\n" msg;
+  [%expect {| Just the message |}]
+
+
+(* === Cn_runtime: telegram_payload === *)
+
+let%expect_test "telegram_payload: body takes priority" =
+  let ops : Cn_lib.agent_op list = [Reply ("id-1", "reply text")] in
+  let result = Cn_runtime.telegram_payload ops (Some "Body content") in
+  Printf.printf "%s\n" result;
+  [%expect {| Body content |}]
+
+let%expect_test "telegram_payload: falls back to Reply op message" =
+  let ops : Cn_lib.agent_op list = [Ack "id-1"; Reply ("id-2", "The reply")] in
+  let result = Cn_runtime.telegram_payload ops None in
+  Printf.printf "%s\n" result;
+  [%expect {| The reply |}]
+
+let%expect_test "telegram_payload: no body and no Reply op" =
+  let ops : Cn_lib.agent_op list = [Ack "id-1"; Done "id-2"] in
+  let result = Cn_runtime.telegram_payload ops None in
+  Printf.printf "%s\n" result;
+  [%expect {| (acknowledged) |}]
+
+let%expect_test "telegram_payload: empty ops and no body" =
+  let result = Cn_runtime.telegram_payload [] None in
+  Printf.printf "%s\n" result;
+  [%expect {| (acknowledged) |}]
+
+let%expect_test "telegram_payload: body=Some empty string still wins" =
+  let ops : Cn_lib.agent_op list = [Reply ("id-1", "reply")] in
+  let result = Cn_runtime.telegram_payload ops (Some "") in
+  Printf.printf "%S\n" result;
+  [%expect {| "" |}]
