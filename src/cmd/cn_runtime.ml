@@ -208,7 +208,7 @@ let finalize ~(config : Cn_config.config) ~hub_path ~name
          Cn_hub.log_action hub_path "process.telegram_skip" "no token");
 
   (* 5. Append to conversation history *)
-  let assistant_text = match body with Some b -> b | None -> output_content in
+  let assistant_text = telegram_payload ops body in
   append_conversation hub_path
     ~user_msg:inbound_message ~assistant_msg:assistant_text;
 
@@ -348,10 +348,11 @@ let process_one ~(config : Cn_config.config) ~hub_path ~name =
 (** Cron/daemon entry point. Runs update check when idle, then calls
     process_one which handles all state mutation under lock. *)
 let run_cron ~(config : Cn_config.config) ~hub_path ~name =
-  (* Auto-update check (only when idle — no input.md/output.md) *)
+  (* Auto-update check (only when truly idle — no state files, no lock) *)
   let inp = Cn_agent.input_path hub_path in
   let outp = Cn_agent.output_path hub_path in
-  if not (Cn_ffi.Fs.exists inp) && not (Cn_ffi.Fs.exists outp) then begin
+  if not (Cn_ffi.Fs.exists inp) && not (Cn_ffi.Fs.exists outp)
+     && not (Cn_ffi.Fs.exists (lock_path hub_path)) then begin
     let update_info = Cn_agent.check_for_update hub_path in
     match update_info with
     | Cn_agent.Update_skip -> ()

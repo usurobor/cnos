@@ -1,6 +1,6 @@
 # Agent Runtime: Native cnos Agent
 
-**Version:** 3.1.2
+**Version:** 3.1.3
 **Authors:** Sigma (original), Pi (CLP), Axiom (pure-pipe directive)
 **Date:** 2026-02-19
 **Status:** Draft
@@ -9,6 +9,12 @@
 ---
 
 ## Patch Notes
+
+**v3.1.3** — Prompt contract: Option B (body-only prompt):
+- LLM is invoked with the body below frontmatter only (packed context)
+- `state/input.md` frontmatter (`id`, `from`, `chat_id`, `date`) is runtime metadata, not part of the prompt
+- `logs/input/` archives the full file (metadata + prompt) for audit
+- Conversation history stores the original inbound message (not the full packed context)
 
 **v3.1.2** — Harden curl-backed HTTP + safe exec:
 - Use `data-raw` (not `data`) to prevent curl `@file` body interpretation
@@ -77,7 +83,7 @@
 This document proposes a native OCaml agent runtime for cnos that replaces OpenClaw (OC) as the orchestration layer. The runtime preserves the CN security invariant:
 
 > **Agent interface (conceptual):** `state/input.md → state/output.md`
-> **LLM reality:** sees only the text contents of input.md, produces the text contents of output.md. cn performs all file I/O, network, and effect execution.
+> **LLM reality:** sees only the body below frontmatter of input.md (the packed context), produces the text contents of output.md. Frontmatter in input.md is runtime metadata (`id`, `from`, `chat_id`, `date`), not part of the prompt. cn performs all file I/O, network, and effect execution.
 
 The runtime (`cn`) is responsible for:
 1. Receiving Telegram messages, enqueuing, and packing `state/input.md` with all needed context
@@ -178,7 +184,7 @@ message ──→  1. Pack state/input.md
              │ <user's message>     │
              └──────────────────────┘
                         │
-             2. Call Claude API  ──→  LLM reads input text
+             2. Call Claude API  ──→  LLM reads body below frontmatter
                                       LLM produces output text
                                   ←──  (single request→response)
                         │
@@ -203,7 +209,7 @@ message ──→  1. Pack state/input.md
 
 ### What the LLM Sees
 
-The LLM receives a single system prompt + user message. It does NOT see files, tools, or shell access. It sees **text** — the content of `state/input.md` assembled by cn — and produces **text** — the content of `state/output.md` with ops in frontmatter.
+The LLM receives a single system prompt + user message. It does NOT see files, tools, or shell access. It sees **text** — the body below frontmatter of `state/input.md` (the packed context assembled by cn) — and produces **text** — the content of `state/output.md` with ops in frontmatter. The frontmatter of `state/input.md` is runtime metadata only and is not included in the prompt.
 
 ### What cn Does
 
