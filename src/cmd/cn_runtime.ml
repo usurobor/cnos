@@ -7,7 +7,12 @@
     split. Single entry points: process_one and run_cron.
 
     Uses atomic file locking (O_CREAT|O_EXCL) to prevent cron overlap
-    and daemon race conditions on state/input.md and state/output.md. *)
+    and daemon race conditions on state/input.md and state/output.md.
+
+    Recovery model: process_one handles three entry states under lock:
+    1. output.md exists → finalize existing cycle
+    2. input.md exists (no output) → resume: call LLM, then finalize
+    3. neither exists → dequeue, pack, call LLM, finalize *)
 
 open Cn_lib
 
@@ -68,10 +73,114 @@ let append_conversation hub_path ~user_msg ~assistant_msg =
   else new_entries in
   Cn_ffi.Fs.write path (Cn_json.to_string (Cn_json.Array trimmed) ^ "\n")
 
+(* === Archive (raw — no ops, no deletes) === *)
+
+(** Copy input.md and output.md to logs/ for audit.
+    Does NOT execute ops or delete state files — caller handles those. *)
+let archive_raw hub_path ~trigger_id =
+  let inp = Cn_agent.input_path hub_path in
+  let outp = Cn_agent.output_path hub_path in
+  let logs_in = Cn_agent.logs_input_dir hub_path in
+  let logs_out = Cn_agent.logs_output_dir hub_path in
+  Cn_ffi.Fs.ensure_dir logs_in;
+  Cn_ffi.Fs.ensure_dir logs_out;
+  let archive_name = trigger_id ^ ".md" in
+  (if Cn_ffi.Fs.exists inp then
+     Cn_ffi.Fs.write (Cn_ffi.Path.join logs_in archive_name) (Cn_ffi.Fs.read inp));
+  (if Cn_ffi.Fs.exists outp then
+     Cn_ffi.Fs.write (Cn_ffi.Path.join logs_out archive_name) (Cn_ffi.Fs.read outp));
+  Cn_hub.log_action hub_path "io.archive" (Printf.sprintf "trigger:%s" trigger_id)
+
+(** Clean up state files after a cycle is fully complete. *)
+let cleanup_state hub_path =
+  let inp = Cn_agent.input_path hub_path in
+  let outp = Cn_agent.output_path hub_path in
+  (if Cn_ffi.Fs.exists inp then Cn_ffi.Fs.unlink inp);
+  (if Cn_ffi.Fs.exists outp then Cn_ffi.Fs.unlink outp)
+
+(* === Input construction === *)
+
+(** Build state/input.md with frontmatter + packed context.
+    The file content IS the LLM prompt — audit-correct by construction. *)
+let build_input_md ~trigger_id ~from ~chat_id_opt ~packed_content =
+  let buf = Buffer.create (String.length packed_content + 128) in
+  Buffer.add_string buf "---\n";
+  Buffer.add_string buf (Printf.sprintf "id: %s\n" trigger_id);
+  Buffer.add_string buf (Printf.sprintf "from: %s\n" from);
+  (match chat_id_opt with
+   | Some cid -> Buffer.add_string buf (Printf.sprintf "chat_id: %d\n" cid)
+   | None -> ());
+  Buffer.add_string buf (Printf.sprintf "date: %s\n" (Cn_fmt.now_iso ()));
+  Buffer.add_string buf "---\n\n";
+  Buffer.add_string buf packed_content;
+  Buffer.contents buf
+
+(* === Finalize: archive → execute → project → conversation → cleanup === *)
+
+(** Run the post-LLM pipeline on an existing input.md + output.md pair. *)
+let finalize ~(config : Cn_config.config) ~hub_path ~name
+      ~trigger_id ~from ~message ~output_content =
+  (* 1. Archive raw BEFORE effects *)
+  archive_raw hub_path ~trigger_id;
+
+  (* 2. Parse output *)
+  let output_meta = parse_frontmatter output_content in
+  let ops = extract_ops output_meta in
+  let body = extract_body output_content in
+  let ops = List.map (resolve_payload body) ops in
+
+  (* 3. Execute operations *)
+  List.iter (fun op ->
+    Cn_agent.execute_op hub_path name trigger_id op
+  ) ops;
+
+  (* 4. Project to Telegram if from Telegram *)
+  (if from = "telegram" then
+     match config.telegram_token with
+     | Some token ->
+         let inp = Cn_agent.input_path hub_path in
+         let input_meta =
+           if Cn_ffi.Fs.exists inp then parse_frontmatter (Cn_ffi.Fs.read inp)
+           else []
+         in
+         let chat_id_str = input_meta |> List.find_map (fun (k, v) ->
+           if k = "chat_id" then Some v else None) |> Option.value ~default:"" in
+         (match int_of_string_opt chat_id_str with
+          | Some chat_id ->
+              let payload = match body with Some b -> b | None -> output_content in
+              (match Cn_telegram.send_message ~token ~chat_id ~text:payload with
+               | Ok () ->
+                   Cn_hub.log_action hub_path "process.telegram_reply"
+                     (Printf.sprintf "chat_id:%d" chat_id)
+               | Error msg ->
+                   Cn_hub.log_action hub_path "process.telegram_error"
+                     (Printf.sprintf "chat_id:%d error:%s" chat_id msg);
+                   print_endline (Cn_fmt.warn
+                     (Printf.sprintf "Telegram reply failed: %s" msg)))
+          | None ->
+              Cn_hub.log_action hub_path "process.telegram_skip"
+                "no chat_id in input frontmatter")
+     | None ->
+         Cn_hub.log_action hub_path "process.telegram_skip" "no token");
+
+  (* 5. Append to conversation history (body, not raw frontmatter) *)
+  let assistant_text = match body with Some b -> b | None -> output_content in
+  append_conversation hub_path ~user_msg:message ~assistant_msg:assistant_text;
+
+  (* 6. Cleanup state files *)
+  cleanup_state hub_path;
+
+  print_endline (Cn_fmt.ok
+    (Printf.sprintf "Processed: %s (%d ops)" trigger_id (List.length ops)));
+  Ok ()
+
 (* === Pipeline === *)
 
-(** Process one queued item through the full pipeline.
-    Returns Ok () on success, Error msg on failure or empty queue. *)
+(** Process one cycle. Handles three entry states under lock:
+    1. output.md exists → finalize existing cycle
+    2. input.md exists (no output) → resume: call LLM, then finalize
+    3. neither exists → dequeue, pack, call, finalize
+    Returns Ok () on success or when idle. Error on LLM/processing failure. *)
 let process_one ~(config : Cn_config.config) ~hub_path ~name =
   match acquire_lock hub_path with
   | Error msg ->
@@ -80,193 +189,143 @@ let process_one ~(config : Cn_config.config) ~hub_path ~name =
   | Ok lock_fd ->
     let finally () = release_lock hub_path lock_fd in
     match
-      (* 1. Dequeue *)
-      match Cn_agent.queue_pop hub_path with
-      | None ->
-          print_endline (Cn_fmt.ok "Queue empty");
-          Ok ()
-      | Some raw_content ->
-          let meta = parse_frontmatter raw_content in
-          let get k = meta |> List.find_map (fun (key, v) ->
-            if key = k then Some v else None) |> Option.value ~default:"unknown" in
-          let trigger_id = get "id" in
-          let from = get "from" in
-          let message = match extract_body raw_content with
-            | Some b -> b | None -> "" in
+      let inp = Cn_agent.input_path hub_path in
+      let outp = Cn_agent.output_path hub_path in
 
-          Cn_hub.log_action hub_path "process.start"
-            (Printf.sprintf "id:%s from:%s" trigger_id from);
+      (* === State 1: output.md exists → finalize existing cycle === *)
+      if Cn_ffi.Fs.exists outp && Cn_ffi.Fs.exists inp then begin
+        let input_content = Cn_ffi.Fs.read inp in
+        let output_content = Cn_ffi.Fs.read outp in
+        let meta = parse_frontmatter input_content in
+        let get k = meta |> List.find_map (fun (key, v) ->
+          if key = k then Some v else None) |> Option.value ~default:"unknown" in
+        let trigger_id = get "id" in
+        let from = get "from" in
+        let message = match extract_body input_content with
+          | Some b -> b | None -> "" in
+        Cn_hub.log_action hub_path "process.resume_finalize"
+          (Printf.sprintf "id:%s" trigger_id);
+        finalize ~config ~hub_path ~name
+          ~trigger_id ~from ~message ~output_content
 
-          (* 2. Pack context *)
-          let packed = Cn_context.pack ~hub_path ~trigger_id ~message ~from in
-          let inp = Cn_agent.input_path hub_path in
-          Cn_ffi.Fs.ensure_dir (Cn_ffi.Path.join hub_path "state");
-          Cn_ffi.Fs.write inp raw_content;
+      (* === State 2: input.md exists, no output → resume LLM call === *)
+      end else if Cn_ffi.Fs.exists inp then begin
+        let input_content = Cn_ffi.Fs.read inp in
+        let meta = parse_frontmatter input_content in
+        let get k = meta |> List.find_map (fun (key, v) ->
+          if key = k then Some v else None) |> Option.value ~default:"unknown" in
+        let trigger_id = get "id" in
+        let from = get "from" in
+        let message = match extract_body input_content with
+          | Some b -> b | None -> "" in
 
-          (* 3. Call LLM *)
-          (match Cn_llm.call ~api_key:config.anthropic_key
-                   ~model:config.model ~max_tokens:config.max_tokens
-                   ~content:packed.content with
-           | Error msg ->
-               Cn_hub.log_action hub_path "process.llm_error"
-                 (Printf.sprintf "id:%s error:%s" trigger_id msg);
-               Error (Printf.sprintf "LLM call failed: %s" msg)
-           | Ok response ->
-               (* 4. Write output *)
-               let outp = Cn_agent.output_path hub_path in
-               Cn_ffi.Fs.write outp response.content;
+        Cn_hub.log_action hub_path "process.resume_llm"
+          (Printf.sprintf "id:%s from:%s" trigger_id from);
 
-               Cn_hub.log_action hub_path "process.llm_done"
-                 (Printf.sprintf "id:%s in=%d out=%d stop=%s"
-                    trigger_id response.input_tokens response.output_tokens
-                    response.stop_reason);
+        (* Call LLM with the input.md body — it IS the packed context *)
+        match Cn_llm.call ~api_key:config.anthropic_key
+                ~model:config.model ~max_tokens:config.max_tokens
+                ~content:message with
+        | Error msg ->
+            Cn_hub.log_action hub_path "process.llm_error"
+              (Printf.sprintf "id:%s error:%s" trigger_id msg);
+            Error (Printf.sprintf "LLM call failed: %s" msg)
+        | Ok response ->
+            Cn_ffi.Fs.write outp response.content;
+            Cn_hub.log_action hub_path "process.llm_done"
+              (Printf.sprintf "id:%s in=%d out=%d stop=%s"
+                 trigger_id response.input_tokens response.output_tokens
+                 response.stop_reason);
+            finalize ~config ~hub_path ~name
+              ~trigger_id ~from ~message ~output_content:response.content
 
-               (* 5. Archive BEFORE effects *)
-               let _archived = Cn_agent.archive_io_pair hub_path name in
+      (* === State 3: neither exists → dequeue + full pipeline === *)
+      end else begin
+        match Cn_agent.queue_pop hub_path with
+        | None ->
+            print_endline (Cn_fmt.ok "Queue empty");
+            Ok ()
+        | Some raw_content ->
+            let meta = parse_frontmatter raw_content in
+            let get k = meta |> List.find_map (fun (key, v) ->
+              if key = k then Some v else None) |> Option.value ~default:"unknown" in
+            let trigger_id = get "id" in
+            let from = get "from" in
+            let chat_id_opt = meta |> List.find_map (fun (k, v) ->
+              if k = "chat_id" then int_of_string_opt v else None) in
+            let message = match extract_body raw_content with
+              | Some b -> b | None -> "" in
 
-               (* 6. Parse output *)
-               let output_meta = parse_frontmatter response.content in
-               let ops = extract_ops output_meta in
-               let body = extract_body response.content in
-               let ops = List.map (resolve_payload body) ops in
+            Cn_hub.log_action hub_path "process.start"
+              (Printf.sprintf "id:%s from:%s" trigger_id from);
 
-               (* 7. Execute operations *)
-               List.iter (fun op ->
-                 Cn_agent.execute_op hub_path name trigger_id op
-               ) ops;
+            (* Pack context *)
+            let packed = Cn_context.pack ~hub_path ~trigger_id ~message ~from in
 
-               (* 8. Project to Telegram if from Telegram *)
-               (if from = "telegram" then
-                  match config.telegram_token with
-                  | Some token ->
-                      (* Extract chat_id from frontmatter *)
-                      let chat_id_str = get "chat_id" in
-                      (match int_of_string_opt chat_id_str with
-                       | Some chat_id ->
-                           let payload = match body with
-                             | Some b -> b | None -> response.content in
-                           (match Cn_telegram.send_message ~token ~chat_id ~text:payload with
-                            | Ok () ->
-                                Cn_hub.log_action hub_path "process.telegram_reply"
-                                  (Printf.sprintf "chat_id:%d" chat_id)
-                            | Error msg ->
-                                Cn_hub.log_action hub_path "process.telegram_error"
-                                  (Printf.sprintf "chat_id:%d error:%s" chat_id msg);
-                                print_endline (Cn_fmt.warn
-                                  (Printf.sprintf "Telegram reply failed: %s" msg)))
-                       | None ->
-                           Cn_hub.log_action hub_path "process.telegram_skip"
-                             "no chat_id in frontmatter")
-                  | None ->
-                      Cn_hub.log_action hub_path "process.telegram_skip" "no token");
+            (* Write input.md = frontmatter + packed content (= what LLM sees) *)
+            let input_doc = build_input_md ~trigger_id ~from ~chat_id_opt
+              ~packed_content:packed.content in
+            Cn_ffi.Fs.ensure_dir (Cn_ffi.Path.join hub_path "state");
+            Cn_ffi.Fs.write inp input_doc;
 
-               (* 9. Append to conversation history *)
-               append_conversation hub_path
-                 ~user_msg:message ~assistant_msg:response.content;
-
-               print_endline (Cn_fmt.ok
-                 (Printf.sprintf "Processed: %s (ops=%d, tokens=%d+%d)"
-                    trigger_id (List.length ops)
-                    response.input_tokens response.output_tokens));
-               Ok ())
+            (* Call LLM *)
+            match Cn_llm.call ~api_key:config.anthropic_key
+                    ~model:config.model ~max_tokens:config.max_tokens
+                    ~content:packed.content with
+            | Error msg ->
+                Cn_hub.log_action hub_path "process.llm_error"
+                  (Printf.sprintf "id:%s error:%s" trigger_id msg);
+                Error (Printf.sprintf "LLM call failed: %s" msg)
+            | Ok response ->
+                Cn_ffi.Fs.write outp response.content;
+                Cn_hub.log_action hub_path "process.llm_done"
+                  (Printf.sprintf "id:%s in=%d out=%d stop=%s"
+                     trigger_id response.input_tokens response.output_tokens
+                     response.stop_reason);
+                finalize ~config ~hub_path ~name
+                  ~trigger_id ~from ~message ~output_content:response.content
+      end
     with
     | result -> finally (); result
     | exception exn -> finally (); raise exn
 
-(** Cron/daemon entry point. Queues inbox items, derives FSM state,
-    handles archive/timeout, then processes one item. *)
+(** Cron/daemon entry point. Queues inbox items, runs update check,
+    then calls process_one (which handles all recovery states under lock). *)
 let run_cron ~(config : Cn_config.config) ~hub_path ~name =
   (* Queue inbox items *)
   let queued = Cn_agent.queue_inbox_items hub_path in
   if queued > 0 then
     print_endline (Cn_fmt.ok (Printf.sprintf "Queued %d inbox item(s)" queued));
 
-  (* Derive actor state from filesystem *)
+  Cn_hub.log_action hub_path "cron.start"
+    (Printf.sprintf "queue=%d" (Cn_agent.queue_count hub_path));
+
+  (* Auto-update check (only when idle — no input.md/output.md) *)
   let inp = Cn_agent.input_path hub_path in
   let outp = Cn_agent.output_path hub_path in
+  if not (Cn_ffi.Fs.exists inp) && not (Cn_ffi.Fs.exists outp) then begin
+    let update_info = Cn_agent.check_for_update hub_path in
+    match update_info with
+    | Cn_agent.Update_skip -> ()
+    | Cn_agent.Update_git ver | Cn_agent.Update_binary ver ->
+        print_endline (Cn_fmt.info
+          (Printf.sprintf "Update available: %s -> %s" Cn_lib.version ver));
+        Cn_hub.log_action hub_path "actor.update"
+          (Printf.sprintf "checking:%s" ver);
+        let result = Cn_agent.do_update update_info in
+        match result with
+        | Cn_protocol.Update_complete ->
+            Cn_hub.log_action hub_path "actor.update"
+              (Printf.sprintf "complete:%s" ver);
+            print_endline (Cn_fmt.ok
+              (Printf.sprintf "Updated to %s, re-executing..." ver));
+            Cn_agent.re_exec ()
+        | Cn_protocol.Update_fail ->
+            Cn_hub.log_action hub_path "actor.update" "failed";
+            print_endline (Cn_fmt.warn
+              "Update failed, continuing with current version")
+        | _ -> ()
+  end;
 
-  let input_age_min =
-    if Cn_ffi.Fs.exists inp then
-      try
-        let stat = Unix.stat inp in
-        (Unix.gettimeofday () -. stat.Unix.st_mtime) /. 60.0
-      with _ -> 0.0
-    else 0.0
-  in
-  let cron_period_min =
-    match Cn_ffi.Process.getenv_opt "CN_CRON_PERIOD_MIN" with
-    | Some s -> (match int_of_string_opt s with Some i -> float_of_int i | None -> 5.0)
-    | None -> 5.0
-  in
-  let timeout_cycles =
-    match Cn_ffi.Process.getenv_opt "CN_TIMEOUT_CYCLES" with
-    | Some s -> (match int_of_string_opt s with Some i -> float_of_int i | None -> 3.0)
-    | None -> 3.0
-  in
-  let max_age_min = cron_period_min *. timeout_cycles in
-
-  let state = Cn_protocol.actor_derive_state_with_timeout
-    ~input_exists:(Cn_ffi.Fs.exists inp)
-    ~output_exists:(Cn_ffi.Fs.exists outp)
-    ~input_age_min ~max_age_min
-  in
-
-  Cn_hub.log_action hub_path "cron.state"
-    (Printf.sprintf "state=%s queue=%d"
-       (Cn_protocol.string_of_actor_state state)
-       (Cn_agent.queue_count hub_path));
-
-  match state with
-  | Cn_protocol.OutputReady ->
-      (* Archive previous IO pair, then process next *)
-      let _archived = Cn_agent.archive_io_pair hub_path name in
-      Cn_agent.auto_save hub_path name;
-      ignore (process_one ~config ~hub_path ~name)
-
-  | Cn_protocol.TimedOut ->
-      (* Archive timeout, then process next *)
-      let _archived = Cn_agent.archive_timeout hub_path name in
-      Cn_agent.auto_save hub_path name;
-      ignore (process_one ~config ~hub_path ~name)
-
-  | Cn_protocol.Idle ->
-      (* Auto-update check with FSM transitions, then process *)
-      let update_info = Cn_agent.check_for_update hub_path in
-      (match update_info with
-       | Cn_agent.Update_skip ->
-           ignore (process_one ~config ~hub_path ~name)
-       | Cn_agent.Update_git ver | Cn_agent.Update_binary ver ->
-           print_endline (Cn_fmt.info
-             (Printf.sprintf "Update available: %s -> %s" Cn_lib.version ver));
-           Cn_hub.log_action hub_path "actor.update"
-             (Printf.sprintf "checking:%s" ver);
-           let result = Cn_agent.do_update update_info in
-           (match result with
-            | Cn_protocol.Update_complete ->
-                Cn_hub.log_action hub_path "actor.update"
-                  (Printf.sprintf "complete:%s" ver);
-                print_endline (Cn_fmt.ok
-                  (Printf.sprintf "Updated to %s, re-executing..." ver));
-                Cn_agent.re_exec ()
-            | Cn_protocol.Update_fail ->
-                Cn_hub.log_action hub_path "actor.update" "failed";
-                print_endline (Cn_fmt.warn
-                  "Update failed, continuing with current version");
-                ignore (process_one ~config ~hub_path ~name)
-            | _ ->
-                ignore (process_one ~config ~hub_path ~name)))
-
-  | Cn_protocol.Processing ->
-      print_endline (Cn_fmt.info
-        (Printf.sprintf "Agent processing (age=%.0fm, timeout=%.0fm)"
-           input_age_min max_age_min))
-
-  | Cn_protocol.InputReady ->
-      (* Input written but not processed — resume via process_one.
-         Note: process_one will find queue empty, but that's fine —
-         the existing input.md will be picked up by the next cron cycle
-         after it moves to OutputReady state. *)
-      print_endline (Cn_fmt.info "Input ready, awaiting processing")
-
-  | Cn_protocol.Updating ->
-      print_endline (Cn_fmt.info "Update in progress")
+  (* process_one handles all recovery states under lock *)
+  ignore (process_one ~config ~hub_path ~name)
