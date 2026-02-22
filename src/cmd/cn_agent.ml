@@ -256,6 +256,8 @@ let queue_inbox_items hub_path =
     |> List.length
 
 (* === Feed next input === *)
+(* DEPRECATED: Replaced by Cn_runtime.process_one (Step 9).
+   Kept for one release cycle — existing cron setups may still call run_inbound. *)
 
 let feed_next_input hub_path =
   let inp = input_path hub_path in
@@ -284,11 +286,11 @@ let feed_next_input hub_path =
       true
 
 (* === Wake agent === *)
-(* DEPRECATED: OpenClaw removed. Will be replaced by Cn_runtime.process_one.
-   Kept as a stub so run_inbound compiles until cn_runtime.ml lands. *)
+(* DEPRECATED: OpenClaw removed, replaced by Cn_runtime.process_one (Step 9).
+   Kept for one release cycle — existing cron setups may still call run_inbound. *)
 
 let wake_agent _hub_path =
-  print_endline (Cn_fmt.warn "wake_agent: OpenClaw removed. Native runtime not yet wired (see PLAN.md Step 8-9)")
+  print_endline (Cn_fmt.warn "wake_agent: deprecated — use `cn agent` (Cn_runtime.run_cron)")
 
 (* === Queue Commands === *)
 
@@ -597,9 +599,14 @@ let re_exec () =
   Unix.execvp bin_path (Cn_ffi.Process.argv)
 
 (* === Inbound (Actor Loop — FSM-driven) === *)
+(* DEPRECATED: Replaced by Cn_runtime.run_cron (Step 9).
+   The full pipeline — dequeue, pack, LLM call, archive, execute, project —
+   is now handled by Cn_runtime.process_one under atomic lock.
+   Kept for one release cycle — existing cron setups may still call this. *)
 
 let run_inbound hub_path name =
-  print_endline (Cn_fmt.info "cn in: handling external input...");
+  print_endline (Cn_fmt.warn "run_inbound: deprecated — use `cn agent` (Cn_runtime.run_cron)");
+  print_endline (Cn_fmt.info "cn in: handling external input (legacy path)...");
 
   (* Step 1: Queue any new inbox items *)
   let queued = queue_inbox_items hub_path in
