@@ -12,10 +12,18 @@
     - Cn_context.score_skill (keyword overlap scoring)
     - Cn_runtime.extract_inbound_message (message slicing from packed context)
     - Cn_runtime.telegram_payload (Telegram reply fallback chain)
+    - Cn_config.load (config loading: defaults, env override, clamping, errors)
 
     Note: Most cn_cmd functions do I/O (Cn_ffi.Fs, git). Those need
     integration tests with temp directories. This file covers the
-    pure subset that can be tested with ppx_expect. *)
+    pure subset that can be tested with ppx_expect.
+
+    Cn_config tests use temp directories for .cn/config.json fixtures.
+
+    ENV VAR ORDERING: OCaml has no unsetenv. Tests that require
+    ANTHROPIC_KEY to be absent MUST come before any test that sets it.
+    Similarly, CN_MODEL override test sets it permanently. Tests are
+    ordered accordingly — do not reorder. *)
 
 (* === Cn_mail: parse_rejected_branch === *)
 
@@ -447,3 +455,115 @@ let%expect_test "telegram_payload: body=Some empty string still wins" =
   let result = Cn_runtime.telegram_payload ops (Some "") in
   Printf.printf "%S\n" result;
   [%expect {| "" |}]
+
+
+(* === Cn_config: load ===
+
+   Uses temp directories with real .cn/config.json files.
+   IMPORTANT: Tests are ordered by env var dependencies:
+   1. "missing ANTHROPIC_KEY" — MUST come first (before any test sets it)
+   2. All other tests set ANTHROPIC_KEY before calling load
+   3. CN_MODEL override test — sets CN_MODEL permanently *)
+
+let with_temp_hub ?config_json f =
+  let tmp = Filename.temp_dir "cn_config_test" "" in
+  let cn_dir = Filename.concat tmp ".cn" in
+  Cn_ffi.Fs.mkdir_p cn_dir;
+  (match config_json with
+   | Some json -> Cn_ffi.Fs.write (Filename.concat cn_dir "config.json") json
+   | None -> ());
+  Fun.protect ~finally:(fun () ->
+    (try Sys.remove (Filename.concat cn_dir "config.json") with _ -> ());
+    (try Unix.rmdir cn_dir with _ -> ());
+    (try Unix.rmdir tmp with _ -> ()))
+    (fun () -> f tmp)
+
+let show_config hub_path =
+  match Cn_config.load ~hub_path with
+  | Error msg -> Printf.printf "Error: %s\n" msg
+  | Ok c ->
+      Printf.printf "model=%s poll=%d timeout=%d max=%d users=[%s] tg=%s\n"
+        c.model c.poll_interval c.poll_timeout c.max_tokens
+        (c.allowed_users |> List.map string_of_int |> String.concat ",")
+        (match c.telegram_token with Some _ -> "set" | None -> "unset")
+
+let%expect_test "config: missing ANTHROPIC_KEY → Error" =
+  (* MUST be first config test — before any test sets ANTHROPIC_KEY *)
+  with_temp_hub (fun hub_path ->
+    show_config hub_path);
+  [%expect {| Error: ANTHROPIC_KEY not set (required for agent runtime) |}]
+
+let%expect_test "config: defaults with no config file" =
+  Unix.putenv "ANTHROPIC_KEY" "sk-test-key";
+  with_temp_hub (fun hub_path ->
+    show_config hub_path);
+  [%expect {| model=claude-sonnet-4-latest poll=1 timeout=30 max=8192 users=[] tg=unset |}]
+
+let%expect_test "config: runtime key overrides defaults" =
+  with_temp_hub
+    ~config_json:{|{"runtime":{"model":"claude-haiku-4-latest","poll_interval":5,"poll_timeout":60,"max_tokens":4096}}|}
+    (fun hub_path -> show_config hub_path);
+  [%expect {| model=claude-haiku-4-latest poll=5 timeout=60 max=4096 users=[] tg=unset |}]
+
+let%expect_test "config: allowed_users parsed as int list" =
+  with_temp_hub
+    ~config_json:{|{"runtime":{"allowed_users":[111,222,333]}}|}
+    (fun hub_path -> show_config hub_path);
+  [%expect {| model=claude-sonnet-4-latest poll=1 timeout=30 max=8192 users=[111,222,333] tg=unset |}]
+
+let%expect_test "config: empty allowed_users means deny all" =
+  with_temp_hub
+    ~config_json:{|{"runtime":{"allowed_users":[]}}|}
+    (fun hub_path -> show_config hub_path);
+  [%expect {| model=claude-sonnet-4-latest poll=1 timeout=30 max=8192 users=[] tg=unset |}]
+
+let%expect_test "config: integer clamping — poll_interval < 1 clamped to 1" =
+  with_temp_hub
+    ~config_json:{|{"runtime":{"poll_interval":0}}|}
+    (fun hub_path -> show_config hub_path);
+  [%expect {| model=claude-sonnet-4-latest poll=1 timeout=30 max=8192 users=[] tg=unset |}]
+
+let%expect_test "config: integer clamping — poll_timeout < 0 clamped to 0" =
+  with_temp_hub
+    ~config_json:{|{"runtime":{"poll_timeout":-5}}|}
+    (fun hub_path -> show_config hub_path);
+  [%expect {| model=claude-sonnet-4-latest poll=1 timeout=0 max=8192 users=[] tg=unset |}]
+
+let%expect_test "config: integer clamping — max_tokens < 1 clamped to 1" =
+  with_temp_hub
+    ~config_json:{|{"runtime":{"max_tokens":0}}|}
+    (fun hub_path -> show_config hub_path);
+  [%expect {| model=claude-sonnet-4-latest poll=1 timeout=30 max=1 users=[] tg=unset |}]
+
+let%expect_test "config: invalid JSON → Error with path" =
+  with_temp_hub
+    ~config_json:"not valid json {"
+    (fun hub_path ->
+      match Cn_config.load ~hub_path with
+      | Error msg ->
+          (* Error format: "<hub>/.cn/config.json: <parse error>"
+             Strip the random temp prefix, keep the stable suffix *)
+          let has_path = Cn_lib.starts_with ~prefix:hub_path msg in
+          let suffix =
+            let plen = String.length hub_path in
+            if String.length msg > plen then String.sub msg plen (String.length msg - plen)
+            else msg
+          in
+          Printf.printf "has_path=%b suffix=%s\n" has_path suffix
+      | Ok _ -> print_endline "unexpected Ok");
+  [%expect {| has_path=true suffix=/.cn/config.json: unexpected char 'n' at pos 0 |}]
+
+let%expect_test "config: no runtime key in JSON → defaults" =
+  with_temp_hub
+    ~config_json:{|{"other_key":"value"}|}
+    (fun hub_path -> show_config hub_path);
+  [%expect {| model=claude-sonnet-4-latest poll=1 timeout=30 max=8192 users=[] tg=unset |}]
+
+let%expect_test "config: CN_MODEL env overrides config file model" =
+  (* Sets CN_MODEL — putenv "" is not unsetenv, so model="" would
+     leak into any later config tests. Keep this LAST. *)
+  Unix.putenv "CN_MODEL" "claude-opus-4";
+  with_temp_hub
+    ~config_json:{|{"runtime":{"model":"claude-haiku-4-latest"}}|}
+    (fun hub_path -> show_config hub_path);
+  [%expect {| model=claude-opus-4 poll=1 timeout=30 max=8192 users=[] tg=unset |}]
