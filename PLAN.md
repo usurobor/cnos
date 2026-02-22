@@ -283,12 +283,13 @@ The orchestrator. Implements the full pipeline:
 ```ocaml
 val process_one : config:Cn_config.config -> hub_path:string -> name:string
                   -> (unit, string) result
-(** Dequeue one item, pack context, call LLM, archive, execute, project.
-    Returns Ok () if processed, Error if queue empty or failure. *)
+(** Handles recovery + dequeue + pack + LLM + finalize, all under lock.
+    Returns Ok () when idle/queue empty or processed successfully.
+    Returns Error only on LLM/processing failure. *)
 
 val run_cron : config:Cn_config.config -> hub_path:string -> name:string -> unit
-(** Cron entry point. Queues inbox items, checks MCA cycle, processes one item.
-    Replaces the current run_inbound. *)
+(** Cron entry point. Runs update check when idle (no state files, no lock),
+    then delegates to process_one for all state mutation under lock. *)
 ```
 
 **`process_one` pipeline:**
