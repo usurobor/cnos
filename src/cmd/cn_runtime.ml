@@ -41,7 +41,9 @@ let acquire_lock hub_path =
            (Printf.sprintf "age=%.0fs, removing" age);
          Cn_ffi.Fs.unlink path
        end
-     with _ -> ());
+     with exn ->
+       Cn_hub.log_action hub_path "lock.stat_error"
+         (Printexc.to_string exn));
   try
     let fd = Unix.openfile path [Unix.O_CREAT; Unix.O_EXCL; Unix.O_WRONLY] 0o644 in
     Ok fd
@@ -49,8 +51,10 @@ let acquire_lock hub_path =
     Error "agent already running (state/agent.lock exists)"
 
 let release_lock hub_path fd =
-  (try Unix.close fd with _ -> ());
-  (try Cn_ffi.Fs.unlink (lock_path hub_path) with _ -> ())
+  (try Unix.close fd with exn ->
+     Cn_hub.log_action hub_path "lock.close_error" (Printexc.to_string exn));
+  (try Cn_ffi.Fs.unlink (lock_path hub_path) with exn ->
+     Cn_hub.log_action hub_path "lock.unlink_error" (Printexc.to_string exn))
 
 (* === Helpers === *)
 
@@ -103,7 +107,13 @@ let append_conversation hub_path ~user_msg ~assistant_msg =
     if Cn_ffi.Fs.exists path then
       match Cn_ffi.Fs.read path |> Cn_json.parse with
       | Ok (Cn_json.Array items) -> items
-      | _ -> []
+      | Ok _ ->
+          Cn_hub.log_action hub_path "conversation.corrupt"
+            "expected JSON array, resetting";
+          []
+      | Error msg ->
+          Cn_hub.log_action hub_path "conversation.parse_error" msg;
+          []
     else []
   in
   let new_entries = existing @ [
@@ -380,11 +390,18 @@ let run_cron ~(config : Cn_config.config) ~hub_path ~name =
             Cn_hub.log_action hub_path "actor.update" "failed";
             print_endline (Cn_fmt.warn
               "Update failed, continuing with current version")
-        | _ -> ()
+        | other ->
+            Cn_hub.log_action hub_path "actor.update"
+              (Printf.sprintf "unexpected_state:%s"
+                 (Cn_protocol.string_of_actor_event other))
   end;
 
   (* process_one handles inbox queueing + all recovery states under lock *)
-  ignore (process_one ~config ~hub_path ~name)
+  (match process_one ~config ~hub_path ~name with
+   | Ok () -> ()
+   | Error msg ->
+       Cn_hub.log_action hub_path "cron.process_error" msg;
+       print_endline (Cn_fmt.warn (Printf.sprintf "Cron cycle failed: %s" msg)))
 
 (* === Telegram daemon === *)
 
@@ -468,10 +485,22 @@ let run_daemon ~(config : Cn_config.config) ~hub_path ~name =
       print_endline (Cn_fmt.fail "Daemon mode requires TELEGRAM_TOKEN");
       Cn_ffi.Process.exit 1
   | Some token ->
+      (* Startup diagnostics — Issue #20 Priority 1 *)
       print_endline (Cn_fmt.ok (Printf.sprintf
         "Telegram daemon started (poll=%ds timeout=%ds)"
         config.poll_interval config.poll_timeout));
-      Cn_hub.log_action hub_path "daemon.start" "telegram";
+      print_endline (Cn_fmt.info (Printf.sprintf
+        "  hub: %s" hub_path));
+      print_endline (Cn_fmt.info (Printf.sprintf
+        "  model: %s" config.model));
+      print_endline (Cn_fmt.info (Printf.sprintf
+        "  allowed_users: %d configured" (List.length config.allowed_users)));
+      if config.allowed_users = [] then
+        print_endline (Cn_fmt.warn
+          "allowed_users is empty — ALL Telegram messages will be rejected");
+      Cn_hub.log_action hub_path "daemon.start"
+        (Printf.sprintf "hub:%s model:%s allowed_users:%d"
+           hub_path config.model (List.length config.allowed_users));
       let offset = ref (read_offset hub_path) in
       while true do
         (match Cn_telegram.get_updates ~token ~offset:!offset
@@ -489,9 +518,14 @@ let run_daemon ~(config : Cn_config.config) ~hub_path ~name =
               | [] -> ()
               | (msg : Cn_telegram.message) :: rest ->
                   if not (is_allowed_user config msg.user_id) then begin
-                    (* Rejected: advance offset (handled by dropping) *)
+                    (* Rejected: warn on stderr + log — Issue #20 Priority 0 *)
+                    let username_str = match msg.username with
+                      | Some u -> Printf.sprintf " (@%s)" u | None -> "" in
+                    print_endline (Cn_fmt.warn (Printf.sprintf
+                      "Rejected message from user_id:%d%s (not in allowed_users)"
+                      msg.user_id username_str));
                     Cn_hub.log_action hub_path "daemon.rejected"
-                      (Printf.sprintf "user_id:%d" msg.user_id);
+                      (Printf.sprintf "user_id:%d%s" msg.user_id username_str);
                     offset := max !offset (msg.update_id + 1);
                     write_offset hub_path !offset;
                     drain rest

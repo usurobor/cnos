@@ -20,11 +20,35 @@ let rec find_hub_path dir =
 
 (* === Logging === *)
 
-let log_action _hub_path _action _details =
-  (* Removed: hub log redundant with system log + logs/runs/
-     System log: /var/log/cn-YYYYMMDD.log (cron stdout)
-     Audit trail: logs/runs/ (input + output + meta) *)
-  ()
+(** Structured log to logs/cn.log (JSON lines, append) + stderr.
+    This is the generic observability pattern: every action that
+    could fail silently gets a log_action call. The log file provides
+    audit trail; stderr provides daemon/cron visibility.
+
+    Format: {"ts":"<ISO>","action":"<dotted>","details":"<free-text>"}
+    Errors in the logger itself are swallowed (logging must not crash). *)
+let log_action hub_path action details =
+  let ts = Cn_fmt.now_iso () in
+  let escape_json s =
+    let buf = Buffer.create (String.length s) in
+    String.iter (fun c -> match c with
+      | '"' -> Buffer.add_string buf "\\\""
+      | '\\' -> Buffer.add_string buf "\\\\"
+      | '\n' -> Buffer.add_string buf "\\n"
+      | '\r' -> Buffer.add_string buf "\\r"
+      | c -> Buffer.add_char buf c) s;
+    Buffer.contents buf in
+  let line = Printf.sprintf "{\"ts\":\"%s\",\"action\":\"%s\",\"details\":\"%s\"}\n"
+    ts (escape_json action) (escape_json details) in
+  (* Emit to stderr for daemon/cron visibility *)
+  Printf.eprintf "[%s] %s %s\n%!" ts action details;
+  (* Append to logs/cn.log *)
+  let log_dir = Cn_ffi.Path.join hub_path "logs" in
+  let log_path = Cn_ffi.Path.join log_dir "cn.log" in
+  (try
+     Cn_ffi.Fs.ensure_dir log_dir;
+     Cn_ffi.Fs.append log_path line
+   with _ -> ()  (* logger must not crash the process *))
 
 (* === Peers === *)
 

@@ -125,10 +125,14 @@ let send_thread ~hub:_ ~from_name ~peer ~outbox_dir ~sent_dir ~file =
   let content = Fs.read file_path in
 
   match peer.clone with
-  | None -> None
+  | None ->
+      Printf.eprintf "[cn_io] send_thread: no clone path for peer %s, skipping %s\n%!" peer.name file;
+      None
   | Some clone_path ->
-      if not (Fs.exists clone_path) then None
-      else begin
+      if not (Fs.exists clone_path) then begin
+        Printf.eprintf "[cn_io] send_thread: clone not found at %s for peer %s, skipping %s\n%!" clone_path peer.name file;
+        None
+      end else begin
         let topic = Filename.chop_suffix_opt ~suffix:".md" file |> Option.value ~default:file in
         let branch_name = Printf.sprintf "%s/%s" from_name topic in
         let adhoc_dir = Path.join clone_path "threads/adhoc" in
@@ -143,15 +147,19 @@ let send_thread ~hub:_ ~from_name ~peer ~outbox_dir ~sent_dir ~file =
 
         let _ = Git.add_all ~cwd:clone_path in
         let _ = Git.commit ~cwd:clone_path ~msg:(Printf.sprintf "%s: %s" from_name topic) in
-        let _ = Git.push_branch ~cwd:clone_path ~branch:branch_name ~force:true in
+        let push_ok = Git.push_branch ~cwd:clone_path ~branch:branch_name ~force:true in
         let _ = Git.checkout_main ~cwd:clone_path in
 
-        (* Move to sent *)
-        let sent_path = Path.join sent_dir file in
-        Fs.write sent_path content;
-        Fs.unlink file_path;
-
-        Some file
+        if push_ok then begin
+          (* Only move to sent after confirmed push *)
+          let sent_path = Path.join sent_dir file in
+          Fs.write sent_path content;
+          Fs.unlink file_path;
+          Some file
+        end else begin
+          Printf.eprintf "[cn_io] send_thread: push failed for %s to %s (message kept in outbox)\n%!" file peer.name;
+          None
+        end
       end
 
 let flush_outbox ~hub ~from_name ~peers =
@@ -167,11 +175,15 @@ let flush_outbox ~hub ~from_name ~peers =
       let file_path = Path.join outbox_dir file in
       let content = Fs.read file_path in
       match parse_to_header content with
-      | None -> None
+      | None ->
+          Printf.eprintf "[cn_io] flush_outbox: no 'to:' header in %s, skipping\n%!" file;
+          None
       | Some to_name ->
           let peer = peers |> List.find_opt (fun p -> p.name = to_name) in
           match peer with
-          | None -> None
+          | None ->
+              Printf.eprintf "[cn_io] flush_outbox: unknown peer %s in %s, skipping\n%!" to_name file;
+              None
           | Some p -> send_thread ~hub ~from_name ~peer:p ~outbox_dir ~sent_dir ~file
     ) |> List.length
   end

@@ -424,9 +424,13 @@ created: %s
 
   (* 1.2: Filename.quote for shell safety — id could contain quotes *)
   let commit_msg = Filename.quote (Printf.sprintf "run: %s %s" gtd_type id) in
-  let _ = Cn_ffi.Child_process.exec_in ~cwd:hub_path
-    (Printf.sprintf "git add -A && git commit -m %s" commit_msg) in
-  print_endline (Cn_fmt.ok "Committed run")
+  (match Cn_ffi.Child_process.exec_in ~cwd:hub_path
+    (Printf.sprintf "git add -A && git commit -m %s" commit_msg) with
+   | Some _ -> print_endline (Cn_fmt.ok "Committed run")
+   | None ->
+       Cn_hub.log_action hub_path "out.commit_error"
+         (Printf.sprintf "id:%s gtd:%s" id gtd_type);
+       print_endline (Cn_fmt.warn "git commit failed after run"))
 
 (* === Auto-save === *)
 

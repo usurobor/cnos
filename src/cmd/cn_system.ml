@@ -142,13 +142,22 @@ let run_sync hub_path name =
   Cn_mail.inbox_process hub_path;
   Cn_mail.outbox_flush hub_path name;
   update_runtime hub_path;
-  let _ = Cn_ffi.Child_process.exec_in ~cwd:hub_path "git add -A" in
+  (match Cn_ffi.Child_process.exec_in ~cwd:hub_path "git add -A" with
+   | Some _ -> ()
+   | None ->
+       Cn_hub.log_action hub_path "sync.git_add_error" "git add -A failed";
+       print_endline (Cn_fmt.warn "git add failed during sync"));
   let commit_result = Cn_ffi.Child_process.exec_in ~cwd:hub_path "git commit -m 'heartbeat' --allow-empty" in
   (match commit_result with
    | Some _ ->
-       let _ = Cn_ffi.Child_process.exec_in ~cwd:hub_path "git push origin 2>/dev/null" in
-       ()
-   | None -> ());
+       (match Cn_ffi.Child_process.exec_in ~cwd:hub_path "git push origin 2>&1" with
+        | Some _ -> ()
+        | None ->
+            Cn_hub.log_action hub_path "sync.push_error" "git push origin failed";
+            print_endline (Cn_fmt.warn "git push failed during sync"))
+   | None ->
+       Cn_hub.log_action hub_path "sync.commit_error" "git commit failed";
+       print_endline (Cn_fmt.warn "git commit failed during sync"));
   print_endline (Cn_fmt.ok "Sync complete")
 
 (* === Setup === *)
