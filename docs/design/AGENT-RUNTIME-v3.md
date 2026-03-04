@@ -1,14 +1,40 @@
 # Agent Runtime: Native cnos Agent
 
-**Version:** 3.1.4
+**Version:** 3.2.0
 **Authors:** Sigma (original), Pi (CLP), Axiom (pure-pipe directive)
-**Date:** 2026-02-23
+**Date:** 2026-03-04
 **Status:** Draft
 **Reviewers:** usurobor, external
 
 ---
 
 ## Patch Notes
+
+**v3.2.0** — CN Shell (capability runtime) + syscall manifests + receipts:
+- Define **CN Shell** as a capability runtime inside cn (kernel/syscalls), not an interactive terminal for the LLM:
+  - Agent (brain) emits plans; cn (body) validates + executes under policy
+  - No tool loop; no in-call filesystem access; execution happens post-call under the processor lock
+- Extend the output contract with an optional typed ops manifest:
+  - `ops:` frontmatter field contains a list of typed ops (parsed via `cn_json`)
+  - Ops are declarative and closed-vocabulary (no agent-generated scripts, no arbitrary shell strings)
+  - Backwards compatible: legacy frontmatter ops (`reply`, `send`, `done`, etc.) remain valid
+- Add an explicit posture for capability governance:
+  - Observe ops are read-only (produce evidence)
+  - Mutating ops are gated by config (default posture: safe-by-default; `apply_mode=branch`)
+  - `exec` is opt-in and allowlisted (`argv` only; never `sh -c`)
+- Introduce receipts + artifacts as first-class runtime outputs:
+  - Each executed op yields a receipt with status, timing, hashes (stdout/stderr), and artifact pointers
+  - Receipts written to `state/receipts/` and archived to `logs/receipts/`
+- Optional bounded two-pass execution without tools:
+  - Pass A: requests observe ops → cn executes → receipts/artifacts become files
+  - Pass B: proposes effects using the new evidence
+  - Still pure-pipe; no tool loop; two-pass is opt-in, not default
+- Idempotency for effects:
+  - Require `op_id` for effect ops
+  - Runtime records applied `op_id`s in receipts and ensures crash recovery does not double-apply effects
+- Clarify host DSL boundary:
+  - Humans may author workflows in host DSLs (e.g., F# computation expressions) that compile to the same syscall IR/manifest
+  - The agent MUST NOT output executable code; agent interface remains the pure-pipe `string → string`
 
 **v3.1.4** — Mindsets as session substrate + role-weighted skill scoring:
 - `Cn_context.pack` now loads mindsets from `src/agent/mindsets/` in deterministic order (COHERENCE, role-file, WRITING, OPERATIONS, PERSONALITY, MEMES) between USER and reflections
