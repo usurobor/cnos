@@ -1,6 +1,6 @@
 # Agent Runtime: Native cnos Agent
 
-**Version:** 3.3.1
+**Version:** 3.3.2
 **Authors:** Sigma (original), Pi (CLP), Axiom (pure-pipe directive)
 **Date:** 2026-03-05
 **Status:** Draft
@@ -9,6 +9,14 @@
 ---
 
 ## Patch Notes
+
+**v3.3.2** — CLP pass: α-axis hardening (internal consistency):
+- **ops: encoding**: normative single-line requirement; runtime MUST reject newlines in `ops:` value
+- **Pass-A-safe principle**: corrected to "idempotent under crash recovery + does not advance terminal lifecycle + does not route to other agents"; `reply` qualified as safe only if projection is idempotent per `trigger_id`
+- **Pass B execution ordering**: normative order defined (validate → effects in manifest order → coordination gated on effect success); effect failure skips terminal coordination ops
+- **Receipt status taxonomy**: `denied` (policy/budget/schema/unknown kind), `error` (execution failure), `skipped` (phase rules/gating) — no conflation
+- **"No tools" precision**: scoped claim to "no in-call tool loop, no direct execution authority, post-call governed capabilities only"; two-pass acknowledged as bounded re-entry
+- **Deferred coordination logging**: explicitly routed to receipts (not separate log)
 
 **v3.3.1** — CLP pass: β-axis strengthening (relational connections):
 - Add **Design Principle: Observe Before Act** — names the CAP invariant the two-pass architecture enforces; traces to MCA priority (CAP §3.1) and the Coherence Walk
@@ -612,7 +620,7 @@ This is intentionally simple. Semantic skill matching is a v2 consideration.
 
 ---
 
-## CN Shell: Capability Runtime (v3.3.1)
+## CN Shell: Capability Runtime (v3.3.2)
 
 ### Definition
 
@@ -628,11 +636,13 @@ This preserves the core invariant:
 
 ### Why This Is Still "No Tools"
 
-CN Shell is not "tools for the LLM." Tools imply *interactive* iteration: LLM → tool → result → LLM → tool → …
+CN Shell is not "tools for the LLM." Specifically:
 
-CN Shell is instead: LLM → proposal → cn executes → receipts/artifacts recorded (optionally followed by one bounded second call).
+- **No in-call tool loop.** The LLM cannot invoke capabilities during generation. It emits a proposal; cn executes after the call completes.
+- **No direct execution authority.** The agent cannot run arbitrary code. Ops are declarative, closed-vocabulary, and validated against policy.
+- **Post-call, governed capabilities only.** Execution happens under the processor lock, with receipts and audit.
 
-No mid-call access. No unbounded loops. No imperative scripts from the model.
+Two-pass is bounded re-entry (max 2 calls), not an interactive tool loop. The agent sees artifacts from Pass A, but cannot iteratively probe — it gets one chance to revise its proposal.
 
 ### Design Principle: Observe Before Act
 
@@ -651,6 +661,8 @@ Rationale:
 - Single-line JSON is stable for parsing and avoids YAML dependencies
 - Typed ops allow a closed vocabulary (no agent-generated scripts)
 
+**Encoding requirement:** `ops:` MUST be representable as a single frontmatter line (no embedded newlines). If the `ops:` value contains a newline character, cn MUST reject it with receipt `status: denied`, `reason: ops_not_single_line`. This keeps parsing deterministic and avoids YAML multiline scalar ambiguity.
+
 Legacy frontmatter ops (§agent-ops/SKILL.md) remain valid. `ops:` is additive.
 
 #### Ops Vocabulary Versioning
@@ -660,7 +672,7 @@ The set of valid op `kind` values is a closed vocabulary maintained in `cn_runti
 - New observe ops: additive, minor version bump (e.g., 3.3.x → 3.4.0)
 - New effect ops: require governance review, minor version bump
 - Removing an op kind: major version bump, deprecation cycle in patch notes
-- The runtime MUST reject unknown `kind` values with receipt `status: error`, `reason: unknown_op_kind`
+- The runtime MUST reject unknown `kind` values with receipt `status: denied`, `reason: unknown_op_kind`
 
 #### Example
 
@@ -739,6 +751,17 @@ For every executed typed op, cn MUST emit a receipt containing:
 - Hashes for stdout/stderr artifacts (if produced)
 - Artifact pointers (paths + hashes + size)
 
+#### Receipt status taxonomy (normative)
+
+| Status | Meaning | Examples |
+|--------|---------|---------|
+| `ok` | Op executed successfully | — |
+| `denied` | Op rejected before execution (validation failure) | `unknown_op_kind`, `budget_exceeded`, `policy_rejected`, `ops_not_single_line`, `max_passes_exceeded` |
+| `error` | Op attempted execution but failed | exec returned non-zero, fs_write permission error, git_commit with no staged changes |
+| `skipped` | Op deliberately not executed due to phase/gating rules | `observe_pass_requires_followup`, `pass_a_unsafe`, `effects_failed` |
+
+These four statuses are exhaustive. Every receipt MUST use exactly one.
+
 Receipts MUST be written to `state/receipts/` and archived to `logs/receipts/`.
 
 **Secret safety:** Receipts MUST NOT contain secrets. This is enforced structurally: observe ops read from the hub (no secret paths); effect ops write to the hub (content is agent-authored prose/code, not credentials). The `exec` op captures stdout/stderr into artifacts — the allowlist MUST exclude commands that emit secrets. Config validation rejects `exec` allowlist entries known to emit credentials (e.g., `cat .cn/secrets.env`).
@@ -783,12 +806,12 @@ This prevents the agent from "acting before seeing" while still allowing it to e
 
 Rather than enumerate which legacy ops are allowed in each pass, we derive from a single principle:
 
-> **An op is Pass-A-safe iff it is idempotent and does not change thread state or reach another party.**
+> **An op is Pass-A-safe iff it is (a) idempotent under crash recovery, (b) does not advance terminal lifecycle state, and (c) does not route work to other agents.**
 
 | Legacy op | Pass-A-safe? | Reason |
 |-----------|-------------|--------|
-| `reply` | Yes | Idempotent progress notification to same thread |
-| `surface` / `mca` | Yes | Adds concern to backlog; does not resolve or route |
+| `reply` | Conditional | Progress notification — safe only if projection is idempotent per `trigger_id` (see note below) |
+| `surface` / `mca` | Yes | Adds concern to backlog; does not advance lifecycle or route |
 | `ack` | Yes | Idempotent acknowledgement |
 | `done` | **No** | Terminal — advances FSM to `resolved` |
 | `fail` | **No** | Terminal — advances FSM to `failed` |
@@ -797,7 +820,9 @@ Rather than enumerate which legacy ops are allowed in each pass, we derive from 
 | `defer` | **No** | Reschedules — changes thread timing |
 | `delete` | **No** | Destructive — removes thread |
 
-Pass-A-unsafe ops in Pass A output are ignored and logged. The agent SHOULD re-propose them in Pass B after reviewing evidence.
+**`reply` idempotency requirement:** `reply` in Pass A is projected to the user (e.g., Telegram message). If the projection layer does not deduplicate by `trigger_id` on crash recovery, `reply` becomes Pass-A-unsafe (crash → restart → duplicate user message). The runtime MUST either: (a) ensure projection deduplicates by `trigger_id`, or (b) defer `reply` to Pass B. Current implementation: Telegram projection deduplicates by `trigger_id` via `state/projected/<trigger_id>` marker files (see `cn_telegram.ml`), so `reply` is Pass-A-safe.
+
+Pass-A-unsafe ops in Pass A output are ignored and logged via receipts (`status: skipped`, `reason: pass_a_unsafe`). The agent SHOULD re-propose them in Pass B after reviewing evidence.
 
 #### Interaction with Actor FSM
 
@@ -835,9 +860,16 @@ Observe artifacts are injected into Pass B context as bounded excerpts (see Budg
    - Artifact excerpts (bounded — configurable max bytes per artifact)
    - Same skill set as Pass A (no re-scoring)
 2. Call the agent again (single LLM call)
-3. Parse Pass B output; execute all coordination ops + typed effect ops (subject to governance)
-4. FSM transitions applied from Pass B coordination ops
-5. Archive IO pair (Pass B) per LOGGING.md
+3. Parse Pass B output
+4. **Validate** all ops (schema, policy, budgets) — invalid ops receive receipt `status: denied`
+5. **Execute typed effect ops** in manifest order (the order they appear in `ops:`)
+6. **Gate coordination on effect success:**
+   - If ALL effect ops completed with `status: ok` → execute coordination ops in listed order; FSM transitions applied
+   - If ANY effect op has `status: error` or `status: denied` → skip terminal coordination ops (`done`, `fail`, `delete`, `delegate`, `send`, `defer`) with receipt `status: skipped`, `reason: effects_failed`; allow only `reply`/`surface` so the agent can report the failure
+   - If no typed effect ops were proposed → execute coordination ops normally
+7. Archive IO pair (Pass B) per LOGGING.md
+
+This ordering ensures the system never advances narrative state (FSM) when the world action didn't succeed — consistent with CAP: act on world, then update model, never the reverse.
 
 #### Loop prevention
 
