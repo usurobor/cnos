@@ -186,47 +186,57 @@ let finalize ~(config : Cn_config.config) ~hub_path ~name
         atomically (O_CREAT|O_EXCL) before sending. On recovery replay,
         the marker prevents duplicate messages.
 
-        On send failure: marker is REMOVED so recovery replay can retry.
-        This gives retryable-delivery semantics, consistent with the
-        recovery-oriented design of the rest of the runtime. *)
-  (if from = "telegram" then
-     match config.telegram_token with
-     | Some token ->
-         let inp = Cn_agent.input_path hub_path in
-         let input_meta =
-           if Cn_ffi.Fs.exists inp then parse_frontmatter (Cn_ffi.Fs.read inp)
-           else []
-         in
-         let chat_id_str = input_meta |> List.find_map (fun (k, v) ->
-           if k = "chat_id" then Some v else None) |> Option.value ~default:"" in
-         (match int_of_string_opt chat_id_str with
-          | Some chat_id ->
-              (match Cn_projection.project_reply ~hub_path
-                       ~projection:"telegram" ~trigger_id with
-               | `Already_projected ->
-                   Cn_hub.log_action hub_path "process.telegram_skip"
-                     (Printf.sprintf "already_projected trigger:%s" trigger_id)
-               | `Send ->
-                   let payload = telegram_payload ops body in
-                   (match Cn_telegram.send_message ~token ~chat_id ~text:payload with
-                    | Ok () ->
-                        Cn_hub.log_action hub_path "process.telegram_reply"
-                          (Printf.sprintf "chat_id:%d" chat_id)
-                    | Error msg ->
-                        (* Remove marker so recovery replay can retry delivery *)
-                        Cn_projection.unmark ~hub_path
-                          ~projection:"telegram" ~trigger_id;
-                        Cn_hub.log_action hub_path "process.telegram_error"
-                          (Printf.sprintf "chat_id:%d error:%s retryable:true"
-                             chat_id msg);
-                        print_endline (Cn_fmt.warn
-                          (Printf.sprintf "Telegram reply failed (retryable): %s"
-                             msg))))
-          | None ->
-              Cn_hub.log_action hub_path "process.telegram_skip"
-                "no chat_id in input frontmatter")
-     | None ->
-         Cn_hub.log_action hub_path "process.telegram_skip" "no token");
+        On send failure: marker is REMOVED and finalize returns Error,
+        which blocks offset advancement. The daemon will not advance
+        state/telegram.offset, so Telegram re-delivers the update and
+        the runtime retries projection on the next cycle. *)
+  let projection_result =
+    if from <> "telegram" then Ok ()
+    else match config.telegram_token with
+    | None ->
+        Cn_hub.log_action hub_path "process.telegram_skip" "no token";
+        Ok ()
+    | Some token ->
+        let inp = Cn_agent.input_path hub_path in
+        let input_meta =
+          if Cn_ffi.Fs.exists inp then parse_frontmatter (Cn_ffi.Fs.read inp)
+          else []
+        in
+        let chat_id_str = input_meta |> List.find_map (fun (k, v) ->
+          if k = "chat_id" then Some v else None) |> Option.value ~default:"" in
+        match int_of_string_opt chat_id_str with
+        | None ->
+            Cn_hub.log_action hub_path "process.telegram_skip"
+              "no chat_id in input frontmatter";
+            Ok ()
+        | Some chat_id ->
+            match Cn_projection.project_reply ~hub_path
+                    ~projection:"telegram" ~trigger_id with
+            | `Already_projected ->
+                Cn_hub.log_action hub_path "process.telegram_skip"
+                  (Printf.sprintf "already_projected trigger:%s" trigger_id);
+                Ok ()
+            | `Send ->
+                let payload = telegram_payload ops body in
+                match Cn_telegram.send_message ~token ~chat_id ~text:payload with
+                | Ok () ->
+                    Cn_hub.log_action hub_path "process.telegram_reply"
+                      (Printf.sprintf "chat_id:%d" chat_id);
+                    Ok ()
+                | Error msg ->
+                    Cn_projection.unmark ~hub_path
+                      ~projection:"telegram" ~trigger_id;
+                    Cn_hub.log_action hub_path "process.telegram_error"
+                      (Printf.sprintf "chat_id:%d error:%s retryable:true"
+                         chat_id msg);
+                    print_endline (Cn_fmt.warn
+                      (Printf.sprintf "Telegram reply failed (retryable): %s"
+                         msg));
+                    Error (Printf.sprintf "Telegram projection failed: %s" msg)
+  in
+  match projection_result with
+  | Error msg -> Error msg
+  | Ok () ->
 
   (* 5. Append to conversation history *)
   let assistant_text = telegram_payload ops body in
