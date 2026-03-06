@@ -47,6 +47,15 @@ let try_mark ~hub_path ~projection ~trigger_id =
 let is_projected ~hub_path ~projection ~trigger_id =
   Sys.file_exists (marker_path ~hub_path ~projection ~trigger_id)
 
+(* === Rollback === *)
+
+(** Remove a projection marker after a failed external send.
+    This restores retryability: recovery replay will see no marker and
+    attempt the send again.  Safe to call if marker doesn't exist. *)
+let unmark ~hub_path ~projection ~trigger_id =
+  let path = marker_path ~hub_path ~projection ~trigger_id in
+  (try Sys.remove path with Sys_error _ -> ())
+
 (* === Convenience: mark-and-decide === *)
 
 (** Atomically decide whether to send a projection.

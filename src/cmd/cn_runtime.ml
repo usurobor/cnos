@@ -184,7 +184,11 @@ let finalize ~(config : Cn_config.config) ~hub_path ~name
         Uses Cn_projection.project_reply for crash-recovery idempotency:
         marker state/projected/telegram/{trigger_id}.sent is created
         atomically (O_CREAT|O_EXCL) before sending. On recovery replay,
-        the marker prevents duplicate messages. *)
+        the marker prevents duplicate messages.
+
+        On send failure: marker is REMOVED so recovery replay can retry.
+        This gives retryable-delivery semantics, consistent with the
+        recovery-oriented design of the rest of the runtime. *)
   (if from = "telegram" then
      match config.telegram_token with
      | Some token ->
@@ -209,10 +213,15 @@ let finalize ~(config : Cn_config.config) ~hub_path ~name
                         Cn_hub.log_action hub_path "process.telegram_reply"
                           (Printf.sprintf "chat_id:%d" chat_id)
                     | Error msg ->
+                        (* Remove marker so recovery replay can retry delivery *)
+                        Cn_projection.unmark ~hub_path
+                          ~projection:"telegram" ~trigger_id;
                         Cn_hub.log_action hub_path "process.telegram_error"
-                          (Printf.sprintf "chat_id:%d error:%s" chat_id msg);
+                          (Printf.sprintf "chat_id:%d error:%s retryable:true"
+                             chat_id msg);
                         print_endline (Cn_fmt.warn
-                          (Printf.sprintf "Telegram reply failed: %s" msg))))
+                          (Printf.sprintf "Telegram reply failed (retryable): %s"
+                             msg))))
           | None ->
               Cn_hub.log_action hub_path "process.telegram_skip"
                 "no chat_id in input frontmatter")
@@ -332,7 +341,7 @@ let process_one ~(config : Cn_config.config) ~hub_path ~name =
 
             (* Pack context into structured system blocks + message turns *)
             let packed = Cn_context.pack ~hub_path ~trigger_id
-              ~message:inbound_message ~from in
+              ~message:inbound_message ~from ~shell_config:config.shell () in
 
             (* Write input.md = frontmatter + audit text (human-readable) *)
             let input_doc = build_input_md ~trigger_id ~from ~chat_id_opt
