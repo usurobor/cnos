@@ -97,7 +97,7 @@ let conversation_path hub_path =
 
 (** Append a user+assistant exchange to state/conversation.json.
     Creates the file if missing. Keeps last 50 entries to bound growth. *)
-let append_conversation hub_path ~user_msg ~assistant_msg =
+let append_conversation hub_path ~trigger_id ~user_msg ~assistant_msg =
   let path = conversation_path hub_path in
   let existing =
     if Cn_ffi.Fs.exists path then
@@ -106,16 +106,31 @@ let append_conversation hub_path ~user_msg ~assistant_msg =
       | _ -> []
     else []
   in
-  let new_entries = existing @ [
-    Cn_json.Object ["role", Cn_json.String "user"; "content", Cn_json.String user_msg];
-    Cn_json.Object ["role", Cn_json.String "assistant"; "content", Cn_json.String assistant_msg];
-  ] in
-  (* Keep last 50 entries *)
-  let len = List.length new_entries in
-  let trimmed = if len > 50 then
-    List.filteri (fun i _ -> i >= len - 50) new_entries
-  else new_entries in
-  Cn_ffi.Fs.write path (Cn_json.to_string (Cn_json.Array trimmed) ^ "\n")
+  (* Dedup: if any entry already carries this trigger_id, this is a
+     recovery replay — skip to avoid double-appending conversation. *)
+  let already_appended = existing |> List.exists (fun entry ->
+    Cn_json.get_string "trigger_id" entry = Some trigger_id
+  ) in
+  if already_appended then
+    Cn_hub.log_action hub_path "process.conversation_skip"
+      (Printf.sprintf "trigger:%s already in conversation" trigger_id)
+  else begin
+    let new_entries = existing @ [
+      Cn_json.Object [
+        "role", Cn_json.String "user";
+        "content", Cn_json.String user_msg;
+        "trigger_id", Cn_json.String trigger_id];
+      Cn_json.Object [
+        "role", Cn_json.String "assistant";
+        "content", Cn_json.String assistant_msg];
+    ] in
+    (* Keep last 50 entries *)
+    let len = List.length new_entries in
+    let trimmed = if len > 50 then
+      List.filteri (fun i _ -> i >= len - 50) new_entries
+    else new_entries in
+    Cn_ffi.Fs.write path (Cn_json.to_string (Cn_json.Array trimmed) ^ "\n")
+  end
 
 (* === Archive (raw — no ops, no deletes) === *)
 
@@ -271,7 +286,7 @@ let finalize ~(config : Cn_config.config) ~hub_path ~name
 
   (* 5. Append to conversation history *)
   let assistant_text = telegram_payload ops body in
-  append_conversation hub_path
+  append_conversation hub_path ~trigger_id
     ~user_msg:inbound_message ~assistant_msg:assistant_text;
 
   (* 6. Cleanup state files FIRST, then clear ops_done marker.
@@ -364,6 +379,18 @@ let process_one ~(config : Cn_config.config) ~hub_path ~name =
 
       (* === State 3: neither exists → queue inbox + dequeue + pipeline === *)
       end else begin
+        (* GC: sweep stale ops_done markers left by crashes after
+           cleanup_state but before clear_ops_done. Safe here because
+           no input.md/output.md exist — no recovery can fire. *)
+        let finalized_dir = Cn_ffi.Path.join hub_path "state/finalized" in
+        (if Cn_ffi.Fs.exists finalized_dir then
+           Cn_ffi.Fs.readdir finalized_dir
+           |> List.iter (fun f ->
+                let path = Cn_ffi.Path.join finalized_dir f in
+                (try Sys.remove path with Sys_error _ -> ());
+                Cn_hub.log_action hub_path "process.gc_ops_done"
+                  (Printf.sprintf "removed stale marker: %s" f)));
+
         (* Queue inbox items under lock to prevent overlap races *)
         let queued = Cn_agent.queue_inbox_items hub_path in
         if queued > 0 then
