@@ -107,8 +107,13 @@ val summarize : hub_path:string -> asset_summary
 - `validate_core` checks for `.cn/vendor/core/mindsets/COHERENCE.md` and
   `.cn/vendor/core/skills/agent/agent-ops/SKILL.md` at minimum
 - `load_mindsets` scans three directories, deduplicates by filename
-  (hub-local wins), then loads in the fixed order:
-  COHERENCE → role-file → WRITING → OPERATIONS → PERSONALITY → MEMES
+  (hub-local wins), then loads all 10 core mindsets in deterministic order:
+  COHERENCE → role-file → ENGINEERING → PM → WRITING → OPERATIONS →
+  PERSONALITY → MEMES → THINKING → WISDOM → FUNCTIONAL
+
+  Role-file inserts the active role's mindset second (e.g. if role=engineer,
+  ENGINEERING is loaded at position 2; it is not duplicated later).
+  All 10 are loaded if present — no "file exists but agent never sees it".
 - `collect_skills` walks all three skill trees, deduplicates by relative
   path (hub-local wins over package, package over core), returns unified
   list for the existing `score_skill` + `tokenize` algorithm in cn_context
@@ -181,23 +186,30 @@ output structure. With `.cn/vendor/core/` missing, `pack` raises a clear error.
 ### Types
 
 ```ocaml
-type dep_entry = {
+(** Manifest entry: what the human wants. *)
+type manifest_dep = {
   name : string;
-  version : string;   (* semver range for manifest, exact for lockfile *)
-  source : string;    (* git+https://... — only in lockfile *)
-  rev : string;       (* commit hash — only in lockfile *)
-  integrity : string; (* sha256:... — only in lockfile *)
+  version : string;   (* semver range, e.g. "^1.0.0" *)
+}
+
+(** Lockfile entry: what the resolver pinned. *)
+type locked_dep = {
+  name : string;
+  version : string;   (* exact semver, e.g. "1.0.3" *)
+  source : string;    (* git+https://... *)
+  rev : string;       (* exact commit hash — reproducibility key *)
+  integrity : string option;  (* sha256:... — optional in v3.4.0, required in v3.4.1 *)
 }
 
 type manifest = {
   schema : string;       (* "cn.deps.v1" *)
   profile : string;      (* "engineer" | "pm" *)
-  packages : dep_entry list;
+  packages : manifest_dep list;
 }
 
 type lockfile = {
   schema : string;       (* "cn.deps.lock.v1" *)
-  packages : dep_entry list;
+  packages : locked_dep list;
 }
 ```
 
@@ -248,13 +260,19 @@ val bundled_core_source : unit -> (string, string) result
 ### `restore` implementation
 
 1. Read `.cn/deps.lock.json`
-2. For each package not already in `.cn/vendor/packages/<name>@<version>/`:
-   a. `git clone --depth=1 --branch=v<version> <source>` into temp dir
-   b. Verify integrity (sha256 of contents)
-   c. Copy `mindsets/` and `skills/` into `.cn/vendor/packages/<name>@<version>/`
-   d. Clean up temp dir
-3. Call `materialize_core` to ensure core is present
+2. Call `materialize_core` to ensure core is present
+3. For each package not already in `.cn/vendor/packages/<name>@<version>/`:
+   a. `git init` temp dir, `git fetch <source> <rev> --depth=1`
+   b. `git checkout <rev>` — the lockfile rev is authoritative, not a tag
+   c. If `integrity` is `Some hash`, verify sha256 (v3.4.1 enforcement)
+   d. Copy `mindsets/` and `skills/` into `.cn/vendor/packages/<name>@<version>/`
+   e. Clean up temp dir
 4. Return Ok or Error with details
+
+**Why fetch by rev, not tag:** Tags and branches can move. The lockfile
+pins a commit hash. Restore must checkout that exact rev to guarantee
+deterministic resolution. Tags are used during `cn deps update` (resolve
+phase), not during `restore` (install phase).
 
 ### `bundled_core_source` implementation
 
@@ -312,20 +330,24 @@ materializes core.
 
 ### Changes to `run_setup`
 
-After existing setup logic (logrotate, cron), add:
+Extend the current `cn setup` interactive flow (hub config, secrets,
+role selection) to also materialize the cognitive substrate:
 
 1. Call `Cn_deps.materialize_core ~hub_path`
 2. If `.cn/deps.json` doesn't exist, write a default manifest:
    ```json
    { "schema": "cn.deps.v1", "profile": "engineer", "packages": [] }
    ```
-   (Profile derived from `.cn/config.json` runtime.role)
+   (Profile derived from the role selected during setup)
 3. If `.cn/deps.lock.json` doesn't exist, write empty lockfile:
    ```json
    { "schema": "cn.deps.lock.v1", "packages": [] }
    ```
 4. Call `Cn_deps.restore ~hub_path` to install any declared packages
 5. Print success message with asset summary
+
+This means `cn setup` is the single command that makes a hub wake-ready.
+No separate `cn deps restore` required after first setup.
 
 ### Changes to `run_init`
 
@@ -418,5 +440,6 @@ Steps 3, 5, 6, 7 each depend on the modules they consume.
 - `cn deps search` / `cn deps info` (requires index repo — v3.4.1)
 - `cn deps add` with version resolution from index (v3.4.1)
 - `cn deps add <git-url>` works but with manual version pinning
-- Integrity verification (sha256 checking — deferred to when packages exist)
+- Integrity enforcement (sha256 field is optional in v3.4.0 lockfile;
+  v3.4.1 makes it required and verified on restore)
 - `cn skill` aliases (ergonomic layer — v3.4.1)
