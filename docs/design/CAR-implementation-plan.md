@@ -233,7 +233,7 @@ val write_lockfile : hub_path:string -> lockfile -> unit
 val materialize_core : hub_path:string -> (unit, string) result
 
 (** Install packages from lockfile into .cn/vendor/packages/.
-    Runs git clone, verifies integrity, copies runtime dirs. *)
+    Fetches by rev, optionally verifies integrity, copies runtime dirs. *)
 val restore : hub_path:string -> (unit, string) result
 
 (** List installed packages from .cn/vendor/packages/. *)
@@ -334,11 +334,21 @@ Extend the current `cn setup` interactive flow (hub config, secrets,
 role selection) to also materialize the cognitive substrate:
 
 1. Call `Cn_deps.materialize_core ~hub_path`
-2. If `.cn/deps.json` doesn't exist, write a default manifest:
+2. If `.cn/deps.json` doesn't exist, write a default manifest
+   with the profile's default package pre-declared:
    ```json
-   { "schema": "cn.deps.v1", "profile": "engineer", "packages": [] }
+   {
+     "schema": "cn.deps.v1",
+     "profile": "engineer",
+     "packages": [
+       { "name": "cnos.profile.engineer", "version": "^1.0.0" }
+     ]
+   }
    ```
-   (Profile derived from the role selected during setup)
+   (Profile and package derived from the role selected during setup.
+   PM role → `cnos.profile.pm`, etc. Per CAR-v3.4.md §16.1:
+   "After cn setup, a new hub must be impossible to wake without
+   baseline cognition.")
 3. If `.cn/deps.lock.json` doesn't exist, write empty lockfile:
    ```json
    { "schema": "cn.deps.lock.v1", "packages": [] }
