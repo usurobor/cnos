@@ -176,3 +176,135 @@ let%expect_test "single-line output (no newlines in JSON)" =
   let has_newline = String.contains s '\n' in
   Printf.printf "has newline: %b\n" has_newline;
   [%expect {| has newline: false |}]
+
+(* === Integration tests: full boot event sequence to JSONL === *)
+
+let make_tmp_hub () =
+  let base = Filename.concat (Filename.get_temp_dir_name ())
+    (Printf.sprintf "cn-trace-test-%d" (Random.int 100000)) in
+  Cn_ffi.Fs.ensure_dir (Filename.concat base "logs/events");
+  base
+
+let%expect_test "boot sequence emits required events in order" =
+  let hub = make_tmp_hub () in
+  let session = Cn_trace.start_session ~min_severity:Debug hub in
+  (* Emit the normative boot sequence from TRACEABILITY §7 *)
+  let boot_events = [
+    "boot.start"; "config.loaded"; "deps.lock.loaded";
+    "assets.validated"; "doctrine.loaded"; "mindsets.loaded";
+    "skills.indexed"; "capabilities.rendered"; "boot.ready";
+  ] in
+  List.iter (fun event_name ->
+    Cn_trace.emit session (Cn_trace.make_event
+      ~component:"runtime" ~layer:Body ~event:event_name
+      ~severity:Info ~status:Ok_ ())
+  ) boot_events;
+  (* Read the JSONL file and verify event sequence *)
+  let dir = Filename.concat hub "logs/events" in
+  let files = Array.to_list (Sys.readdir dir) in
+  assert (List.length files = 1);
+  let path = Filename.concat dir (List.hd files) in
+  let content = Cn_ffi.Fs.read path in
+  let lines = String.split_on_char '\n' content
+    |> List.filter (fun s -> String.trim s <> "") in
+  assert (List.length lines = 9);
+  (* Extract event names in order *)
+  let event_names = List.filter_map (fun line ->
+    match Cn_json.parse line with
+    | Ok obj -> Cn_json.get_string "event" obj
+    | Error _ -> None
+  ) lines in
+  if event_names = boot_events then
+    print_endline "ok: boot sequence events in normative order"
+  else begin
+    print_endline "FAIL: event order mismatch";
+    List.iter (fun e -> Printf.printf "  got: %s\n" e) event_names
+  end;
+  [%expect {| ok: boot sequence events in normative order |}]
+
+let%expect_test "boot sequence events have monotonic seq" =
+  let hub = make_tmp_hub () in
+  let session = Cn_trace.start_session ~min_severity:Debug hub in
+  List.iter (fun event_name ->
+    Cn_trace.emit session (Cn_trace.make_event
+      ~component:"runtime" ~layer:Body ~event:event_name
+      ~severity:Info ~status:Ok_ ())
+  ) ["boot.start"; "config.loaded"; "boot.ready"];
+  let dir = Filename.concat hub "logs/events" in
+  let files = Array.to_list (Sys.readdir dir) in
+  let path = Filename.concat dir (List.hd files) in
+  let content = Cn_ffi.Fs.read path in
+  let lines = String.split_on_char '\n' content
+    |> List.filter (fun s -> String.trim s <> "") in
+  let seqs = List.filter_map (fun line ->
+    match Cn_json.parse line with
+    | Ok obj -> Cn_json.get_int "seq" obj
+    | Error _ -> None
+  ) lines in
+  (* Verify strictly increasing *)
+  let rec is_ascending = function
+    | [] | [_] -> true
+    | a :: b :: rest -> a < b && is_ascending (b :: rest)
+  in
+  Printf.printf "monotonic: %b\n" (is_ascending seqs);
+  Printf.printf "seqs: %s\n" (String.concat "," (List.map string_of_int seqs));
+  [%expect {|
+    monotonic: true
+    seqs: 1,2,3 |}]
+
+let%expect_test "cycle events interleave correctly with boot events" =
+  let hub = make_tmp_hub () in
+  let session = Cn_trace.start_session ~min_severity:Debug hub in
+  (* Boot *)
+  Cn_trace.emit session (Cn_trace.make_event
+    ~component:"runtime" ~layer:Body ~event:"boot.start"
+    ~severity:Info ~status:Ok_ ());
+  Cn_trace.emit session (Cn_trace.make_event
+    ~component:"runtime" ~layer:Body ~event:"boot.ready"
+    ~severity:Info ~status:Ok_ ());
+  (* Cycle *)
+  Cn_trace.emit session (Cn_trace.make_event
+    ~component:"runtime" ~layer:Body ~event:"cycle.start"
+    ~severity:Info ~status:Ok_ ~trigger_id:"tg-1" ());
+  Cn_trace.emit session (Cn_trace.make_event
+    ~component:"runtime" ~layer:Mind ~event:"llm.call.ok"
+    ~severity:Info ~status:Ok_ ~trigger_id:"tg-1" ());
+  Cn_trace.emit session (Cn_trace.make_event
+    ~component:"runtime" ~layer:Body ~event:"finalize.complete"
+    ~severity:Info ~status:Ok_ ~trigger_id:"tg-1" ());
+  (* Read and verify *)
+  let dir = Filename.concat hub "logs/events" in
+  let files = Array.to_list (Sys.readdir dir) in
+  let path = Filename.concat dir (List.hd files) in
+  let content = Cn_ffi.Fs.read path in
+  let lines = String.split_on_char '\n' content
+    |> List.filter (fun s -> String.trim s <> "") in
+  assert (List.length lines = 5);
+  let events = List.filter_map (fun line ->
+    match Cn_json.parse line with
+    | Ok obj -> Cn_json.get_string "event" obj
+    | Error _ -> None
+  ) lines in
+  let expected = ["boot.start"; "boot.ready"; "cycle.start";
+                  "llm.call.ok"; "finalize.complete"] in
+  if events = expected then
+    print_endline "ok: boot + cycle events in correct order"
+  else
+    print_endline "FAIL: event order mismatch";
+  (* Verify trigger_id on cycle events *)
+  let trigger_events = List.filter_map (fun line ->
+    match Cn_json.parse line with
+    | Ok obj ->
+        (match Cn_json.get_string "trigger_id" obj with
+         | Some tid -> Some (Option.get (Cn_json.get_string "event" obj), tid)
+         | None -> None)
+    | Error _ -> None
+  ) lines in
+  List.iter (fun (ev, tid) ->
+    Printf.printf "%s: trigger_id=%s\n" ev tid
+  ) trigger_events;
+  [%expect {|
+    ok: boot + cycle events in correct order
+    cycle.start: trigger_id=tg-1
+    llm.call.ok: trigger_id=tg-1
+    finalize.complete: trigger_id=tg-1 |}]

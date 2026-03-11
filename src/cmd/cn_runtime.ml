@@ -208,6 +208,201 @@ let clear_ops_done hub_path trigger_id =
   let path = ops_done_path hub_path trigger_id in
   (try Sys.remove path with Sys_error _ -> ())
 
+(* === Shared boot sequence (TRACEABILITY §7) === *)
+
+(** Boot result: asset summary + coherence state for projection writes. *)
+type boot_info = {
+  session : Cn_trace.session;
+  summary : Cn_assets.asset_summary;
+  lock_ok : bool;
+  pkg_names : string list;
+  total_skills : int;
+}
+
+(** Run the full boot/readiness sequence and write projections.
+    Called from daemon, cron, and stdio. Mode is "daemon"/"cron"/"stdio".
+    Returns Ok boot_info on success, Error msg if boot is blocked. *)
+let boot_sequence ~(config : Cn_config.config) ~hub_path ~mode =
+  let session = match Cn_trace.get_global () with
+    | Some s -> s
+    | None -> Cn_trace.init_global hub_path
+  in
+
+  (* 1. boot.start *)
+  Cn_trace.emit_simple session ~component:"runtime" ~layer:Body
+    ~event:"boot.start" ~severity:Info ~status:Ok_
+    ~details:["mode", Cn_json.String mode] ();
+
+  (* 2. config.loaded *)
+  Cn_trace.emit_simple session ~component:"runtime" ~layer:Mind
+    ~event:"config.loaded" ~severity:Info ~status:Ok_
+    ~details:[
+      "model", Cn_json.String config.model;
+      "poll_interval", Cn_json.Int config.poll_interval;
+      "poll_timeout", Cn_json.Int config.poll_timeout;
+    ] ();
+
+  (* 3. deps.lock.loaded *)
+  let lock_ok = Cn_ffi.Fs.exists (Cn_ffi.Path.join hub_path ".cn/deps.lock.json") in
+  Cn_trace.emit_simple session ~component:"runtime" ~layer:Mind
+    ~event:"deps.lock.loaded" ~severity:Info
+    ~status:(if lock_ok then Ok_ else Degraded) ();
+
+  (* 4. assets.validated *)
+  let assets_ok = match Cn_assets.validate_packages ~hub_path with
+    | Ok () ->
+        Cn_trace.emit_simple session ~component:"runtime" ~layer:Mind
+          ~event:"assets.validated" ~severity:Info ~status:Ok_ ();
+        true
+    | Error msg ->
+        Cn_trace.emit_simple session ~component:"runtime" ~layer:Mind
+          ~event:"boot.blocked" ~severity:Error_ ~status:Blocked
+          ~reason_code:"core_doctrine_missing" ~reason:msg ();
+        Cn_trace_state.write_ready hub_path {
+          status = Blocked; boot_id = session.boot_id;
+          updated_at = Cn_fmt.now_iso ();
+          blocked_reason = Some "core_doctrine_missing";
+          mind = None; body = None; sensors_telegram = None;
+        };
+        false
+  in
+  if not assets_ok then
+    Error "Boot blocked: core assets missing"
+  else begin
+    (* 5-8. doctrine, mindsets, skills, capabilities *)
+    let summary = Cn_assets.summarize ~hub_path in
+    let total_skills = List.fold_left (fun acc (_, c) -> acc + c) 0 summary.packages in
+    Cn_trace.emit_simple session ~component:"runtime" ~layer:Mind
+      ~event:"doctrine.loaded" ~severity:Info ~status:Ok_
+      ~details:["count", Cn_json.Int summary.doctrine_count] ();
+    Cn_trace.emit_simple session ~component:"runtime" ~layer:Mind
+      ~event:"mindsets.loaded" ~severity:Info ~status:Ok_
+      ~details:["count", Cn_json.Int summary.mindset_count] ();
+    Cn_trace.emit_simple session ~component:"runtime" ~layer:Mind
+      ~event:"skills.indexed" ~severity:Info ~status:Ok_
+      ~details:["count", Cn_json.Int total_skills] ();
+    Cn_trace.emit_simple session ~component:"runtime" ~layer:Mind
+      ~event:"capabilities.rendered" ~severity:Info ~status:Ok_
+      ~details:[
+        "two_pass", Cn_json.String config.shell.two_pass;
+        "apply_mode", Cn_json.String config.shell.apply_mode;
+        "exec_enabled", Cn_json.Bool config.shell.exec_enabled;
+      ] ();
+
+    (* 9. boot.ready *)
+    Cn_trace.emit_simple session ~component:"runtime" ~layer:Body
+      ~event:"boot.ready" ~severity:Info ~status:Ok_ ();
+
+    let pkg_names = List.map (fun (name, _) -> name) summary.packages in
+
+    (* Write ready.json — mode-aware sensor block *)
+    let sensors_telegram = match mode with
+      | "daemon" -> Some {
+          Cn_trace_state.enabled = true;
+          offset = 0; (* daemon will update after offset load *)
+          last_poll_status = "starting";
+          last_poll_at = Cn_fmt.now_iso ();
+        }
+      | _ -> None
+    in
+    Cn_trace_state.write_ready hub_path {
+      status = Ready; boot_id = session.boot_id;
+      updated_at = Cn_fmt.now_iso ();
+      blocked_reason = None;
+      mind = Some {
+        profile = Option.value ~default:"engineer" summary.profile;
+        packages = pkg_names;
+        doctrine_required = List.length Cn_assets.required_doctrine;
+        doctrine_loaded = summary.doctrine_count;
+        doctrine_hash = "";
+        mindsets_required = List.length Cn_assets.required_mindsets;
+        mindsets_loaded = summary.mindset_count;
+        mindsets_hash = "";
+        skills_indexed = total_skills;
+        skills_selected_last = [];
+        capabilities_hash = "";
+        two_pass = config.shell.two_pass;
+        apply_mode = config.shell.apply_mode;
+        exec_enabled = config.shell.exec_enabled;
+      };
+      body = Some {
+        fsm_state = "idle";
+        lock_held = false;
+        current_cycle = None;
+        queue_depth = 0;
+      };
+      sensors_telegram;
+    };
+
+    (* Write coherence.json *)
+    Cn_trace_state.write_coherence hub_path {
+      boot_id = session.boot_id;
+      status = "coherent";
+      config = Ok_;
+      lockfile = (if lock_ok then Ok_ else Missing);
+      doctrine = Ok_;
+      mindsets = Ok_;
+      packages = Ok_;
+      capabilities = Ok_;
+      transport = (match mode with "daemon" -> Ok_ | _ -> Missing);
+      updated_at = Cn_fmt.now_iso ();
+    };
+
+    (* Write initial runtime.json — idle state *)
+    Cn_trace_state.write_runtime hub_path {
+      boot_id = session.boot_id;
+      current_cycle_id = None;
+      current_pass = None;
+      active_trigger = None;
+      queue_depth = 0;
+      lock_held = false;
+      lock_boot_id = None;
+      pending_projection = None;
+      updated_at = Cn_fmt.now_iso ();
+    };
+
+    Ok { session; summary; lock_ok; pkg_names; total_skills }
+  end
+
+(** Update runtime.json projection for common state transitions. *)
+let update_runtime_projection hub_path ~cycle_id ~pass ~trigger ~lock_held
+    ~pending_projection =
+  match Cn_trace.get_global () with
+  | Some session ->
+      Cn_trace_state.write_runtime hub_path {
+        boot_id = session.boot_id;
+        current_cycle_id = cycle_id;
+        current_pass = pass;
+        active_trigger = trigger;
+        queue_depth = 0;
+        lock_held;
+        lock_boot_id = (if lock_held then Some session.boot_id else None);
+        pending_projection;
+        updated_at = Cn_fmt.now_iso ();
+      }
+  | None -> ()
+
+(** Update ready.json body section for FSM state changes. *)
+let update_ready_body hub_path ~fsm_state ~lock_held ~current_cycle =
+  match Cn_trace.get_global () with
+  | Some session ->
+      (* Read existing ready.json and update body section only.
+         For v1 simplicity, write a minimal update. *)
+      Cn_trace_state.write_ready hub_path {
+        status = Ready; boot_id = session.boot_id;
+        updated_at = Cn_fmt.now_iso ();
+        blocked_reason = None;
+        mind = None;  (* preserve existing via overwrite — v1 tradeoff *)
+        body = Some {
+          fsm_state;
+          lock_held;
+          current_cycle;
+          queue_depth = 0;
+        };
+        sensors_telegram = None;
+      }
+  | None -> ()
+
 (* === Finalize: archive → execute → project → conversation → cleanup === *)
 
 (** Run the post-LLM pipeline on an existing input.md + output.md pair.
@@ -350,21 +545,12 @@ let finalize ~(config : Cn_config.config) ~hub_path ~name
             receipts = Some (Printf.sprintf "state/receipts/%s.json" trigger_id) }
     ();
 
-  (* Update runtime projection: cycle complete *)
-  (match Cn_trace.get_global () with
-   | Some session ->
-       Cn_trace_state.write_runtime hub_path {
-         boot_id = session.boot_id;
-         current_cycle_id = None;
-         current_pass = None;
-         active_trigger = None;
-         queue_depth = 0;
-         lock_held = true;
-         lock_boot_id = Some session.boot_id;
-         pending_projection = None;
-         updated_at = Cn_fmt.now_iso ();
-       }
-   | None -> ());
+  (* Update projections: cycle complete, back to idle *)
+  update_runtime_projection hub_path
+    ~cycle_id:None ~pass:None ~trigger:None
+    ~lock_held:true ~pending_projection:None;
+  update_ready_body hub_path ~fsm_state:"idle"
+    ~lock_held:true ~current_cycle:None;
 
   print_endline (Cn_fmt.ok
     (Printf.sprintf "Processed: %s (%d ops)" trigger_id (List.length ops)));
@@ -381,7 +567,19 @@ let process_one ~(config : Cn_config.config) ~hub_path ~name =
       print_endline (Cn_fmt.info msg);
       Ok () (* Not an error — normal for cron overlap *)
   | Ok lock_fd ->
-    let finally () = release_lock hub_path lock_fd in
+    let finally () =
+      release_lock hub_path lock_fd;
+      (* Update projections on lock release *)
+      update_runtime_projection hub_path
+        ~cycle_id:None ~pass:None ~trigger:None
+        ~lock_held:false ~pending_projection:None;
+      update_ready_body hub_path ~fsm_state:"idle"
+        ~lock_held:false ~current_cycle:None
+    in
+    (* Update projections on lock acquire *)
+    update_runtime_projection hub_path
+      ~cycle_id:None ~pass:None ~trigger:None
+      ~lock_held:true ~pending_projection:None;
     match
       let inp = Cn_agent.input_path hub_path in
       let outp = Cn_agent.output_path hub_path in
@@ -398,6 +596,11 @@ let process_one ~(config : Cn_config.config) ~hub_path ~name =
         let packed_body = match extract_body input_content with
           | Some b -> b | None -> "" in
         let inbound_message = extract_inbound_message packed_body in
+        (* Update projections: recovering *)
+        update_runtime_projection hub_path
+          ~cycle_id:(Some trigger_id) ~pass:None
+          ~trigger:(Some trigger_id) ~lock_held:true
+          ~pending_projection:None;
         Cn_trace.gemit ~component:"runtime" ~layer:Body
           ~event:"cycle.recover" ~severity:Info ~status:Ok_
           ~trigger_id ~reason_code:"recovery_output_present"
@@ -417,6 +620,11 @@ let process_one ~(config : Cn_config.config) ~hub_path ~name =
           | Some b -> b | None -> "" in
         let inbound_message = extract_inbound_message packed_body in
 
+        (* Update projections: recovering with LLM call pending *)
+        update_runtime_projection hub_path
+          ~cycle_id:(Some trigger_id) ~pass:None
+          ~trigger:(Some trigger_id) ~lock_held:true
+          ~pending_projection:None;
         Cn_trace.gemit ~component:"runtime" ~layer:Body
           ~event:"cycle.recover" ~severity:Info ~status:Ok_
           ~trigger_id ~reason_code:"recovery_input_present"
@@ -503,21 +711,13 @@ let process_one ~(config : Cn_config.config) ~hub_path ~name =
               ~event:"queue.dequeue" ~severity:Info ~status:Ok_
               ~trigger_id ();
 
-            (* Update runtime projection: cycle in progress *)
-            (match Cn_trace.get_global () with
-             | Some session ->
-                 Cn_trace_state.write_runtime hub_path {
-                   boot_id = session.boot_id;
-                   current_cycle_id = Some trigger_id;
-                   current_pass = Some "A";
-                   active_trigger = Some trigger_id;
-                   queue_depth = 0;
-                   lock_held = true;
-                   lock_boot_id = Some session.boot_id;
-                   pending_projection = None;
-                   updated_at = Cn_fmt.now_iso ();
-                 }
-             | None -> ());
+            (* Update projections: cycle in progress *)
+            update_runtime_projection hub_path
+              ~cycle_id:(Some trigger_id) ~pass:(Some "A")
+              ~trigger:(Some trigger_id) ~lock_held:true
+              ~pending_projection:None;
+            update_ready_body hub_path ~fsm_state:"processing"
+              ~lock_held:true ~current_cycle:(Some trigger_id);
 
             (* Pack context into structured system blocks + message turns *)
             Cn_trace.gemit ~component:"runtime" ~layer:Mind
@@ -570,14 +770,15 @@ let process_one ~(config : Cn_config.config) ~hub_path ~name =
 (** Cron/daemon entry point. Runs update check when idle, then calls
     process_one which handles all state mutation under lock. *)
 let run_cron ~(config : Cn_config.config) ~hub_path ~name =
-  (* Initialize tracing if not already done *)
+  (* Full boot sequence with projections (shared across all modes) *)
   (match Cn_trace.get_global () with
-   | Some _ -> ()
+   | Some _ -> () (* Already booted — e.g. resumed from daemon *)
    | None ->
-       let session = Cn_trace.init_global hub_path in
-       Cn_trace.emit_simple session ~component:"runtime" ~layer:Body
-         ~event:"boot.start" ~severity:Info ~status:Ok_
-         ~details:["mode", Cn_json.String "cron"] ());
+       match boot_sequence ~config ~hub_path ~mode:"cron" with
+       | Error msg ->
+           print_endline (Cn_fmt.fail msg);
+           Cn_ffi.Process.exit 1
+       | Ok _ -> ());
 
   (* Auto-update check (only when truly idle — no state files, no lock) *)
   let inp = Cn_agent.input_path hub_path in
@@ -692,98 +893,35 @@ let run_daemon ~(config : Cn_config.config) ~hub_path ~name =
       print_endline (Cn_fmt.fail "Daemon mode requires TELEGRAM_TOKEN");
       Cn_ffi.Process.exit 1
   | Some token ->
-      (* === Initialize tracing session === *)
-      let session = Cn_trace.init_global hub_path in
-
-      (* === Boot sequence (TRACEABILITY §7) === *)
-      Cn_trace.emit_simple session ~component:"runtime" ~layer:Body
-        ~event:"boot.start" ~severity:Info ~status:Ok_
-        ~details:["mode", Cn_json.String "daemon"] ();
-
-      (* config.loaded — config was already loaded by caller *)
-      Cn_trace.emit_simple session ~component:"runtime" ~layer:Mind
-        ~event:"config.loaded" ~severity:Info ~status:Ok_
-        ~details:[
-          "model", Cn_json.String config.model;
-          "poll_interval", Cn_json.Int config.poll_interval;
-          "poll_timeout", Cn_json.Int config.poll_timeout;
-        ] ();
-
-      (* deps/lock validation *)
-      let lock_ok = Cn_ffi.Fs.exists (Cn_ffi.Path.join hub_path ".cn/deps.lock.json") in
-      Cn_trace.emit_simple session ~component:"runtime" ~layer:Mind
-        ~event:"deps.lock.loaded" ~severity:Info
-        ~status:(if lock_ok then Ok_ else Degraded) ();
-
-      (* Asset validation *)
-      let assets_ok = match Cn_assets.validate_packages ~hub_path with
-        | Ok () ->
-            Cn_trace.emit_simple session ~component:"runtime" ~layer:Mind
-              ~event:"assets.validated" ~severity:Info ~status:Ok_ ();
-            true
+      (* Shared boot sequence — writes ready.json, coherence.json, runtime.json *)
+      let boot = match boot_sequence ~config ~hub_path ~mode:"daemon" with
         | Error msg ->
-            Cn_trace.emit_simple session ~component:"runtime" ~layer:Mind
-              ~event:"boot.blocked" ~severity:Error_ ~status:Blocked
-              ~reason_code:"core_doctrine_missing" ~reason:msg ();
-            Cn_trace_state.write_ready hub_path {
-              status = Blocked; boot_id = session.boot_id;
-              updated_at = Cn_fmt.now_iso ();
-              blocked_reason = Some "core_doctrine_missing";
-              mind = None; body = None; sensors_telegram = None;
-            };
-            false
+            print_endline (Cn_fmt.fail msg);
+            Cn_ffi.Process.exit 1
+        | Ok b -> b
       in
-      if not assets_ok then begin
-        print_endline (Cn_fmt.fail "Boot blocked: core assets missing");
-        Cn_ffi.Process.exit 1
-      end;
 
-      (* Doctrine + mindsets + skills + capabilities *)
-      let summary = Cn_assets.summarize ~hub_path in
-      let total_skills = List.fold_left (fun acc (_, c) -> acc + c) 0 summary.packages in
-      Cn_trace.emit_simple session ~component:"runtime" ~layer:Mind
-        ~event:"doctrine.loaded" ~severity:Info ~status:Ok_
-        ~details:["count", Cn_json.Int summary.doctrine_count] ();
-      Cn_trace.emit_simple session ~component:"runtime" ~layer:Mind
-        ~event:"mindsets.loaded" ~severity:Info ~status:Ok_
-        ~details:["count", Cn_json.Int summary.mindset_count] ();
-      Cn_trace.emit_simple session ~component:"runtime" ~layer:Mind
-        ~event:"skills.indexed" ~severity:Info ~status:Ok_
-        ~details:["count", Cn_json.Int total_skills] ();
-      Cn_trace.emit_simple session ~component:"runtime" ~layer:Mind
-        ~event:"capabilities.rendered" ~severity:Info ~status:Ok_
-        ~details:[
-          "two_pass", Cn_json.String config.shell.two_pass;
-          "apply_mode", Cn_json.String config.shell.apply_mode;
-          "exec_enabled", Cn_json.Bool config.shell.exec_enabled;
-        ] ();
-
-      (* Telegram transport readiness *)
+      (* Daemon-specific: Telegram transport readiness *)
       let offset = ref (read_offset hub_path) in
-      Cn_trace.emit_simple session ~component:"telegram" ~layer:Sensor
+      Cn_trace.emit_simple boot.session ~component:"telegram" ~layer:Sensor
         ~event:"telegram.offset.loaded" ~severity:Info ~status:Ok_
         ~details:["offset", Cn_json.Int !offset] ();
 
-      (* boot.ready *)
-      Cn_trace.emit_simple session ~component:"runtime" ~layer:Body
-        ~event:"boot.ready" ~severity:Info ~status:Ok_ ();
-
-      (* Write initial state projections *)
-      let pkg_names = List.map (fun (name, _) -> name) summary.packages in
+      (* Update ready.json with actual telegram offset *)
       Cn_trace_state.write_ready hub_path {
-        status = Ready; boot_id = session.boot_id;
+        status = Ready; boot_id = boot.session.boot_id;
         updated_at = Cn_fmt.now_iso ();
         blocked_reason = None;
         mind = Some {
-          profile = Option.value ~default:"engineer" summary.profile;
-          packages = pkg_names;
+          profile = Option.value ~default:"engineer" boot.summary.profile;
+          packages = boot.pkg_names;
           doctrine_required = List.length Cn_assets.required_doctrine;
-          doctrine_loaded = summary.doctrine_count;
+          doctrine_loaded = boot.summary.doctrine_count;
           doctrine_hash = "";
           mindsets_required = List.length Cn_assets.required_mindsets;
-          mindsets_loaded = summary.mindset_count;
+          mindsets_loaded = boot.summary.mindset_count;
           mindsets_hash = "";
-          skills_indexed = total_skills;
+          skills_indexed = boot.total_skills;
           skills_selected_last = [];
           capabilities_hash = "";
           two_pass = config.shell.two_pass;
@@ -804,21 +942,8 @@ let run_daemon ~(config : Cn_config.config) ~hub_path ~name =
         };
       };
 
-      Cn_trace_state.write_coherence hub_path {
-        boot_id = session.boot_id;
-        status = "coherent";
-        config = Ok_;
-        lockfile = (if lock_ok then Ok_ else Missing);
-        doctrine = Ok_;
-        mindsets = Ok_;
-        packages = Ok_;
-        capabilities = Ok_;
-        transport = Ok_;
-        updated_at = Cn_fmt.now_iso ();
-      };
-
       (* Daemon poll start *)
-      Cn_trace.emit_simple session ~component:"telegram" ~layer:Sensor
+      Cn_trace.emit_simple boot.session ~component:"telegram" ~layer:Sensor
         ~event:"daemon.poll.start" ~severity:Info ~status:Ok_ ();
 
       print_endline (Cn_fmt.ok (Printf.sprintf
@@ -905,14 +1030,15 @@ let run_daemon ~(config : Cn_config.config) ~hub_path ~name =
 (** Interactive mode: read from stdin, enqueue, process, print response.
     Each line is a separate message. Ctrl-D to exit. *)
 let run_stdio ~(config : Cn_config.config) ~hub_path ~name =
-  (* Initialize tracing *)
+  (* Full boot sequence with projections (shared across all modes) *)
   (match Cn_trace.get_global () with
    | Some _ -> ()
    | None ->
-       let session = Cn_trace.init_global hub_path in
-       Cn_trace.emit_simple session ~component:"runtime" ~layer:Body
-         ~event:"boot.start" ~severity:Info ~status:Ok_
-         ~details:["mode", Cn_json.String "stdio"] ());
+       match boot_sequence ~config ~hub_path ~mode:"stdio" with
+       | Error msg ->
+           print_endline (Cn_fmt.fail msg);
+           Cn_ffi.Process.exit 1
+       | Ok _ -> ());
 
   print_endline (Cn_fmt.info "Interactive mode (stdin -> LLM -> stdout)");
   print_endline (Cn_fmt.dim "Type a message and press Enter. Ctrl-D to exit.");
