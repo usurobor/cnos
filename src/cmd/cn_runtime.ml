@@ -382,25 +382,15 @@ let update_runtime_projection hub_path ~cycle_id ~pass ~trigger ~lock_held
       }
   | None -> ()
 
-(** Update ready.json body section for FSM state changes. *)
+(** Update ready.json body section for FSM state changes.
+    Uses read-modify-write to preserve mind and sensors_telegram fields. *)
 let update_ready_body hub_path ~fsm_state ~lock_held ~current_cycle =
   match Cn_trace.get_global () with
   | Some session ->
-      (* Read existing ready.json and update body section only.
-         For v1 simplicity, write a minimal update. *)
-      Cn_trace_state.write_ready hub_path {
-        status = Ready; boot_id = session.boot_id;
-        updated_at = Cn_fmt.now_iso ();
-        blocked_reason = None;
-        mind = None;  (* preserve existing via overwrite — v1 tradeoff *)
-        body = Some {
-          fsm_state;
-          lock_held;
-          current_cycle;
-          queue_depth = 0;
-        };
-        sensors_telegram = None;
-      }
+      Cn_trace_state.update_ready_body hub_path
+        ~boot_id:session.boot_id
+        ~updated_at:(Cn_fmt.now_iso ())
+        { fsm_state; lock_held; current_cycle; queue_depth = 0 }
   | None -> ()
 
 (* === Finalize: archive → execute → project → conversation → cleanup === *)
