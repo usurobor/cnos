@@ -85,3 +85,171 @@ let%expect_test "coherence check rendering" =
     (Cn_trace_state.string_of_check Missing)
     (Cn_trace_state.string_of_check Error_);
   [%expect {| ok missing error |}]
+
+(* === Integration tests: projection writes to filesystem === *)
+
+let make_tmp_hub () =
+  let base = Filename.concat (Filename.get_temp_dir_name ())
+    (Printf.sprintf "cn-trace-state-test-%d" (Random.int 100000)) in
+  Cn_ffi.Fs.ensure_dir (Filename.concat base "state");
+  base
+
+let%expect_test "write_ready creates state/ready.json on disk" =
+  let hub = make_tmp_hub () in
+  Cn_trace_state.write_ready hub {
+    status = Ready; boot_id = "test-boot-001";
+    updated_at = "2026-03-15T14:02:04.000Z";
+    blocked_reason = None;
+    mind = None;
+    body = Some {
+      fsm_state = "idle"; lock_held = false;
+      current_cycle = None; queue_depth = 0;
+    };
+    sensors_telegram = None;
+  };
+  let path = Filename.concat hub "state/ready.json" in
+  assert (Sys.file_exists path);
+  let content = Cn_ffi.Fs.read path in
+  (match Cn_json.parse content with
+   | Ok obj ->
+       assert (Cn_json.get_string "schema" obj = Some "cn.ready.v1");
+       assert (Cn_json.get_string "status" obj = Some "ready");
+       assert (Cn_json.get_string "boot_id" obj = Some "test-boot-001");
+       (match Cn_json.get "body" obj with
+        | Some body ->
+            assert (Cn_json.get_string "fsm_state" body = Some "idle");
+            print_endline "ok: ready.json written with body"
+        | None -> print_endline "missing body")
+   | Error e -> print_endline ("parse error: " ^ e));
+  [%expect {| ok: ready.json written with body |}]
+
+let%expect_test "write_runtime creates state/runtime.json on disk" =
+  let hub = make_tmp_hub () in
+  Cn_trace_state.write_runtime hub {
+    boot_id = "test-boot-002";
+    current_cycle_id = Some "tg-42";
+    current_pass = Some "A";
+    active_trigger = Some "tg-42";
+    queue_depth = 3;
+    lock_held = true;
+    lock_boot_id = Some "test-boot-002";
+    pending_projection = None;
+    updated_at = "2026-03-15T14:02:05.000Z";
+  };
+  let path = Filename.concat hub "state/runtime.json" in
+  assert (Sys.file_exists path);
+  let content = Cn_ffi.Fs.read path in
+  (match Cn_json.parse content with
+   | Ok obj ->
+       assert (Cn_json.get_string "schema" obj = Some "cn.runtime.v1");
+       assert (Cn_json.get_string "current_cycle_id" obj = Some "tg-42");
+       assert (Cn_json.get_string "current_pass" obj = Some "A");
+       assert (Cn_json.get_int "queue_depth" obj = Some 3);
+       (match Cn_json.get "lock_held" obj with
+        | Some (Cn_json.Bool true) ->
+            print_endline "ok: runtime.json written with cycle state"
+        | _ -> print_endline "wrong lock_held")
+   | Error e -> print_endline ("parse error: " ^ e));
+  [%expect {| ok: runtime.json written with cycle state |}]
+
+let%expect_test "write_coherence creates state/coherence.json on disk" =
+  let hub = make_tmp_hub () in
+  Cn_trace_state.write_coherence hub {
+    boot_id = "test-boot-003";
+    status = "coherent";
+    config = Ok_; lockfile = Ok_;
+    doctrine = Ok_; mindsets = Ok_;
+    packages = Ok_; capabilities = Ok_;
+    transport = Missing;
+    updated_at = "2026-03-15T14:02:06.000Z";
+  };
+  let path = Filename.concat hub "state/coherence.json" in
+  assert (Sys.file_exists path);
+  let content = Cn_ffi.Fs.read path in
+  (match Cn_json.parse content with
+   | Ok obj ->
+       assert (Cn_json.get_string "schema" obj = Some "cn.coherence.v1");
+       assert (Cn_json.get_string "status" obj = Some "coherent");
+       (match Cn_json.get "checks" obj with
+        | Some checks ->
+            assert (Cn_json.get_string "transport" checks = Some "missing");
+            assert (Cn_json.get_string "doctrine" checks = Some "ok");
+            print_endline "ok: coherence.json written with checks"
+        | None -> print_endline "missing checks")
+   | Error e -> print_endline ("parse error: " ^ e));
+  [%expect {| ok: coherence.json written with checks |}]
+
+let%expect_test "projection update lifecycle: idle -> processing -> idle" =
+  let hub = make_tmp_hub () in
+  let boot_id = "test-lifecycle-001" in
+  (* Phase 1: boot — idle state *)
+  Cn_trace_state.write_runtime hub {
+    boot_id; current_cycle_id = None; current_pass = None;
+    active_trigger = None; queue_depth = 0;
+    lock_held = false; lock_boot_id = None;
+    pending_projection = None;
+    updated_at = "2026-03-15T14:00:00.000Z";
+  };
+  Cn_trace_state.write_ready hub {
+    status = Ready; boot_id;
+    updated_at = "2026-03-15T14:00:00.000Z";
+    blocked_reason = None; mind = None;
+    body = Some { fsm_state = "idle"; lock_held = false;
+                  current_cycle = None; queue_depth = 0; };
+    sensors_telegram = None;
+  };
+  (* Phase 2: lock acquired, cycle start *)
+  Cn_trace_state.write_runtime hub {
+    boot_id; current_cycle_id = Some "tg-99";
+    current_pass = Some "A"; active_trigger = Some "tg-99";
+    queue_depth = 0; lock_held = true;
+    lock_boot_id = Some boot_id;
+    pending_projection = None;
+    updated_at = "2026-03-15T14:00:01.000Z";
+  };
+  Cn_trace_state.write_ready hub {
+    status = Ready; boot_id;
+    updated_at = "2026-03-15T14:00:01.000Z";
+    blocked_reason = None; mind = None;
+    body = Some { fsm_state = "processing"; lock_held = true;
+                  current_cycle = Some "tg-99"; queue_depth = 0; };
+    sensors_telegram = None;
+  };
+  (* Phase 3: finalize complete, back to idle *)
+  Cn_trace_state.write_runtime hub {
+    boot_id; current_cycle_id = None; current_pass = None;
+    active_trigger = None; queue_depth = 0;
+    lock_held = false; lock_boot_id = None;
+    pending_projection = None;
+    updated_at = "2026-03-15T14:00:02.000Z";
+  };
+  Cn_trace_state.write_ready hub {
+    status = Ready; boot_id;
+    updated_at = "2026-03-15T14:00:02.000Z";
+    blocked_reason = None; mind = None;
+    body = Some { fsm_state = "idle"; lock_held = false;
+                  current_cycle = None; queue_depth = 0; };
+    sensors_telegram = None;
+  };
+  (* Verify final state *)
+  let rt = Cn_ffi.Fs.read (Filename.concat hub "state/runtime.json") in
+  let rd = Cn_ffi.Fs.read (Filename.concat hub "state/ready.json") in
+  (match Cn_json.parse rt, Cn_json.parse rd with
+   | Ok rt_obj, Ok rd_obj ->
+       (* runtime.json: idle, no cycle *)
+       assert (Cn_json.get_string "current_cycle_id" rt_obj = None
+               || Cn_json.get "current_cycle_id" rt_obj = Some Cn_json.Null);
+       (match Cn_json.get "lock_held" rt_obj with
+        | Some (Cn_json.Bool false) -> ()
+        | _ -> assert false);
+       (* ready.json: idle body *)
+       (match Cn_json.get "body" rd_obj with
+        | Some body ->
+            assert (Cn_json.get_string "fsm_state" body = Some "idle");
+            (match Cn_json.get "lock_held" body with
+             | Some (Cn_json.Bool false) -> ()
+             | _ -> assert false);
+            print_endline "ok: lifecycle idle -> processing -> idle verified"
+        | None -> print_endline "missing body")
+   | _ -> print_endline "parse error");
+  [%expect {| ok: lifecycle idle -> processing -> idle verified |}]
