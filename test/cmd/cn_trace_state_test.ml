@@ -253,3 +253,101 @@ let%expect_test "projection update lifecycle: idle -> processing -> idle" =
         | None -> print_endline "missing body")
    | _ -> print_endline "parse error");
   [%expect {| ok: lifecycle idle -> processing -> idle verified |}]
+
+let%expect_test "update_ready_body preserves mind and sensors fields" =
+  let hub = make_tmp_hub () in
+  let boot_id = "test-preserve-001" in
+  (* Write full ready.json with mind and sensors *)
+  Cn_trace_state.write_ready hub {
+    status = Ready; boot_id;
+    updated_at = "2026-03-15T14:00:00.000Z";
+    blocked_reason = None;
+    mind = Some {
+      profile = "engineer";
+      packages = ["cnos.core@1.0.0"];
+      doctrine_required = 6; doctrine_loaded = 6;
+      doctrine_hash = "sha256:abc";
+      mindsets_required = 9; mindsets_loaded = 9;
+      mindsets_hash = "sha256:def";
+      skills_indexed = 12;
+      skills_selected_last = ["eng/review"];
+      capabilities_hash = "sha256:ghi";
+      two_pass = "auto"; apply_mode = "branch";
+      exec_enabled = false;
+    };
+    body = Some {
+      fsm_state = "idle"; lock_held = false;
+      current_cycle = None; queue_depth = 0;
+    };
+    sensors_telegram = Some {
+      enabled = true; offset = 42;
+      last_poll_status = "ok";
+      last_poll_at = "2026-03-15T13:59:00.000Z";
+    };
+  };
+  (* Now do a body-only update via update_ready_body *)
+  Cn_trace_state.update_ready_body hub
+    ~boot_id ~updated_at:"2026-03-15T14:00:01.000Z"
+    { fsm_state = "processing"; lock_held = true;
+      current_cycle = Some "tg-99"; queue_depth = 0; };
+  (* Verify mind and sensors survived *)
+  let path = Filename.concat hub "state/ready.json" in
+  let content = Cn_ffi.Fs.read path in
+  (match Cn_json.parse content with
+   | Ok obj ->
+       (* Body should be updated *)
+       (match Cn_json.get "body" obj with
+        | Some body ->
+            assert (Cn_json.get_string "fsm_state" body = Some "processing");
+            (match Cn_json.get "lock_held" body with
+             | Some (Cn_json.Bool true) -> ()
+             | _ -> assert false)
+        | None -> assert false);
+       (* Mind should be preserved *)
+       (match Cn_json.get "mind" obj with
+        | Some mind ->
+            assert (Cn_json.get_string "profile" mind = Some "engineer");
+            (match Cn_json.get "skills" mind with
+             | Some skills ->
+                 assert (Cn_json.get_int "indexed" skills = Some 12)
+             | None -> assert false)
+        | None ->
+            print_endline "FAIL: mind field lost after body update";
+            assert false);
+       (* Sensors should be preserved *)
+       (match Cn_json.get "sensors" obj with
+        | Some sensors ->
+            (match Cn_json.get "telegram" sensors with
+             | Some tg ->
+                 assert (Cn_json.get_int "offset" tg = Some 42);
+                 print_endline "ok: mind and sensors preserved after body update"
+             | None ->
+                 print_endline "FAIL: telegram sensor lost";
+                 assert false)
+        | None ->
+            print_endline "FAIL: sensors field lost after body update";
+            assert false)
+   | Error e -> print_endline ("parse error: " ^ e));
+  [%expect {| ok: mind and sensors preserved after body update |}]
+
+let%expect_test "update_ready_body works when no prior ready.json exists" =
+  let hub = make_tmp_hub () in
+  (* No prior write_ready — update_ready_body should still work *)
+  Cn_trace_state.update_ready_body hub
+    ~boot_id:"test-fresh-001"
+    ~updated_at:"2026-03-15T14:00:00.000Z"
+    { fsm_state = "idle"; lock_held = false;
+      current_cycle = None; queue_depth = 0; };
+  let path = Filename.concat hub "state/ready.json" in
+  assert (Sys.file_exists path);
+  let content = Cn_ffi.Fs.read path in
+  (match Cn_json.parse content with
+   | Ok obj ->
+       assert (Cn_json.get_string "schema" obj = Some "cn.ready.v1");
+       (match Cn_json.get "body" obj with
+        | Some body ->
+            assert (Cn_json.get_string "fsm_state" body = Some "idle");
+            print_endline "ok: update_ready_body works without prior ready.json"
+        | None -> print_endline "missing body")
+   | Error e -> print_endline ("parse error: " ^ e));
+  [%expect {| ok: update_ready_body works without prior ready.json |}]

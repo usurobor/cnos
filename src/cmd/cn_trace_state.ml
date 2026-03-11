@@ -162,6 +162,47 @@ let write_ready hub_path (r : ready_projection) =
   in
   write_json hub_path "ready.json" (Cn_json.Object fields)
 
+(** Read existing ready.json and return as raw JSON, or None if missing/invalid. *)
+let read_ready_json hub_path =
+  let path = Cn_ffi.Path.join (state_dir hub_path) "ready.json" in
+  if Cn_ffi.Fs.exists path then
+    match Cn_ffi.Fs.read path |> Cn_json.parse with
+    | Ok obj -> Some obj
+    | Error _ -> None
+  else None
+
+(** Update only the body section of ready.json, preserving mind and sensors.
+    If ready.json doesn't exist yet, writes a minimal projection with body only. *)
+let update_ready_body hub_path ~boot_id ~updated_at (body : body_projection) =
+  let existing = read_ready_json hub_path in
+  (* Start with existing fields or minimal defaults *)
+  let base_fields = match existing with
+    | Some (Cn_json.Object fields) -> fields
+    | _ -> [
+        "schema", Cn_json.String "cn.ready.v1";
+        "status", Cn_json.String "ready";
+        "boot_id", Cn_json.String boot_id;
+      ]
+  in
+  (* Build new body JSON *)
+  let cycle = match body.current_cycle with
+    | Some c -> Cn_json.String c | None -> Cn_json.Null in
+  let body_json = Cn_json.Object [
+    "fsm_state", Cn_json.String body.fsm_state;
+    "lock_held", Cn_json.Bool body.lock_held;
+    "current_cycle", cycle;
+    "queue_depth", Cn_json.Int body.queue_depth;
+  ] in
+  (* Replace/add body and updated_at; preserve everything else *)
+  let fields = base_fields
+    |> List.filter (fun (k, _) -> k <> "body" && k <> "updated_at")
+  in
+  let fields = fields @ [
+    "body", body_json;
+    "updated_at", Cn_json.String updated_at;
+  ] in
+  write_json hub_path "ready.json" (Cn_json.Object fields)
+
 let write_runtime hub_path (r : runtime_projection) =
   let opt_str = function Some s -> Cn_json.String s | None -> Cn_json.Null in
   let fields = [
