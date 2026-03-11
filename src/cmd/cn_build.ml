@@ -248,6 +248,34 @@ let check_one ~agent_root ~pkgs_dir (dir_name, pkg) =
   rm_tree tmp_dir;
   (pkg.name, mismatches)
 
+(* === Programmatic check for a single package === *)
+
+(** Check whether a specific package's built output in packages/ is in sync
+    with src/agent/.  Returns Ok () if in sync (or if we're not in the cnos
+    repo / no src/agent/ exists), Error msg if stale.
+    Called by cn_deps before local first-party restore to prevent installing
+    stale generated artifacts. *)
+let check_package ?root pkg_name =
+  let root = match root with Some r -> Some r | None -> repo_root () in
+  match root with
+  | None -> Ok ()  (* not in cnos repo — nothing to check *)
+  | Some root ->
+      let agent_root = agent_path root in
+      let pkgs_dir = packages_path root in
+      if not (Cn_ffi.Fs.exists agent_root) then Ok ()
+      else
+        let packages = discover_packages root in
+        match List.find_opt (fun (_, pkg) -> pkg.name = pkg_name) packages with
+        | None -> Ok ()  (* package not managed by build system *)
+        | Some entry ->
+            let (_name, mismatches) = check_one ~agent_root ~pkgs_dir entry in
+            match mismatches with
+            | [] -> Ok ()
+            | issues ->
+                Error (Printf.sprintf
+                  "packages/%s is stale relative to src/agent/ — run 'cn build'\n  %s"
+                  pkg_name (String.concat "\n  " issues))
+
 (* === CLI entry points === *)
 
 let run_build () =
