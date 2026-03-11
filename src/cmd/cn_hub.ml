@@ -22,8 +22,22 @@ let rec find_hub_path dir =
 
 let log_action _hub_path action details =
   (* Compatibility shim: forward to Cn_trace structured events.
-     Maps legacy action strings to event names. *)
-  Cn_trace.gemit ~component:"runtime" ~layer:Body
+     Infers component/layer from action prefix for richer traceability. *)
+  let component, layer =
+    if String.length action >= 6 && String.sub action 0 6 = "daemon" then
+      "telegram", Cn_trace.Sensor
+    else if String.length action >= 10 && String.sub action 0 10 = "projection" then
+      "projection", Cn_trace.Sensor
+    else if String.length action >= 5 && String.sub action 0 5 = "actor" then
+      "runtime", Cn_trace.Body
+    else if String.length action >= 7 && String.sub action 0 7 = "process" then
+      "runtime", Cn_trace.Body
+    else if String.length action >= 2 && String.sub action 0 2 = "io" then
+      "runtime", Cn_trace.Body
+    else
+      "runtime", Cn_trace.Body
+  in
+  Cn_trace.gemit ~component ~layer
     ~event:action ~severity:Info ~status:Ok_
     ~reason:details ()
 
