@@ -234,6 +234,68 @@ let%expect_test "check detects drift when source changes" =
     differs: doctrine/FOUNDATIONS.md
   |}]
 
+(* === check_package (staleness guard for restore) === *)
+
+let%expect_test "check_package returns Ok when packages in sync" =
+  with_test_repo (fun root ->
+    let agent_root = Filename.concat root "src/agent" in
+    let pkgs_dir = Filename.concat root "packages" in
+    let packages = Cn_build.discover_packages root in
+    (* Build all packages first *)
+    packages |> List.iter (fun entry ->
+      ignore (Cn_build.build_one ~agent_root ~pkgs_dir entry));
+    (* check_package should pass *)
+    (match Cn_build.check_package ~root "cnos.core" with
+     | Ok () -> print_endline "cnos.core: ok"
+     | Error msg -> print_endline msg);
+    (match Cn_build.check_package ~root "cnos.eng" with
+     | Ok () -> print_endline "cnos.eng: ok"
+     | Error msg -> print_endline msg));
+  [%expect {|
+    cnos.core: ok
+    cnos.eng: ok
+  |}]
+
+let%expect_test "check_package returns Error when packages stale" =
+  with_test_repo (fun root ->
+    let agent_root = Filename.concat root "src/agent" in
+    let pkgs_dir = Filename.concat root "packages" in
+    let packages = Cn_build.discover_packages root in
+    (* Build first *)
+    packages |> List.iter (fun entry ->
+      ignore (Cn_build.build_one ~agent_root ~pkgs_dir entry));
+    (* Modify source to create drift *)
+    Cn_ffi.Fs.write
+      (Filename.concat root "src/agent/doctrine/FOUNDATIONS.md")
+      "# Foundations v2 — updated";
+    (* check_package should fail *)
+    (match Cn_build.check_package ~root "cnos.core" with
+     | Ok () -> print_endline "cnos.core: ok (unexpected)"
+     | Error _ -> print_endline "cnos.core: stale (expected)");
+    (* cnos.eng should still be ok — it doesn't use doctrine *)
+    (match Cn_build.check_package ~root "cnos.eng" with
+     | Ok () -> print_endline "cnos.eng: ok"
+     | Error _ -> print_endline "cnos.eng: stale (unexpected)"));
+  [%expect {|
+    cnos.core: stale (expected)
+    cnos.eng: ok
+  |}]
+
+let%expect_test "check_package returns Ok for unknown package" =
+  with_test_repo (fun root ->
+    let agent_root = Filename.concat root "src/agent" in
+    let pkgs_dir = Filename.concat root "packages" in
+    let packages = Cn_build.discover_packages root in
+    packages |> List.iter (fun entry ->
+      ignore (Cn_build.build_one ~agent_root ~pkgs_dir entry));
+    (* Unknown package should pass (not managed by build system) *)
+    (match Cn_build.check_package ~root "cnos.unknown" with
+     | Ok () -> print_endline "unknown: ok (skipped)"
+     | Error msg -> print_endline msg));
+  [%expect {|
+    unknown: ok (skipped)
+  |}]
+
 let%expect_test "check passes when packages match source" =
   with_test_repo (fun root ->
     let agent_root = Filename.concat root "src/agent" in
