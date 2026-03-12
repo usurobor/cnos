@@ -1,6 +1,6 @@
 # Coherence-Driven Development (CDD)
 
-**Version:** 1.1.0
+**Version:** 1.2.0
 **Status:** Draft
 **Date:** 2026-03-11
 **Placement:** Design document (`docs/design/`)
@@ -24,6 +24,10 @@ a development method in which the primary objective is to reduce incoherence acr
 CDD applies CAP to development itself.
 
 > **A change is good not merely when it is implemented, but when it reduces incoherence across the system as a whole.**
+
+CDD therefore treats each substantial release as a **measured coherence delta**:
+not merely a bundle of features, but a specific movement toward greater coherence.
+Features are the operator-facing articulation of that movement.
 
 Formalization — writing explicit contracts (specs, schemas, invariants, acceptance criteria) — is how coherence becomes inspectable. The cnos system already practices formalization through doctrine, design documents, and schemas. CDD names the wider method that gives formalization its purpose.
 
@@ -134,6 +138,21 @@ The change should improve the future, not just the present.
 - Can the system evolve without special-case accretion?
 - Did we reduce future incoherence?
 
+### 3.4 Coherence delta as the release unit
+
+A release is not judged only by the features it contains.
+Under CDD, a release is judged by the **coherence delta** it produces.
+
+This means every substantial change should answer:
+
+- What incoherence was reduced?
+- Along which axis or axes (α / β / γ)?
+- What concrete feature, fix, or refactor articulated that reduction?
+- What coherence debt remains?
+
+Features still matter. They are how users and operators experience the change.
+But in CDD they are understood as the **concrete articulation of a movement through coherence space**, not the sole unit of value.
+
 ---
 
 ## 4. The CDD Review Loop
@@ -225,6 +244,17 @@ Which layer is affected?
 
 ### 6.5 Failure if skipped
 What incoherence persists if we do nothing?
+
+### 6.6 Expected coherence delta
+What measured movement do we expect this change to produce?
+
+At minimum:
+- starting α / β / γ assessment
+- intended weakest-axis improvement
+- expected end state after release
+
+This does not require false precision.
+It does require that the release be understood as a movement, not just an output.
 
 ---
 
@@ -326,6 +356,14 @@ A change is releasable when:
 - boot/readiness can be determined
 - failure modes are visible
 - major transitions have reason codes
+
+### 9.5 The release's coherence delta is explicit
+The release should state:
+- which incoherence it primarily reduced
+- what changed as its concrete articulation
+- what coherence debt remains
+
+This can be carried in release notes, a changelog TSC table, or equivalent release metadata.
 
 ---
 
@@ -433,6 +471,10 @@ Coherence-Driven Development means:
 - scaling down for small changes, scaling up for substantial ones
 
 > **Development organized around reducing incoherence across thought, design, implementation, operation, and evolution.**
+
+Each substantial release is therefore a **measured coherence delta**.
+The feature is not discarded or treated as accidental;
+it is the concrete, operator-visible articulation of that delta.
 
 ---
 
