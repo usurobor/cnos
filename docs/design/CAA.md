@@ -62,11 +62,17 @@ The agent reconstitutes from local files in this order:
 | 3 | Mindsets | All installed packages | Always, not scored |
 | 4 | Reflections | `threads/reflections/` | Always (recent N) |
 | 5 | Task Skills | All installed packages | Scored, bounded (top N) |
-| 6 | Capabilities | Runtime-generated | Always |
-| 7 | Conversation | `state/conversation.json` | Recent N turns |
-| 8 | Inbound message | Queue / stdin | Current demand |
+| 6 | Workspace Constitution | Runtime-generated | Always |
+| 7 | Capabilities | Runtime-generated | Always |
+| 8 | Conversation | `state/conversation.json` | Recent N turns |
+| 9 | Inbound message | Queue / stdin | Current demand |
 
-Strata 1-3 are stable and cacheable. Strata 4-8 are dynamic.
+Strata 1-3 are stable and cacheable. Strata 4-9 are dynamic.
+
+Stratum 6 (Workspace Constitution) declares the agent's workspace structure:
+roots, writable/protected boundaries, installed packages, doctrine source.
+The agent does not discover its workspace by exploration — the runtime
+tells it. See [`WORKSPACE-CONSTITUTION-v1.md`](WORKSPACE-CONSTITUTION-v1.md).
 
 Doctrine and mindsets never compete for skill slots. If they do,
 the architecture is broken.
@@ -165,6 +171,10 @@ Non-negotiable architectural properties:
    are absent, the agent does not wake. Silent degradation is the
    failure mode this architecture exists to prevent.
 
+8. **Workspace is declared, not discovered.** The runtime provides the
+   agent's workspace structure as an always-on stratum. The agent
+   operates within declared boundaries, not by inferring what exists.
+
 ---
 
 ## 8. Failure Modes
@@ -179,6 +189,7 @@ Non-negotiable architectural properties:
 | Non-deterministic context | #6 | Same input, different behavior |
 | Silent zero-skills wake-up | #7 | Agent functions but is cognitively empty |
 | Doctrine in skill slots | #1 | Principles dropped when skills are full |
+| No workspace declaration | #8 | Agent wastes tokens rediscovering structure |
 
 Each failure mode maps to a specific invariant. If the invariant holds,
 the failure cannot occur.

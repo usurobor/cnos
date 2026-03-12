@@ -1,14 +1,26 @@
 # Agent Runtime: Native cnos Agent
 
-**Version:** 3.6.0
+**Version:** 3.9.0
 **Authors:** Sigma (original), Pi (CLP), Axiom (pure-pipe directive)
-**Date:** 2026-03-11
+**Date:** 2026-03-12
 **Status:** Draft
 **Reviewers:** usurobor, external
 
 ---
 
 ## Patch Notes
+
+**v3.9.0** — Workspace Constitution (always-on workspace stratum):
+- Introduce **Workspace Constitution** as a new runtime-generated, always-on context stratum
+- The runtime declares the agent's workspace structure (roots, writable/protected boundaries, installed packages, doctrine source, override locations) as a versioned block in the packed context
+- Schema: `cn.workspace.v1` — hub-relative paths only, no absolute host paths
+- New stratum position: between Task Skills (#5) and CN Shell Capabilities (#7), as stratum #6
+- Design choice: the agent does not discover its workspace by exploration; the runtime tells it what world it inhabits
+- Closes three gaps: cost (no exploration tokens), determinism (same state → same block), security (bounded declared workspace)
+- New boot event: `workspace.rendered` (between `skills.indexed` and `capabilities.rendered`)
+- New state projection: `state/workspace.json` — operator-facing workspace snapshot
+- Context budget impact: ~150 tokens added to the stable cacheable prefix
+- See [`WORKSPACE-CONSTITUTION-v1.md`](WORKSPACE-CONSTITUTION-v1.md) for the full design doc
 
 **v3.6.0** — Output Plane Separation and sink-safe rendering:
 - Introduce strict separation between **control plane** (frontmatter, coordination ops, typed `ops:` manifest) and **presentation plane** (human-facing text projected to sinks such as Telegram/Discord)
@@ -652,10 +664,11 @@ cn packs the following into `state/input.md` before LLM invocation:
 | Recent daily reflections (last 3) | `threads/reflections/daily/YYYYMMDD.md` | ~1500 |
 | Current weekly reflection | `threads/reflections/weekly/YYYY-WNN.md` | ~500 |
 | Matched skills (top 3, role-weighted) | `src/agent/skills/**/SKILL.md` | ~1500 |
+| Workspace Constitution (v3.9.0+) | Runtime-generated | ~150 |
+| CN Shell capabilities (v3.3.5+) | Runtime-generated | ~100 |
 | Conversation history (last 10) | `state/conversation.json` | ~2000 |
 | Inbound message | The Telegram message text | ~200 |
-| CN Shell capabilities (v3.3.5+) | Runtime-generated | ~100 |
-| **Total** | | **~8600** |
+| **Total** | | **~8750** |
 
 Token budget varies by model and context mode. The runtime should treat headroom as telemetry, not a hardcoded assumption.
 
@@ -663,7 +676,7 @@ Token budget varies by model and context mode. The runtime should treat headroom
 
 `Cn_context.pack` MUST include a short capability-discovery block in the packed context so the agent knows what the runtime supports before proposing ops. This is not a tool loop — it is declaring the syscall ABI at call time.
 
-The block is runtime-generated (not hand-authored) and placed after skills, before conversation history. Format:
+The block is runtime-generated (not hand-authored) and placed after the Workspace Constitution block (v3.9.0+), before conversation history. Format:
 
 ```
 ## CN Shell Capabilities
