@@ -195,9 +195,9 @@ Examples: ENGINEERING, PM, WISDOM, OPERATIONS.
 
 ### Skill
 
-Bounded, selected, instrumental cognitive module. Skills are situational amplifiers, not identity. They live under `skills/<name>/` with a `SKILL.md` file defining TERMS, INPUTS, and EFFECTS. Skills are scored and compete for bounded slots at wake-up.
+Bounded, selected, instrumental cognitive module. Skills are situational amplifiers, not identity. They live under `skills/{name}/` with a `SKILL.md` file defining TERMS, INPUTS, and EFFECTS. Skills are scored and compete for bounded slots at wake-up.
 
-**Location:** `skills/<name>/SKILL.md` in the package source; installed into `.cn/vendor/packages/<pkg>/skills/<name>/`.
+**Location:** `skills/{name}/SKILL.md` in the package source (e.g., `packages/cnos.core/skills/self-cohere/SKILL.md`); installed into `.cn/vendor/packages/{pkg}/skills/{name}/`.
 
 If doctrine competes with task skills, the architecture is already confused.
 
@@ -300,14 +300,11 @@ The source repo and runtime for CN agents. Contains the `cn` CLI, cognitive pack
 
 A Markdown file under `threads/` that represents a conversation, reflection, or topic.
 
-**Naming:** All threads use date prefix `YYYYMMDD-<name>.md`.
-
-**Types:**
-- **Periodic threads** — Daily, weekly, monthly, etc. reflections using α/β/γ format
-- **Topic threads** — Conversations, reviews, discussions
-- **Multi-party threads** — Conversations with other agents
-
-**Protocol:** `threads/{thread_id}.md` at the repo root.
+**Structure:** Threads are organized by type under `threads/`:
+- `threads/reflections/daily/YYYYMMDD.md` — daily reflections using α/β/γ format
+- `threads/reflections/weekly/YYYY-WNN.md` — weekly reflections
+- `threads/adhoc/` — topic conversations, reviews, discussions
+- `threads/mail/inbox/`, `threads/mail/outbox/` — multi-party threads
 
 ### Peer
 
@@ -331,11 +328,11 @@ The agent is the brain. `cn` is the body. Git is the nervous system.
 
 A practice exercise that walks an agent or human through concrete steps to learn or exercise a behavior.
 
-**Location:** `skills/<name>/kata.md` — katas live alongside the skill they exercise.
+**Location:** `skills/{name}/kata.md` — katas live alongside the skill they exercise (e.g., `skills/self-cohere/kata.md`).
 
 ### Coherent Reflection
 
-The structured practice of assessing coherence at regular cadences (daily, weekly, monthly, quarterly, half-yearly, yearly) using TSC's α/β/γ framework. Output is a thread (e.g., `threads/YYYYMMDD-daily.md`).
+The structured practice of assessing coherence at regular cadences (daily, weekly, monthly, quarterly, half-yearly, yearly) using TSC's α/β/γ framework. Output is a reflection thread under the appropriate cadence directory (e.g., `threads/reflections/daily/YYYYMMDD.md`, `threads/reflections/weekly/YYYY-WNN.md`).
 
 Each periodic thread:
 1. Scores PATTERN (α), RELATION (β), EXIT (γ)
