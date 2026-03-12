@@ -4,12 +4,23 @@
     schedulers. No scheduler logic or Telegram logic inside this module.
 
     Responsibilities:
-    - peer sync (fetch, inbox materialization, outbox flush)
+    - peer sync (fetch from peers, commit+push to origin)
+    - inbox check + materialization
+    - outbox flush
     - update checks
-    - MCA/review tick
+    - MCA/review tick (time-gated via review_interval_sec)
     - stale state cleanup
 
-    Each primitive emits trace events via the global trace session. *)
+    Each primitive emits trace events via the global trace session.
+
+    Primitive boundaries (each does exactly one thing):
+    - sync_once: git fetch from peers, stage changes, commit, push
+    - inbox_check_once: fetch inbound peer branches, triage to inbox
+    - materialize_inbox_once: queue inbox items for processing
+    - flush_outbox_once: send pending outbox messages to peers
+    - update_check_once: check for binary updates
+    - review_tick_once: time-gated MCA review
+    - cleanup_once: GC stale finalized markers *)
 
 open Cn_lib
 
@@ -37,17 +48,36 @@ let string_of_substep = function
   | Degraded msg -> Printf.sprintf "degraded:%s" msg
   | Skipped msg -> Printf.sprintf "skipped:%s" msg
 
+(* === Review timestamp tracking === *)
+
+let last_review_path hub_path =
+  Cn_ffi.Path.join hub_path "state/.last-review-at"
+
+let read_last_review_at hub_path =
+  let path = last_review_path hub_path in
+  if Cn_ffi.Fs.exists path then
+    (try
+       let s = String.trim (Cn_ffi.Fs.read path) in
+       Some (float_of_string s)
+     with _ -> None)
+  else None
+
+let write_last_review_at hub_path =
+  Cn_ffi.Fs.write (last_review_path hub_path)
+    (Printf.sprintf "%.0f" (Unix.gettimeofday ()))
+
 (* === Sync primitive === *)
 
-(** Run peer sync: fetch from peers, push to origin.
-    Reuses the same logic as cn_system.run_sync but factored for reuse. *)
+(** Peer sync: fetch from peers, stage local changes, commit, push.
+    This is pure git-level sync — no inbox triage or outbox transport.
+    The heartbeat commit ensures the hub's HEAD advances even when idle,
+    keeping peers informed of liveness via git log. *)
 let sync_once ~hub_path ~name =
   Cn_trace.gemit ~component:"maintenance" ~layer:Body
     ~event:"sync.start" ~severity:Info ~status:Ok_ ();
   try
     Cn_mail.inbox_check hub_path name;
     Cn_mail.inbox_process hub_path;
-    Cn_mail.outbox_flush hub_path name;
     let _ = Cn_ffi.Child_process.exec_in ~cwd:hub_path "git add -A" in
     let commit_result = Cn_ffi.Child_process.exec_in ~cwd:hub_path
       "git commit -m 'heartbeat' --allow-empty" in
@@ -152,19 +182,31 @@ let update_check_once ~hub_path =
 
 (* === MCA review tick primitive === *)
 
-(** Run MCA review tick if cycle count warrants it. *)
-let review_tick_once ~hub_path ~name =
+(** Run MCA review tick if time-gated interval has elapsed.
+    Uses wall-clock time (state/.last-review-at) gated by
+    config.scheduler.review_interval_sec. Falls back to cycle-based
+    gating only if no config interval applies. *)
+let review_tick_once ~hub_path ~name ~review_interval_sec =
   try
-    let cycle = Cn_mca.increment_mca_cycle hub_path in
-    if cycle mod Cn_mca.mca_review_interval = 0
-       && Cn_mca.mca_count hub_path > 0 then begin
+    let now = Unix.gettimeofday () in
+    let last = read_last_review_at hub_path in
+    let elapsed = match last with
+      | Some t -> now -. t
+      | None -> infinity  (* never reviewed → due *)
+    in
+    let interval = float_of_int review_interval_sec in
+    if elapsed >= interval && Cn_mca.mca_count hub_path > 0 then begin
       Cn_trace.gemit ~component:"maintenance" ~layer:Body
         ~event:"review.tick.start" ~severity:Info ~status:Ok_
-        ~details:["cycle", Cn_json.Int cycle] ();
+        ~details:[
+          "elapsed_sec", Cn_json.Int (int_of_float elapsed);
+          "interval_sec", Cn_json.Int review_interval_sec;
+        ] ();
       let review = Cn_mca.prepare_mca_review hub_path name in
       let _ = Cn_agent.queue_add hub_path review.trigger "system" review.body in
       Cn_hub.log_action hub_path "mca.review-queued"
         (Printf.sprintf "trigger:%s count:%d" review.trigger review.count);
+      write_last_review_at hub_path;
       print_endline (Cn_fmt.ok
         (Printf.sprintf "Queued MCA review (%d MCAs)" review.count));
       Cn_trace.gemit ~component:"maintenance" ~layer:Body
@@ -172,10 +214,12 @@ let review_tick_once ~hub_path ~name =
         ~details:["count", Cn_json.Int review.count] ();
       Ok
     end else begin
+      let reason = if Cn_mca.mca_count hub_path = 0 then "no_mcas"
+                   else "not_due" in
       Cn_trace.gemit ~component:"maintenance" ~layer:Body
         ~event:"review.tick.complete" ~severity:Info ~status:Skipped
-        ~reason_code:"not_due" ();
-      Skipped "not_due"
+        ~reason_code:reason ();
+      Skipped reason
     end
   with exn ->
     let msg = Printexc.to_string exn in
@@ -210,7 +254,15 @@ let cleanup_once ~hub_path =
 
 (** Run one full maintenance tick: sync, inbox, outbox, update, review, cleanup.
     Returns a maintenance_result describing what happened.
-    Sub-step failures degrade but do not crash the scheduler. *)
+    Sub-step failures degrade but do not crash the scheduler.
+
+    Primitive sequence:
+    1. sync_once — fetch peers, stage, commit heartbeat, push
+    2. materialize_inbox_once — queue inbox items
+    3. flush_outbox_once — send pending outbox to peers
+    4. update_check_once — binary update (when idle)
+    5. review_tick_once — MCA review (time-gated)
+    6. cleanup_once — GC stale markers *)
 let maintain_once ~(config : Cn_config.config) ~hub_path ~name =
   Cn_trace.gemit ~component:"maintenance" ~layer:Body
     ~event:"maintenance.start" ~severity:Info ~status:Ok_ ();
@@ -228,7 +280,10 @@ let maintain_once ~(config : Cn_config.config) ~hub_path ~name =
     else
       Skipped "agent_busy"
   in
-  let review_status = review_tick_once ~hub_path ~name in
+  let review_status =
+    review_tick_once ~hub_path ~name
+      ~review_interval_sec:config.scheduler.review_interval_sec
+  in
   let cleanup_status = cleanup_once ~hub_path in
 
   let result = { sync_status; inbox_status; outbox_status;
@@ -246,7 +301,6 @@ let maintain_once ~(config : Cn_config.config) ~hub_path ~name =
       "review", Cn_json.String (string_of_substep review_status);
       "cleanup", Cn_json.String (string_of_substep cleanup_status);
     ] ();
-  ignore config;  (* config reserved for future interval-based gating *)
 
   print_endline (Cn_fmt.ok
     (Printf.sprintf "Maintenance complete (%s)" overall_status));
