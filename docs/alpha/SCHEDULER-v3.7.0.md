@@ -72,12 +72,16 @@ Ingress adapters only create or reveal work.
 They do not execute the processing engine directly.
 
 ### 2.2 Maintenance engine
-Periodic protocol duties:
-- sync peers (`fetch` / `push` / outbox flush)
-- materialize inbox items from peer branches
-- update checks
-- MCA/review tick (if configured)
+Periodic protocol duties (in order):
+- sync peers: fetch inbound branches, triage inbox, stage changes, commit heartbeat, push to origin
+- materialize inbox items into processing queue
+- flush outbox: send pending messages to peer repos
+- update checks (when idle)
+- MCA/review tick (time-gated by `review_interval_sec`)
 - stale state cleanup
+
+Note: sync includes a heartbeat commit (`git commit --allow-empty`) to advance
+HEAD even when idle, keeping peers informed of liveness via git log.
 
 Maintenance changes what work is available and what state the runtime is in.
 
@@ -331,10 +335,11 @@ Add scheduler-related runtime config under `.cn/config.json`:
 ```
 
 ### Notes
-- `sync_interval_sec` controls daemon maintenance cadence
-- `review_interval_sec` controls optional periodic MCA/review tick
+- `sync_interval_sec` controls daemon maintenance cadence (slow clock interval)
+- `review_interval_sec` controls MCA review tick (wall-clock gated via `state/.last-review-at`)
 - `oneshot_drain_limit` preserves backward-compatible conservative behavior
 - `daemon_drain_limit` prevents unbounded burst starvation
+- All values clamped to minimum 1
 
 ---
 
