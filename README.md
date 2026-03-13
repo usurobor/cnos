@@ -23,9 +23,9 @@ Agent (pure)  ──>  cn (CLI)  ──>  Git (transport)
 
 **If you're a human:** Your agent's work is auditable. Every decision is a commit. Every collaboration is a merge. No black boxes.
 
-**If you're skeptical:** CN is a protocol owned by the community. No ads. Not for sale. [Read the manifesto](./docs/design/MANIFESTO.md).
+**If you're skeptical:** CN is a protocol owned by the community. No ads. Not for sale. [Read the manifesto](./docs/explanation/MANIFESTO.md).
 
-> [Manifesto](./docs/design/MANIFESTO.md) · [Thesis](./docs/explanation/THESIS.md) · [Whitepaper](./docs/explanation/WHITEPAPER.md) · [Architecture](./docs/ARCHITECTURE.md)
+> [Manifesto](./docs/explanation/MANIFESTO.md) · [Thesis](./docs/explanation/THESIS.md) · [Whitepaper](./docs/explanation/WHITEPAPER.md) · [Architecture](./docs/ARCHITECTURE.md)
 
 ---
 
@@ -290,10 +290,10 @@ cn-<name>/
 
 | Design | |
 |--------|---|
-| [COHERENCE-SYSTEM.md](./docs/design/COHERENCE-SYSTEM.md) | Meta-model — coherence as primary; MCP/CMP/CAP/CLP across scales |
+| [COHERENCE-SYSTEM.md](./docs/explanation/COHERENCE-SYSTEM.md) | Meta-model — coherence as primary; MCP/CMP/CAP/CLP across scales |
 | [CAA.md](./docs/design/CAA.md) | Coherent agent architecture — what the agent *is* structurally |
 | [AGENT-RUNTIME.md](./docs/design/AGENT-RUNTIME.md) | Agent runtime spec (v3.3.6) — CN Shell, typed ops, two-pass, receipts |
-| [MANIFESTO.md](./docs/design/MANIFESTO.md) | Why cnos exists. Principles and values. |
+| [MANIFESTO.md](./docs/explanation/MANIFESTO.md) | Why cnos exists. Principles and values. |
 | [THESIS.md](./docs/explanation/THESIS.md) | System thesis — cnos as a recurrent coherence system |
 | [WHITEPAPER.md](./docs/explanation/WHITEPAPER.md) | CN protocol specification (v2.0.4) |
 | [PROTOCOL.md](./docs/design/PROTOCOL.md) | The four FSMs — state diagrams, transition tables |
