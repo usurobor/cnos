@@ -83,7 +83,7 @@ Rules:
 
 All protocol state machines live in `cn_protocol.ml`. States are algebraic types. Transitions are total functions returning `Ok state | Error string`. Invalid transitions are errors, not exceptions. Terminal states are idempotent.
 
-For full state diagrams and transition tables, see [PROTOCOL.md](architecture/PROTOCOL.md).
+For full state diagrams and transition tables, see [PROTOCOL.md](../α/PROTOCOL.md).
 
 ### FSM 1: Thread Lifecycle
 
@@ -310,15 +310,15 @@ Example: `pi/20260211-143022-review-request` is a thread from pi.
 
 | Document | Purpose |
 |----------|---------|
-| [MANIFESTO.md](../foundations/MANIFESTO.md) | Principles and values |
+| [MANIFESTO.md](../α/MANIFESTO.md) | Principles and values |
 | [THESIS.md](../THESIS.md) | System thesis — cnos as a recurrent coherence system |
 | [WHITEPAPER.md](./WHITEPAPER.md) | CN protocol specification |
-| [PROTOCOL.md](architecture/PROTOCOL.md) | FSM design, state diagrams, transition tables |
-| [AGILE-PROCESS.md](method/AGILE-PROCESS.md) | Team process and workflow |
-| [EXECUTABLE-SKILLS.md](method/EXECUTABLE-SKILLS.md) | Vision: skills as programs |
-| [SECURITY-MODEL.md](architecture/SECURITY-MODEL.md) | Security architecture |
-| [CLI.md](architecture/CLI.md) | CLI command reference |
-| [AGENT-RUNTIME.md](architecture/AGENT-RUNTIME.md) | Agent runtime spec (v3.3.6): CN Shell, typed ops, two-pass, receipts |
-| [LOGGING.md](evidence/LOGGING.md) | Logging architecture |
+| [PROTOCOL.md](../α/PROTOCOL.md) | FSM design, state diagrams, transition tables |
+| [AGILE-PROCESS.md](../γ/AGILE-PROCESS.md) | Team process and workflow |
+| [EXECUTABLE-SKILLS.md](../γ/EXECUTABLE-SKILLS.md) | Vision: skills as programs |
+| [SECURITY-MODEL.md](../α/SECURITY-MODEL.md) | Security architecture |
+| [CLI.md](../α/CLI.md) | CLI command reference |
+| [AGENT-RUNTIME.md](../α/AGENT-RUNTIME.md) | Agent runtime spec (v3.3.6): CN Shell, typed ops, two-pass, receipts |
+| [LOGGING.md](./evidence/LOGGING.md) | Logging architecture |
 
-For the full docs audit and archive decisions, see [AUDIT.md](evidence/AUDIT.md).
+For the full docs audit and archive decisions, see [AUDIT.md](./evidence/AUDIT.md).
