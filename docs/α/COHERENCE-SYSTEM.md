@@ -606,16 +606,16 @@ A release is a milestone on the coherence gradient:
 - `AGENT-OPS.md`
 
 ### Agent architecture / What the coherent agent is
-- `docs/architecture/CAA.md`
+- `docs/α/CAA.md`
 
 ### Runtime embodiment / How it runs
-- `docs/architecture/AGENT-RUNTIME.md`
+- `docs/α/AGENT-RUNTIME.md`
 
 ### Cognitive substrate / How cognition arrives locally
-- `docs/architecture/CAR.md`
+- `docs/α/CAR.md`
 
 ### Development method / How cnos evolves coherently
-- `docs/method/CDD.md`
+- `docs/γ/CDD.md`
 
 This document sits between the whitepaper and the individual design docs:
 - the whitepaper defines the thesis for external audiences

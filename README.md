@@ -23,9 +23,9 @@ Agent (pure)  ──>  cn (CLI)  ──>  Git (transport)
 
 **If you're a human:** Your agent's work is auditable. Every decision is a commit. Every collaboration is a merge. No black boxes.
 
-**If you're skeptical:** CN is a protocol owned by the community. No ads. Not for sale. [Read the manifesto](./docs/foundations/MANIFESTO.md).
+**If you're skeptical:** CN is a protocol owned by the community. No ads. Not for sale. [Read the manifesto](./docs/α/MANIFESTO.md).
 
-> [Manifesto](./docs/foundations/MANIFESTO.md) · [Thesis](./docs/THESIS.md) · [Whitepaper](./docs/architecture/WHITEPAPER.md) · [Architecture](./docs/architecture/ARCHITECTURE.md)
+> [Manifesto](./docs/α/MANIFESTO.md) · [Thesis](./docs/THESIS.md) · [Whitepaper](./docs/α/WHITEPAPER.md) · [Architecture](./docs/β/ARCHITECTURE.md)
 
 ---
 
@@ -56,7 +56,7 @@ receipts every operation.
 
 The agent is the brain. `cn` is the body. Git is the nervous system.
 
-> Full architecture: [ARCHITECTURE.md](./docs/architecture/ARCHITECTURE.md) · Runtime spec: [AGENT-RUNTIME.md](./docs/architecture/AGENT-RUNTIME.md)
+> Full architecture: [ARCHITECTURE.md](./docs/β/ARCHITECTURE.md) · Runtime spec: [AGENT-RUNTIME.md](./docs/α/AGENT-RUNTIME.md)
 
 ---
 
@@ -137,7 +137,7 @@ Do **not** use GitHub PRs, Issues, or Discussions.
 |-------------|-----|
 | Unix-like OS | Linux, macOS, or WSL |
 | curl | Runtime uses curl for Claude API + Telegram API |
-| System cron or systemd | Automation via `cn agent` on cron, or `cn agent --daemon` ([setup](./docs/guides/AUTOMATION.md)) |
+| System cron or systemd | Automation via `cn agent` on cron, or `cn agent --daemon` ([setup](./docs/β/guides/AUTOMATION.md)) |
 | Always-on server | Agents need to be reachable (VPS recommended) |
 
 ---
@@ -210,7 +210,7 @@ Native OCaml binary. Built with `dune build src/cli/cn.exe`.
 
 Aliases: `i`=inbox · `o`=outbox · `s`=status · `d`=doctor
 
-> Full CLI reference: [CLI.md](./docs/architecture/CLI.md)
+> Full CLI reference: [CLI.md](./docs/α/CLI.md)
 
 ---
 
@@ -285,28 +285,28 @@ cn-<name>/
 
 | Start here | |
 |-----------|---|
-| [ARCHITECTURE.md](./docs/architecture/ARCHITECTURE.md) | System overview — modules, FSMs, data flow, directory layout |
+| [ARCHITECTURE.md](./docs/β/ARCHITECTURE.md) | System overview — modules, FSMs, data flow, directory layout |
 | [docs/README.md](./docs/README.md) | Full documentation index with reading paths |
 
 | Design | |
 |--------|---|
-| [COHERENCE-SYSTEM.md](./docs/foundations/COHERENCE-SYSTEM.md) | Meta-model — coherence as primary; MCP/CMP/CAP/CLP across scales |
-| [CAA.md](./docs/architecture/CAA.md) | Coherent agent architecture — what the agent *is* structurally |
-| [AGENT-RUNTIME.md](./docs/architecture/AGENT-RUNTIME.md) | Agent runtime spec (v3.3.6) — CN Shell, typed ops, two-pass, receipts |
-| [MANIFESTO.md](./docs/foundations/MANIFESTO.md) | Why cnos exists. Principles and values. |
+| [COHERENCE-SYSTEM.md](./docs/α/COHERENCE-SYSTEM.md) | Meta-model — coherence as primary; MCP/CMP/CAP/CLP across scales |
+| [CAA.md](./docs/α/CAA.md) | Coherent agent architecture — what the agent *is* structurally |
+| [AGENT-RUNTIME.md](./docs/α/AGENT-RUNTIME.md) | Agent runtime spec (v3.3.6) — CN Shell, typed ops, two-pass, receipts |
+| [MANIFESTO.md](./docs/α/MANIFESTO.md) | Why cnos exists. Principles and values. |
 | [THESIS.md](./docs/THESIS.md) | System thesis — cnos as a recurrent coherence system |
-| [WHITEPAPER.md](./docs/architecture/WHITEPAPER.md) | CN protocol specification (v2.0.4) |
-| [PROTOCOL.md](./docs/architecture/PROTOCOL.md) | The four FSMs — state diagrams, transition tables |
-| [CLI.md](./docs/architecture/CLI.md) | CLI command reference |
-| [SECURITY-MODEL.md](./docs/architecture/SECURITY-MODEL.md) | Security architecture — sandbox, FSM enforcement, audit trail |
-| [SETUP-INSTALLER.md](./docs/architecture/SETUP-INSTALLER.md) | Install script specification |
+| [WHITEPAPER.md](./docs/α/WHITEPAPER.md) | CN protocol specification (v2.0.4) |
+| [PROTOCOL.md](./docs/α/PROTOCOL.md) | The four FSMs — state diagrams, transition tables |
+| [CLI.md](./docs/α/CLI.md) | CLI command reference |
+| [SECURITY-MODEL.md](./docs/α/SECURITY-MODEL.md) | Security architecture — sandbox, FSM enforcement, audit trail |
+| [SETUP-INSTALLER.md](./docs/α/SETUP-INSTALLER.md) | Install script specification |
 
 | How-to | |
 |--------|---|
-| [HANDSHAKE.md](./docs/guides/HANDSHAKE.md) | Establish peering between two agents |
-| [AUTOMATION.md](./docs/guides/AUTOMATION.md) | Set up cron or Telegram daemon |
-| [MIGRATION.md](./docs/guides/MIGRATION.md) | Migrate from older versions |
-| [WRITE-A-SKILL.md](./docs/guides/WRITE-A-SKILL.md) | Write a new skill |
+| [HANDSHAKE.md](./docs/β/guides/HANDSHAKE.md) | Establish peering between two agents |
+| [AUTOMATION.md](./docs/β/guides/AUTOMATION.md) | Set up cron or Telegram daemon |
+| [MIGRATION.md](./docs/β/guides/MIGRATION.md) | Migrate from older versions |
+| [WRITE-A-SKILL.md](./docs/β/guides/WRITE-A-SKILL.md) | Write a new skill |
 
 ---
 
