@@ -1,14 +1,23 @@
 # Agent Runtime: Native cnos Agent
 
-**Version:** 3.6.0
+**Version:** 3.8.0
 **Authors:** Sigma (original), Pi (CLP), Axiom (pure-pipe directive)
-**Date:** 2026-03-11
+**Date:** 2026-03-12
 **Status:** Draft
 **Reviewers:** usurobor, external
 
 ---
 
 ## Patch Notes
+
+**v3.8.0** — Syscall Surface Coherence Amendment:
+- Implement `fs_glob` observe op (was advertised but returned `not_yet_implemented`)
+- Add `git_stage` effect op for explicit staging; split from `git_commit`
+- `git_commit` now commits current index only (no implicit `git add -A`); use `git_stage` first
+- Add `offset` and `limit` fields to `fs_read` for chunked observation of large files
+- Make `fs_patch` external dependency on `patch(1)` explicit: `cn doctor` checks for it; receipts reflect failure
+- New receipt reason: `nothing_staged` (git_commit when index has no staged changes)
+- See: [`SYSCALL-SURFACE-v3.8.0.md`](SYSCALL-SURFACE-v3.8.0.md) for full design
 
 **v3.6.0** — Output Plane Separation and sink-safe rendering:
 - Introduce strict separation between **control plane** (frontmatter, coordination ops, typed `ops:` manifest) and **presentation plane** (human-facing text projected to sinks such as Telegram/Discord)

@@ -320,16 +320,44 @@ let%expect_test "exec: missing argv field" =
     show_receipt r);
   [%expect {| kind=exec status=error reason=missing required field 'argv' artifacts=0 |}]
 
-(* === fs_glob: not yet implemented === *)
+(* === fs_glob: implemented in v3.8.0 === *)
 
-let%expect_test "fs_glob: not yet implemented" =
+let%expect_test "fs_glob: match *.ml in src/" =
   with_test_hub (fun hub ->
     let op = { Cn_shell.kind = Observe Fs_glob;
                op_id = Some "obs-01";
-               fields = [("pattern", Cn_json.String "**/*.ml")] } in
+               fields = [("pattern", Cn_json.String "*.ml");
+                          ("base", Cn_json.String "src")] } in
     let r = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config op in
     show_receipt r);
-  [%expect {| kind=fs_glob status=error reason=not_yet_implemented artifacts=0 |}]
+  [%expect {| kind=fs_glob status=ok reason=(none) artifacts=1 |}]
+
+let%expect_test "fs_glob: no matches returns ok" =
+  with_test_hub (fun hub ->
+    let op = { Cn_shell.kind = Observe Fs_glob;
+               op_id = Some "obs-01";
+               fields = [("pattern", Cn_json.String "*.xyz")] } in
+    let r = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config op in
+    show_receipt r);
+  [%expect {| kind=fs_glob status=ok reason=(none) artifacts=1 |}]
+
+let%expect_test "fs_glob: denied base path (.cn)" =
+  with_test_hub (fun hub ->
+    let op = { Cn_shell.kind = Observe Fs_glob;
+               op_id = Some "obs-01";
+               fields = [("pattern", Cn_json.String "*");
+                          ("base", Cn_json.String ".cn")] } in
+    let r = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config op in
+    show_receipt r);
+  [%expect {| kind=fs_glob status=denied reason=path_denied artifacts=0 |}]
+
+let%expect_test "fs_glob: missing pattern field" =
+  with_test_hub (fun hub ->
+    let op = { Cn_shell.kind = Observe Fs_glob;
+               op_id = Some "obs-01"; fields = [] } in
+    let r = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config op in
+    show_receipt r);
+  [%expect {| kind=fs_glob status=error reason=missing required field 'pattern' artifacts=0 |}]
 
 (* === Artifact: write_artifact with SHA-256 === *)
 
@@ -445,3 +473,303 @@ let%expect_test "execute_op: pass field is blank (orchestrator fills)" =
     let r = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config op in
     Printf.printf "pass: '%s'\n" r.Cn_shell.pass);
   [%expect {| pass: '' |}]
+
+(* === v3.8.0: fs_read chunking === *)
+
+let%expect_test "fs_read: chunked with offset" =
+  with_test_hub (fun hub ->
+    let op = { Cn_shell.kind = Observe Fs_read;
+               op_id = Some "obs-01";
+               fields = [("path", Cn_json.String "src/main.ml");
+                          ("offset", Cn_json.Int 4);
+                          ("limit", Cn_json.Int 5)] } in
+    let r = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config op in
+    show_receipt r;
+    (* Verify artifact content is the chunk *)
+    let art_path = Filename.concat hub (List.hd r.artifacts).Cn_shell.path in
+    let content = Cn_ffi.Fs.read art_path in
+    Printf.printf "chunk: '%s'\n" content);
+  [%expect {|
+    kind=fs_read status=ok reason=(none) artifacts=1
+    chunk: '() = ' |}]
+
+let%expect_test "fs_read: offset beyond file size" =
+  with_test_hub (fun hub ->
+    let op = { Cn_shell.kind = Observe Fs_read;
+               op_id = Some "obs-01";
+               fields = [("path", Cn_json.String "src/main.ml");
+                          ("offset", Cn_json.Int 99999)] } in
+    let r = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config op in
+    show_receipt r;
+    let art_path = Filename.concat hub (List.hd r.artifacts).Cn_shell.path in
+    let content = Cn_ffi.Fs.read art_path in
+    Printf.printf "chunk_len: %d\n" (String.length content));
+  [%expect {|
+    kind=fs_read status=ok reason=(none) artifacts=1
+    chunk_len: 0 |}]
+
+let%expect_test "fs_read: no offset/limit defaults to full read" =
+  with_test_hub (fun hub ->
+    let op = { Cn_shell.kind = Observe Fs_read;
+               op_id = Some "obs-01";
+               fields = [("path", Cn_json.String "src/main.ml")] } in
+    let r = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config op in
+    show_receipt r;
+    let art_path = Filename.concat hub (List.hd r.artifacts).Cn_shell.path in
+    let content = Cn_ffi.Fs.read art_path in
+    Printf.printf "content: %s\n" content);
+  [%expect {|
+    kind=fs_read status=ok reason=(none) artifacts=1
+    content: let () = print_endline "hello" |}]
+
+(* === v3.8.0: git_stage === *)
+
+let%expect_test "git_stage: apply_mode off denied" =
+  with_test_hub (fun hub ->
+    let config = { test_config with apply_mode = "off" } in
+    let op = { Cn_shell.kind = Effect Git_stage;
+               op_id = Some "stage-01"; fields = [] } in
+    let r = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config op in
+    show_receipt r);
+  [%expect {| kind=git_stage status=denied reason=policy_rejected artifacts=0 |}]
+
+(* === v3.8.0: git_commit index-only semantics === *)
+
+let%expect_test "git_commit: apply_mode off denied" =
+  with_test_hub (fun hub ->
+    let config = { test_config with apply_mode = "off" } in
+    let op = { Cn_shell.kind = Effect Git_commit;
+               op_id = Some "commit-01";
+               fields = [("message", Cn_json.String "test")] } in
+    let r = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config op in
+    show_receipt r);
+  [%expect {| kind=git_commit status=denied reason=policy_rejected artifacts=0 |}]
+
+(* === v3.8.0: end-to-end git_stage + git_commit === *)
+
+let init_git_repo hub =
+  let _ = Cn_ffi.Process.exec_args ~prog:"git"
+    ~args:["-C"; hub; "init"; "--initial-branch"; "main"] () in
+  let _ = Cn_ffi.Process.exec_args ~prog:"git"
+    ~args:["-C"; hub; "config"; "user.email"; "test@test.com"] () in
+  let _ = Cn_ffi.Process.exec_args ~prog:"git"
+    ~args:["-C"; hub; "config"; "user.name"; "Test"] () in
+  (* Initial commit so HEAD exists *)
+  let _ = Cn_ffi.Process.exec_args ~prog:"git"
+    ~args:["-C"; hub; "commit"; "--allow-empty"; "-m"; "init"] () in
+  ()
+
+let%expect_test "git_commit: nothing_staged when no changes in index" =
+  with_test_hub (fun hub ->
+    init_git_repo hub;
+    (* Create an unstaged file — don't stage it *)
+    let oc = open_out (Filename.concat hub "src/unstaged.ml") in
+    output_string oc "let x = 1";
+    close_out oc;
+    let op = { Cn_shell.kind = Effect Git_commit;
+               op_id = Some "commit-01";
+               fields = [("message", Cn_json.String "should skip")] } in
+    let r = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config op in
+    show_receipt r);
+  [%expect {| kind=git_commit status=skipped reason=nothing_staged artifacts=0 |}]
+
+let%expect_test "git_stage then git_commit: succeeds" =
+  with_test_hub (fun hub ->
+    init_git_repo hub;
+    (* Create a new file *)
+    let oc = open_out (Filename.concat hub "src/new_file.ml") in
+    output_string oc "let y = 2";
+    close_out oc;
+    (* Stage it *)
+    let stage_op = { Cn_shell.kind = Effect Git_stage;
+                     op_id = Some "stage-01";
+                     fields = [("paths", Cn_json.Array [Cn_json.String "src/new_file.ml"])] } in
+    let sr = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config stage_op in
+    show_receipt sr;
+    (* Commit *)
+    let commit_op = { Cn_shell.kind = Effect Git_commit;
+                      op_id = Some "commit-01";
+                      fields = [("message", Cn_json.String "add new_file")] } in
+    let cr = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config commit_op in
+    show_receipt cr);
+  [%expect {|
+    kind=git_stage status=ok reason=(none) artifacts=0
+    kind=git_commit status=ok reason=(none) artifacts=0 |}]
+
+let%expect_test "git_stage all then git_commit: succeeds" =
+  with_test_hub (fun hub ->
+    init_git_repo hub;
+    (* Create two new files *)
+    let oc1 = open_out (Filename.concat hub "src/a.ml") in
+    output_string oc1 "let a = 1"; close_out oc1;
+    let oc2 = open_out (Filename.concat hub "docs/b.md") in
+    output_string oc2 "# B"; close_out oc2;
+    (* Stage all (no paths = stage everything) *)
+    let stage_op = { Cn_shell.kind = Effect Git_stage;
+                     op_id = Some "stage-01"; fields = [] } in
+    let sr = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config stage_op in
+    show_receipt sr;
+    (* Commit *)
+    let commit_op = { Cn_shell.kind = Effect Git_commit;
+                      op_id = Some "commit-01";
+                      fields = [("message", Cn_json.String "add a and b")] } in
+    let cr = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config commit_op in
+    show_receipt cr);
+  [%expect {|
+    kind=git_stage status=ok reason=(none) artifacts=0
+    kind=git_commit status=ok reason=(none) artifacts=0 |}]
+
+(* === v3.8.0: git_stage path sandbox regressions === *)
+
+let%expect_test "git_stage: denied path (.cn/) with explicit paths" =
+  with_test_hub (fun hub ->
+    let op = { Cn_shell.kind = Effect Git_stage;
+               op_id = Some "stage-01";
+               fields = [("paths", Cn_json.Array [Cn_json.String ".cn/secrets.env"])] } in
+    let r = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config op in
+    show_receipt r);
+  [%expect {| kind=git_stage status=denied reason=path_denied: .cn/secrets.env artifacts=0 |}]
+
+let%expect_test "git_stage: denied protected file with explicit paths" =
+  with_test_hub (fun hub ->
+    let op = { Cn_shell.kind = Effect Git_stage;
+               op_id = Some "stage-01";
+               fields = [("paths", Cn_json.Array [Cn_json.String "spec/SOUL.md"])] } in
+    let r = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config op in
+    show_receipt r);
+  [%expect {| kind=git_stage status=denied reason=path_denied: spec/SOUL.md artifacts=0 |}]
+
+let%expect_test "git_stage: absolute path denied" =
+  with_test_hub (fun hub ->
+    let op = { Cn_shell.kind = Effect Git_stage;
+               op_id = Some "stage-01";
+               fields = [("paths", Cn_json.Array [Cn_json.String "/etc/passwd"])] } in
+    let r = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config op in
+    show_receipt r);
+  [%expect {| kind=git_stage status=denied reason=path_denied: /etc/passwd artifacts=0 |}]
+
+(* === v3.8.0: git_commit allow_empty === *)
+
+let%expect_test "git_commit: allow_empty succeeds with nothing staged" =
+  with_test_hub (fun hub ->
+    init_git_repo hub;
+    let op = { Cn_shell.kind = Effect Git_commit;
+               op_id = Some "commit-01";
+               fields = [("message", Cn_json.String "empty commit");
+                          ("allow_empty", Cn_json.Bool true)] } in
+    let r = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config op in
+    show_receipt r);
+  [%expect {| kind=git_commit status=ok reason=(none) artifacts=0 |}]
+
+(* === v3.8.0: git_stage directory path rejection === *)
+
+let%expect_test "git_stage: directory path '.' rejected" =
+  with_test_hub (fun hub ->
+    let op = { Cn_shell.kind = Effect Git_stage;
+               op_id = Some "stage-01";
+               fields = [("paths", Cn_json.Array [Cn_json.String "."])] } in
+    let r = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config op in
+    show_receipt r);
+  [%expect {| kind=git_stage status=denied reason=directory_not_allowed: . artifacts=0 |}]
+
+let%expect_test "git_stage: directory path 'src' rejected" =
+  with_test_hub (fun hub ->
+    let op = { Cn_shell.kind = Effect Git_stage;
+               op_id = Some "stage-01";
+               fields = [("paths", Cn_json.Array [Cn_json.String "src"])] } in
+    let r = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config op in
+    show_receipt r);
+  [%expect {| kind=git_stage status=denied reason=directory_not_allowed: src artifacts=0 |}]
+
+let%expect_test "git_stage: directory path 'spec' rejected" =
+  with_test_hub (fun hub ->
+    let op = { Cn_shell.kind = Effect Git_stage;
+               op_id = Some "stage-01";
+               fields = [("paths", Cn_json.Array [Cn_json.String "spec"])] } in
+    let r = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config op in
+    show_receipt r);
+  [%expect {| kind=git_stage status=denied reason=directory_not_allowed: spec artifacts=0 |}]
+
+(* === v3.8.0: stage-all excludes protected files === *)
+
+let staged_files hub =
+  let _, out = Cn_ffi.Process.exec_args ~prog:"git"
+    ~args:["-C"; hub; "diff"; "--cached"; "--name-only"] () in
+  String.trim out
+
+let%expect_test "git_stage all: protected files remain unstaged" =
+  with_test_hub (fun hub ->
+    init_git_repo hub;
+    (* Create a normal file and modify a protected file *)
+    let oc1 = open_out (Filename.concat hub "src/safe.ml") in
+    output_string oc1 "let safe = true"; close_out oc1;
+    let oc2 = open_out (Filename.concat hub "spec/SOUL.md") in
+    output_string oc2 "# Modified SOUL"; close_out oc2;
+    let oc3 = open_out (Filename.concat hub "spec/USER.md") in
+    output_string oc3 "# Modified USER"; close_out oc3;
+    (* Stage all *)
+    let stage_op = { Cn_shell.kind = Effect Git_stage;
+                     op_id = Some "stage-01"; fields = [] } in
+    let sr = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config stage_op in
+    show_receipt sr;
+    (* Check what actually got staged *)
+    let staged = staged_files hub in
+    Printf.printf "staged: %s\n" staged);
+  [%expect {|
+    kind=git_stage status=ok reason=(none) artifacts=0
+    staged: src/safe.ml |}]
+
+let%expect_test "git_stage all: symlink to .cn/ excluded" =
+  with_test_hub (fun hub ->
+    init_git_repo hub;
+    (* Create a normal file *)
+    let oc = open_out (Filename.concat hub "src/normal.ml") in
+    output_string oc "let n = 1"; close_out oc;
+    (* Create a symlink from src/sneaky.env -> .cn/secrets.env *)
+    Unix.symlink
+      (Filename.concat hub ".cn/secrets.env")
+      (Filename.concat hub "src/sneaky.env");
+    (* Stage all *)
+    let stage_op = { Cn_shell.kind = Effect Git_stage;
+                     op_id = Some "stage-01"; fields = [] } in
+    let sr = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config stage_op in
+    show_receipt sr;
+    let staged = staged_files hub in
+    Printf.printf "staged: %s\n" staged);
+  [%expect {|
+    kind=git_stage status=ok reason=(none) artifacts=0
+    staged: src/normal.ml |}]
+
+let%expect_test "git_stage all: symlink to protected file excluded" =
+  with_test_hub (fun hub ->
+    init_git_repo hub;
+    (* Create a normal file *)
+    let oc = open_out (Filename.concat hub "src/ok.ml") in
+    output_string oc "let ok = true"; close_out oc;
+    (* Create a symlink from docs/soul_link.md -> spec/SOUL.md *)
+    Unix.symlink
+      (Filename.concat hub "spec/SOUL.md")
+      (Filename.concat hub "docs/soul_link.md");
+    (* Stage all *)
+    let stage_op = { Cn_shell.kind = Effect Git_stage;
+                     op_id = Some "stage-01"; fields = [] } in
+    let sr = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config stage_op in
+    show_receipt sr;
+    let staged = staged_files hub in
+    Printf.printf "staged: %s\n" staged);
+  [%expect {|
+    kind=git_stage status=ok reason=(none) artifacts=0
+    staged: src/ok.ml |}]
+
+let%expect_test "git_stage explicit: symlink to .cn/ denied" =
+  with_test_hub (fun hub ->
+    (* Create a symlink from src/link.env -> .cn/secrets.env *)
+    Unix.symlink
+      (Filename.concat hub ".cn/secrets.env")
+      (Filename.concat hub "src/link.env");
+    let op = { Cn_shell.kind = Effect Git_stage;
+               op_id = Some "stage-01";
+               fields = [("paths", Cn_json.Array [Cn_json.String "src/link.env"])] } in
+    let r = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config op in
+    show_receipt r);
+  [%expect {| kind=git_stage status=denied reason=path_denied: src/link.env artifacts=0 |}]
