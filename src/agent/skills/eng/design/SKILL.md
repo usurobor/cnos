@@ -11,7 +11,7 @@ Create architectural design documents before significant changes.
 
 ## Location
 
-`docs/architecture/TITLE.md`
+`docs/α/TITLE.md`
 
 ## Structure
 

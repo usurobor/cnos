@@ -328,11 +328,11 @@ The cnos project implements this protocol and extends it with layers not specifi
 | Layer | Document | Scope |
 |-------|----------|-------|
 | **System thesis** | [`THESIS.md`](../THESIS.md) | cnos as a recurrent coherence system |
-| **Agent architecture** | [`CAA.md`](../architecture/CAA.md) | Structural definition of a coherent agent |
-| **Runtime** | [`AGENT-RUNTIME.md`](../architecture/AGENT-RUNTIME.md) | CN Shell, typed ops, two-pass orchestration |
-| **Cognitive packages** | [`CAR.md`](../architecture/CAR.md) | Local, versioned, installable cognition |
-| **Observability** | [`TRACEABILITY.md`](../architecture/TRACEABILITY.md) | Reconstructable mind/body/sensor state |
-| **Development method** | [`CDD.md`](../method/CDD.md) | Coherence-driven development |
+| **Agent architecture** | [`CAA.md`](./CAA.md) | Structural definition of a coherent agent |
+| **Runtime** | [`AGENT-RUNTIME.md`](./AGENT-RUNTIME.md) | CN Shell, typed ops, two-pass orchestration |
+| **Cognitive packages** | [`CAR.md`](./CAR.md) | Local, versioned, installable cognition |
+| **Observability** | [`TRACEABILITY.md`](./TRACEABILITY.md) | Reconstructable mind/body/sensor state |
+| **Development method** | [`CDD.md`](../γ/CDD.md) | Coherence-driven development |
 
 This paper does not track cnos implementation status. For current system architecture, start with THESIS.md.
 

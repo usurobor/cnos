@@ -6,130 +6,63 @@ A recurrent coherence system with Git as its lowest durable substrate.
 
 ## Start Here
 
-[THESIS.md](./THESIS.md) — what cnos is. Start here.
-
-[ARCHITECTURE.md](./architecture/ARCHITECTURE.md) — system overview: modules, FSMs, data flow, directory layout.
-
-### Reading Path
-
-| I want to... | Read |
-|--------------|------|
-| Understand what cnos is | [THESIS.md](./THESIS.md) |
-| Understand *why* cnos exists | [MANIFESTO.md](./foundations/MANIFESTO.md) |
-| Understand coherence as the top-level system | [COHERENCE-SYSTEM.md](./foundations/COHERENCE-SYSTEM.md) |
-| Understand the agent architecture | [CAA.md](./architecture/CAA.md) |
-| Understand the runtime mechanics | [AGENT-RUNTIME.md](./architecture/AGENT-RUNTIME.md) |
-| Understand operational observability | [TRACEABILITY.md](./architecture/TRACEABILITY.md) |
-| Read the CN protocol spec | [WHITEPAPER.md](./architecture/WHITEPAPER.md) |
-| Understand the FSM state machines | [PROTOCOL.md](./architecture/PROTOCOL.md) |
-| Learn the `cn` CLI | [CLI.md](./architecture/CLI.md) |
-| Understand how cnos evolves | [CDD.md](./method/CDD.md) |
-| Look up a term | [GLOSSARY.md](./reference/GLOSSARY.md) |
+[THESIS.md](./THESIS.md) — what cnos is. The whole, above the triad.
 
 ---
 
-## System at a Glance
+## The Triad
 
-**Coherence is primary.** cnos minimizes the gap between model and reality through four operations:
+The docs tree unfolds along three ontological axes. Every document has a dominant character.
 
-| Operation | Verb | What it does |
-|-----------|------|-------------|
-| **CMP** | look | Build the most coherent picture from evidence and constraints |
-| **MCP** | (the picture) | The gaps, the weakest axis, the available moves |
-| **CAP** | move | MCA (act on the world) or MCI (update the model) — MCA first |
-| **CLP** | check | Score α/β/γ, patch the weakest axis, converge or iterate |
+### α — Pattern: What Is Articulated
 
-**The agent** is one articulation of this loop:
+The substance of the system — doctrine, specs, definitions.
 
-```
-CMP (sense)  →  MCP (picture)  →  CAP (act)  →  CLP (review)  →  update  →  repeat
-```
-
-In the runtime, this becomes: `input.md → agent → output.md → cn executes ops → push/fetch`.
-
-**Four FSMs** govern execution (`cn_protocol.ml`):
-
-| FSM | Flow |
-|-----|------|
-| Actor Loop | Idle → InputReady → Processing → OutputReady → Idle |
-| Transport Sender | Pending → BranchCreated → Pushing → Pushed → Delivered |
-| Transport Receiver | Fetched → Materializing → Materialized → Cleaned |
-
-**Git** is the lowest durable substrate — persistent, cloneable, signed, versioned, mergeable. Not the whole thesis, but the foundation everything rests on.
-
----
-
-## Document Taxonomy
-
-Docs are organized by their role in the system's self-model. See [DOCUMENTATION-SYSTEM.md](./method/DOCUMENTATION-SYSTEM.md) for the full rules.
-
-### Foundations — Why
+*"What has been made explicit? Is it internally consistent?"*
 
 | Document | Scope |
 |----------|-------|
-| [THESIS.md](./THESIS.md) | System thesis — cnos as a recurrent coherence system |
-| [MANIFESTO.md](./foundations/MANIFESTO.md) | Principles and values |
-| [COHERENCE-SYSTEM.md](./foundations/COHERENCE-SYSTEM.md) | Meta-model: coherence as primary; the instruction set |
-| [FOUNDATIONS.md](./foundations/FOUNDATIONS.md) | The coherence stack — doctrinal layers |
+| [COHERENCE-SYSTEM.md](./α/COHERENCE-SYSTEM.md) | Meta-model: coherence as primary; the instruction set |
+| [FOUNDATIONS.md](./α/FOUNDATIONS.md) | The coherence stack — doctrinal layers |
+| [MANIFESTO.md](./α/MANIFESTO.md) | Principles and values |
+| [CAA.md](./α/CAA.md) | Coherent agent architecture |
+| [AGENT-RUNTIME.md](./α/AGENT-RUNTIME.md) | Runtime spec: CN Shell, typed ops, two-pass, receipts |
+| [CAR.md](./α/CAR.md) | Cognitive asset resolver — local, versioned cognition |
+| [WHITEPAPER.md](./α/WHITEPAPER.md) | CN protocol specification (v3.0.0) |
+| [PROTOCOL.md](./α/PROTOCOL.md) | FSM design — state diagrams, transition tables |
+| [TRACEABILITY.md](./α/TRACEABILITY.md) | Observability — event stream, state projections, readiness |
+| [SECURITY-MODEL.md](./α/SECURITY-MODEL.md) | Security architecture — sandbox, FSM enforcement, audit trail |
+| [CLI.md](./α/CLI.md) | CLI command reference |
+| [DAEMON.md](./α/DAEMON.md) | Daemon mode design |
+| [SETUP-INSTALLER.md](./α/SETUP-INSTALLER.md) | Install script specification |
+| [THREAD-API.md](./α/THREAD-API.md) | Agent content API |
 
-### Architecture — What
+### β — Relation: How Parts Cohere
 
-| Document | Scope |
-|----------|-------|
-| [ARCHITECTURE.md](./architecture/ARCHITECTURE.md) | System overview — modules, FSMs, data flow |
-| [CAA.md](./architecture/CAA.md) | Coherent agent architecture |
-| [AGENT-RUNTIME.md](./architecture/AGENT-RUNTIME.md) | Runtime spec: CN Shell, typed ops, two-pass, receipts |
-| [CAR.md](./architecture/CAR.md) | Cognitive asset resolver — local, versioned, installable cognition |
-| [WHITEPAPER.md](./architecture/WHITEPAPER.md) | CN protocol specification (v3.0.0) |
-| [PROTOCOL.md](./architecture/PROTOCOL.md) | FSM design — state diagrams, transition tables |
-| [TRACEABILITY.md](./architecture/TRACEABILITY.md) | Observability — event stream, state projections, readiness |
-| [SECURITY-MODEL.md](./architecture/SECURITY-MODEL.md) | Security architecture — sandbox, FSM enforcement, audit trail |
-| [CLI.md](./architecture/CLI.md) | CLI command reference |
-| [DAEMON.md](./architecture/DAEMON.md) | Daemon mode design |
-| [SETUP-INSTALLER.md](./architecture/SETUP-INSTALLER.md) | Install script specification |
+The graph of relations — system overview, shared vocabulary, operator connection, model-reality evidence.
 
-### Method — How it Evolves
+*"Do the parts reveal one system? Does model match reality?"*
 
 | Document | Scope |
 |----------|-------|
-| [CDD.md](./method/CDD.md) | Coherence-driven development |
-| [AGILE-PROCESS.md](./method/AGILE-PROCESS.md) | Team process — backlog, review, sync cadence |
-| [EXECUTABLE-SKILLS.md](./method/EXECUTABLE-SKILLS.md) | Vision: skills as programs (CTB language) |
-| [DOCUMENTATION-SYSTEM.md](./method/DOCUMENTATION-SYSTEM.md) | How docs are organized and evolve |
+| [ARCHITECTURE.md](./β/ARCHITECTURE.md) | System overview — how the parts relate |
+| [GLOSSARY.md](./β/GLOSSARY.md) | Terms and definitions |
+| [NAMING.md](./β/NAMING.md) | Naming conventions (CN, cnos, cn) |
+| [DOCUMENTATION-SYSTEM.md](./β/DOCUMENTATION-SYSTEM.md) | How docs are organized and evolve |
+| [β/guides/](./β/guides/) | Operator ↔ system: handshake, automation, migration, skills, dojo |
+| [β/evidence/](./β/evidence/) | Model ↔ reality: audit, RCAs |
 
-### Plans — Current Intentions
+### γ — Evolution: How the System Moves
 
-Implementation plans for specific releases. Ephemeral by nature.
+The process that moves the system — method, plans, gates.
 
-| Document | Scope |
-|----------|-------|
-| [PLAN-v3.6.0.md](./plans/PLAN-v3.6.0.md) | v3.6.0 Output Plane Separation |
-| [CAR-implementation-plan.md](./plans/CAR-implementation-plan.md) | Cognitive asset resolver |
-| [TRACEABILITY-implementation-plan.md](./plans/TRACEABILITY-implementation-plan.md) | Traceability implementation |
-
-### Evidence — What Happened
+*"How does it change without losing itself?"*
 
 | Document | Scope |
 |----------|-------|
-| [AUDIT.md](./evidence/AUDIT.md) | Docs audit — status, overlap analysis |
-| [evidence/rca/](./evidence/rca/) | Root cause analyses — operational post-mortems |
-
-### Guides — How to Do Things
-
-| Guide | Scope |
-|-------|-------|
-| [HANDSHAKE.md](./guides/HANDSHAKE.md) | Establish peering between two agents |
-| [AUTOMATION.md](./guides/AUTOMATION.md) | Set up cron or Telegram daemon |
-| [MIGRATION.md](./guides/MIGRATION.md) | Migrate from older versions |
-| [BUILD-RELEASE.md](./guides/BUILD-RELEASE.md) | Build and release process |
-| [WRITE-A-SKILL.md](./guides/WRITE-A-SKILL.md) | Write a new skill |
-| [DOJO.md](./guides/DOJO.md) | Practice exercises |
-
-### Reference — Lookup
-
-| Document | Scope |
-|----------|-------|
-| [GLOSSARY.md](./reference/GLOSSARY.md) | Terms and definitions |
-| [NAMING.md](./reference/NAMING.md) | Naming conventions (CN, cnos, cn) |
-
-
+| [CDD.md](./γ/CDD.md) | Coherence-driven development |
+| [AGILE-PROCESS.md](./γ/AGILE-PROCESS.md) | Team process — backlog, review, sync cadence |
+| [EXECUTABLE-SKILLS.md](./γ/EXECUTABLE-SKILLS.md) | Vision: skills as programs |
+| [STATELESS-AGENCY.md](./γ/STATELESS-AGENCY.md) | Position: stop chatting, start committing |
+| [γ/plans/](./γ/plans/) | Implementation plans for specific releases |
+| [γ/checklists/](./γ/checklists/) | Release gate verification |
