@@ -20,8 +20,8 @@ Agent (pure)  ──>  cn (CLI)  ──>  Git (transport)
 | I want to... | Read |
 |--------------|------|
 | Understand what cnos is and how it works | [ARCHITECTURE.md](./ARCHITECTURE.md) |
-| Understand *why* cnos exists | [MANIFESTO.md](./design/MANIFESTO.md) |
-| Understand coherence as the top-level system | [COHERENCE-SYSTEM.md](./design/COHERENCE-SYSTEM.md) |
+| Understand *why* cnos exists | [MANIFESTO.md](./explanation/MANIFESTO.md) |
+| Understand coherence as the top-level system | [COHERENCE-SYSTEM.md](./explanation/COHERENCE-SYSTEM.md) |
 | Understand the agent architecture | [CAA.md](./design/CAA.md) |
 | Understand operational observability | [TRACEABILITY.md](./design/TRACEABILITY.md) |
 | Understand what cnos is at the system level | [THESIS.md](./explanation/THESIS.md) |
@@ -76,7 +76,7 @@ The foundational documents. Read in this order for full understanding.
 | Document | What it is |
 |----------|-----------|
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | System overview — modules, FSMs, data flow, directory layout |
-| [MANIFESTO.md](./design/MANIFESTO.md) | Principles — why cnos exists, what it stands for |
+| [MANIFESTO.md](./explanation/MANIFESTO.md) | Principles — why cnos exists, what it stands for |
 | [THESIS.md](./explanation/THESIS.md) | System thesis — cnos as a recurrent coherence system (v1.0.0) |
 | [WHITEPAPER.md](./explanation/WHITEPAPER.md) | CN protocol specification (v2.0.4) |
 | [PROTOCOL.md](./design/PROTOCOL.md) | FSM design — state diagrams, transition tables (implemented) |
@@ -87,7 +87,7 @@ Specifications for specific subsystems.
 
 | Document | What it is |
 |----------|-----------|
-| [COHERENCE-SYSTEM.md](./design/COHERENCE-SYSTEM.md) | Meta-model: coherence as primary; MCP/CMP/CAP/CLP across scales |
+| [COHERENCE-SYSTEM.md](./explanation/COHERENCE-SYSTEM.md) | Meta-model: coherence as primary; MCP/CMP/CAP/CLP across scales |
 | [CAA.md](./design/CAA.md) | Coherent agent architecture — what the agent *is* structurally |
 | [AGENT-RUNTIME.md](./design/AGENT-RUNTIME.md) | Agent runtime spec (v3.3.7): CN Shell, typed ops, two-pass, receipts |
 | [CLI.md](./design/CLI.md) | CLI command reference — every `cn` command |
