@@ -310,7 +310,7 @@ Example: `pi/20260211-143022-review-request` is a thread from pi.
 
 | Document | Purpose |
 |----------|---------|
-| [MANIFESTO.md](design/MANIFESTO.md) | Principles and values |
+| [MANIFESTO.md](explanation/MANIFESTO.md) | Principles and values |
 | [THESIS.md](explanation/THESIS.md) | System thesis — cnos as a recurrent coherence system |
 | [WHITEPAPER.md](explanation/WHITEPAPER.md) | CN protocol specification |
 | [PROTOCOL.md](design/PROTOCOL.md) | FSM design, state diagrams, transition tables |
