@@ -257,7 +257,7 @@ let review_tick_once ~hub_path ~name ~review_interval_sec =
             with _ -> false
           else false
     in
-    if elapsed >= interval && Cn_mca.mca_count hub_path > 0 && mca_changed then begin
+    if review_interval_sec > 0 && elapsed >= interval && Cn_mca.mca_count hub_path > 0 && mca_changed then begin
       Cn_trace.gemit ~component:"maintenance" ~layer:Body
         ~event:"review.tick.start" ~severity:Info ~status:Ok_
         ~details:[
@@ -276,7 +276,8 @@ let review_tick_once ~hub_path ~name ~review_interval_sec =
         ~details:["count", Cn_json.Int review.count] ();
       Ok
     end else begin
-      let reason = if Cn_mca.mca_count hub_path = 0 then "no_mcas"
+      let reason = if review_interval_sec = 0 then "disabled"
+                   else if Cn_mca.mca_count hub_path = 0 then "no_mcas"
                    else if not mca_changed then "no_new_mcas"
                    else "not_due" in
       Cn_trace.gemit ~component:"maintenance" ~layer:Body
