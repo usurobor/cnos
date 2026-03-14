@@ -965,3 +965,80 @@ let%expect_test "git_stage all: spec/SOUL.md still write-denied" =
   [%expect {|
     kind=git_stage status=ok reason=(none) artifacts=0
     staged: src/good.ml |}]
+
+(* === Git CLI injection regressions === *)
+
+let%expect_test "git_diff: leading-dash rev is denied (--output injection)" =
+  with_test_hub (fun hub ->
+    init_git_repo hub;
+    let target = Filename.concat hub "injected.txt" in
+    let diff_op = { Cn_shell.kind = Observe Git_diff;
+                    op_id = Some "obs-01";
+                    fields = [("rev", Cn_json.String ("--output=" ^ target))] } in
+    let r = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config diff_op in
+    Printf.printf "status=%s\n" (Cn_shell.string_of_receipt_status r.status);
+    Printf.printf "denied: %b\n" (r.status = Cn_shell.Denied);
+    Printf.printf "file_created: %b\n" (Sys.file_exists target));
+  [%expect {|
+    status=denied
+    denied: true
+    file_created: false |}]
+
+let%expect_test "git_log: leading-dash rev is denied" =
+  with_test_hub (fun hub ->
+    init_git_repo hub;
+    let log_op = { Cn_shell.kind = Observe Git_log;
+                   op_id = Some "obs-01";
+                   fields = [("rev", Cn_json.String "--format=%H")] } in
+    let r = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config log_op in
+    show_receipt r);
+  [%expect {| kind=git_log status=denied reason=invalid_rev: leading dash not allowed: --format=%H artifacts=0 |}]
+
+let%expect_test "git_grep: leading-dash query treated as literal via -e" =
+  with_test_hub (fun hub ->
+    init_git_repo hub;
+    (* Commit a file containing a literal dash-prefixed string *)
+    let oc = open_out (Filename.concat hub "src/main.ml") in
+    output_string oc "--open-output flag"; close_out oc;
+    let _ = Cn_ffi.Process.exec_args ~prog:"git"
+      ~args:["-C"; hub; "add"; "src/main.ml"] () in
+    let _ = Cn_ffi.Process.exec_args ~prog:"git"
+      ~args:["-C"; hub; "commit"; "-m"; "add content"] () in
+    let grep_op = { Cn_shell.kind = Observe Git_grep;
+                    op_id = Some "obs-01";
+                    fields = [("query", Cn_json.String "--open-output")] } in
+    let r = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config grep_op in
+    show_receipt r;
+    let content = read_artifact hub r in
+    Printf.printf "found: %b\n"
+      (try ignore (Str.search_forward (Str.regexp_string "--open-output") content 0); true
+       with Not_found -> false));
+  [%expect {|
+    kind=git_grep status=ok reason=(none) artifacts=1
+    found: true |}]
+
+let%expect_test "git_grep: pathspec magic chars treated literally" =
+  with_test_hub (fun hub ->
+    init_git_repo hub;
+    (* Create a file under src and commit *)
+    let oc = open_out (Filename.concat hub "src/main.ml") in
+    output_string oc "hello world"; close_out oc;
+    let _ = Cn_ffi.Process.exec_args ~prog:"git"
+      ~args:["-C"; hub; "add"; "src/main.ml"] () in
+    let _ = Cn_ffi.Process.exec_args ~prog:"git"
+      ~args:["-C"; hub; "commit"; "-m"; "add src"] () in
+    (* Path with colon prefix — would be pathspec magic without
+       GIT_LITERAL_PATHSPECS; should be treated as literal path *)
+    let grep_op = { Cn_shell.kind = Observe Git_grep;
+                    op_id = Some "obs-01";
+                    fields = [("query", Cn_json.String "hello");
+                              ("path", Cn_json.String "src")] } in
+    let r = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config grep_op in
+    show_receipt r;
+    let content = read_artifact hub r in
+    Printf.printf "found: %b\n"
+      (try ignore (Str.search_forward (Str.regexp_string "hello") content 0); true
+       with Not_found -> false));
+  [%expect {|
+    kind=git_grep status=ok reason=(none) artifacts=1
+    found: true |}]
