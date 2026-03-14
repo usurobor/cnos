@@ -173,11 +173,23 @@ let execute_fs_list ~hub_path ~trigger_id ~config (op : Cn_shell.typed_op) =
           status = Cn_shell.Ok_status; reason = "";
           start_time = start; end_time = now_iso (); artifacts = [artifact] }
 
-let execute_git_op ~hub_path ~trigger_id ~config ~kind_str ~args (op : Cn_shell.typed_op) =
+let execute_git_op ~hub_path ~trigger_id ~config ~kind_str
+    ?(env_extra=[]) ~args (op : Cn_shell.typed_op) =
   let start = now_iso () in
+  let full_args = [ "-C"; hub_path ] @ args in
   let code, output =
-    Cn_ffi.Process.exec_args ~prog:"git"
-      ~args:([ "-C"; hub_path ] @ args) ()
+    if env_extra = [] then
+      Cn_ffi.Process.exec_args ~prog:"git" ~args:full_args ()
+    else
+      (* Build env: inherit parent env, then overlay env_extra *)
+      let base_env = Unix.environment () |> Array.to_list in
+      let env = List.map (fun s ->
+        match String.index_opt s '=' with
+        | Some i -> (String.sub s 0 i, String.sub s (i+1) (String.length s - i - 1))
+        | None -> (s, "")
+      ) base_env in
+      let env = env @ env_extra in
+      Cn_ffi.Process.exec_args_env ~prog:"git" ~args:full_args ~env ()
   in
   let op_id_str = match op.Cn_shell.op_id with Some id -> id | None -> "unknown" in
   if code <> 0 then
@@ -197,25 +209,53 @@ let execute_git_status ~hub_path ~trigger_id ~config (op : Cn_shell.typed_op) =
   execute_git_op ~hub_path ~trigger_id ~config ~kind_str:"git_status"
     ~args:["status"; "--porcelain"] op
 
+(** Validate a revision string: reject leading dash to prevent
+    injection of git options like --output=<file>. *)
+let validate_rev rev =
+  if String.length rev > 0 && rev.[0] = '-' then
+    Error (Printf.sprintf "invalid_rev: leading dash not allowed: %s" rev)
+  else
+    Ok rev
+
 let execute_git_diff ~hub_path ~trigger_id ~config (op : Cn_shell.typed_op) =
+  let start = now_iso () in
   let rev = match get_field_string "rev" op with
-    | Some r -> [r]
-    | None -> []
+    | Some r ->
+      (match validate_rev r with
+       | Ok v -> Ok [v]
+       | Error msg -> Error msg)
+    | None -> Ok []
   in
-  execute_git_op ~hub_path ~trigger_id ~config ~kind_str:"git_diff"
-    ~args:(["diff"] @ rev @ git_observe_exclusions) op
+  match rev with
+  | Error reason ->
+    { Cn_shell.pass = ""; op_id = op.op_id; kind = "git_diff";
+      status = Cn_shell.Denied; reason;
+      start_time = start; end_time = now_iso (); artifacts = [] }
+  | Ok rev_args ->
+    execute_git_op ~hub_path ~trigger_id ~config ~kind_str:"git_diff"
+      ~args:(["diff"] @ rev_args @ git_observe_exclusions) op
 
 let execute_git_log ~hub_path ~trigger_id ~config (op : Cn_shell.typed_op) =
+  let start = now_iso () in
   let max_n = match get_field_int "max" op with
     | Some n -> ["-n"; string_of_int n]
     | None -> ["-n"; "20"]
   in
   let rev = match get_field_string "rev" op with
-    | Some r -> [r]
-    | None -> []
+    | Some r ->
+      (match validate_rev r with
+       | Ok v -> Ok [v]
+       | Error msg -> Error msg)
+    | None -> Ok []
   in
-  execute_git_op ~hub_path ~trigger_id ~config ~kind_str:"git_log"
-    ~args:(["log"; "--oneline"] @ max_n @ rev @ git_observe_exclusions) op
+  match rev with
+  | Error reason ->
+    { Cn_shell.pass = ""; op_id = op.op_id; kind = "git_log";
+      status = Cn_shell.Denied; reason;
+      start_time = start; end_time = now_iso (); artifacts = [] }
+  | Ok rev_args ->
+    execute_git_op ~hub_path ~trigger_id ~config ~kind_str:"git_log"
+      ~args:(["log"; "--oneline"] @ max_n @ rev_args @ git_observe_exclusions) op
 
 let execute_git_grep ~hub_path ~trigger_id ~config (op : Cn_shell.typed_op) =
   let start = now_iso () in
@@ -239,8 +279,11 @@ let execute_git_grep ~hub_path ~trigger_id ~config (op : Cn_shell.typed_op) =
         status = Cn_shell.Denied; reason;
         start_time = start; end_time = now_iso (); artifacts = [] }
     | Ok extra_args ->
+      (* Use -e to force query as pattern (not option), and
+         GIT_LITERAL_PATHSPECS to disable pathspec magic (*, ?, :) *)
       execute_git_op ~hub_path ~trigger_id ~config ~kind_str:"git_grep"
-        ~args:(["grep"; "-n"; query] @ extra_args) op
+        ~env_extra:[("GIT_LITERAL_PATHSPECS", "1")]
+        ~args:(["grep"; "-n"; "-e"; query] @ extra_args) op
 
 (* === Glob matching (pure OCaml, no external dependency) === *)
 
