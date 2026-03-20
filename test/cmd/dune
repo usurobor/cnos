@@ -111,3 +111,11 @@
  (inline_tests
   (deps protocol-contract.json))
  (preprocess (pps ppx_expect)))
+
+; cn_runtime integration tests (ppx_expect) — two-pass wiring (Issue #41)
+(library
+ (name cn_runtime_integration_test)
+ (modules cn_runtime_integration_test)
+ (libraries cn_cmd cn_ffi cn_lib unix)
+ (inline_tests)
+ (preprocess (pps ppx_expect)))

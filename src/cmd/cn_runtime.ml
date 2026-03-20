@@ -461,9 +461,13 @@ let update_ready_body hub_path ~fsm_state ~lock_held ~current_cycle =
 (* === Finalize: archive → execute → project → conversation → cleanup === *)
 
 (** Run the post-LLM pipeline on an existing input.md + output.md pair.
-    inbound_message is the original user message (not the full packed context). *)
+    inbound_message is the original user message (not the full packed context).
+    [packed] provides the structured context for Pass B LLM re-call when
+    two-pass execution is needed. If not provided, Pass B falls back to
+    repacking from scratch. *)
 let finalize ~(config : Cn_config.config) ~hub_path ~name
-      ~trigger_id ~from ~inbound_message ~output_content =
+      ~trigger_id ~from ~inbound_message ~output_content
+      ?packed () =
   Cn_trace.gemit ~component:"runtime" ~layer:Body
     ~event:"finalize.start" ~severity:Info ~status:Ok_
     ~trigger_id
@@ -474,9 +478,12 @@ let finalize ~(config : Cn_config.config) ~hub_path ~name
   (* 1. Archive raw BEFORE effects *)
   archive_raw hub_path ~trigger_id;
 
-  (* 2. Parse output via output plane separation *)
+  (* 2. Parse output via output plane separation.
+     [final_parsed] is updated to Pass B output when two-pass executes,
+     so projection and conversation use the agent's final response. *)
   let parsed = Cn_output.parse_output output_content in
   let ops = parsed.coordination_ops in
+  let final_parsed = ref parsed in
 
   (* 3. Execute operations (skipped on recovery if already done) *)
   if ops_already_done hub_path trigger_id then begin
@@ -484,33 +491,130 @@ let finalize ~(config : Cn_config.config) ~hub_path ~name
       ~event:"effects.execute.skip" ~severity:Info ~status:Skipped
       ~trigger_id ~reason_code:"ops_already_done" ()
   end else begin
-    (* 3a. Execute coordination ops (Reply, Send, Delegate, etc.) *)
+    (* 3a. Write parser denial receipts (unknown_op_kind, missing_kind, etc.) *)
     Cn_trace.gemit ~component:"runtime" ~layer:Body
       ~event:"effects.execute.start" ~severity:Info ~status:Ok_
       ~trigger_id
       ~details:["op_count", Cn_json.Int (List.length ops);
                  "typed_op_count", Cn_json.Int (List.length parsed.typed_ops);
                  "denial_count", Cn_json.Int (List.length parsed.ops_receipts)] ();
-    List.iter (fun op ->
-      Cn_agent.execute_op hub_path name trigger_id op
-    ) ops;
 
-    (* 3b. Write parser denial receipts (unknown_op_kind, missing_kind, etc.) *)
     if parsed.ops_receipts <> [] then
       Cn_orchestrator.write_denial_receipts ~hub_path ~trigger_id
         ~pass:"A" parsed.ops_receipts;
 
-    (* 3c. Execute typed ops via orchestrator Pass A *)
-    if parsed.typed_ops <> [] then begin
-      let _pass_a_result =
-        Cn_orchestrator.run_pass_a ~hub_path ~trigger_id
-          ~config:config.shell parsed.typed_ops in
-      Cn_trace.gemit ~component:"runtime" ~layer:Body
-        ~event:"effects.typed_ops.complete" ~severity:Info ~status:Ok_
-        ~trigger_id
-        ~details:["typed_op_count", Cn_json.Int (List.length parsed.typed_ops);
-                   "needs_pass_b", Cn_json.Bool _pass_a_result.needs_pass_b] ()
-    end;
+    (* 3b. Two-pass orchestration for typed ops.
+       When observe ops are present and two_pass=auto, this:
+       1. Executes Pass A (observe ops run, effects deferred)
+       2. Repacks context with artifacts/receipts
+       3. Calls LLM again (Pass B)
+       4. Executes Pass B ops (effects run, observe denied)
+       5. Gates coordination ops on effect success *)
+    let two_pass_result =
+      if parsed.typed_ops <> [] then begin
+        (* Build the LLM call function for Pass B *)
+        let llm_call repack_content =
+          (* Build Pass B messages: original messages + assistant (Pass A) + user (repack) *)
+          let pass_b_system, pass_b_base_messages = match packed with
+            | Some p -> (p.Cn_context.system, p.Cn_context.messages)
+            | None ->
+              (* Recovery path: repack from scratch *)
+              let p = Cn_context.pack ~hub_path ~trigger_id
+                  ~message:inbound_message ~from ~shell_config:config.shell () in
+              (p.system, p.messages)
+          in
+          let pass_b_messages = pass_b_base_messages @ [
+            { Cn_llm.role = "assistant"; content = output_content };
+            { Cn_llm.role = "user"; content = repack_content };
+          ] in
+          (* Update projection: Pass B in progress *)
+          update_runtime_projection hub_path
+            ~cycle_id:(Some trigger_id) ~pass:(Some "B")
+            ~trigger:(Some trigger_id) ~lock_held:true
+            ~pending_projection:None;
+
+          Cn_trace.gemit ~component:"runtime" ~layer:Mind
+            ~event:"llm.call.start" ~severity:Info ~status:Ok_
+            ~trigger_id ~pass:"B"
+            ~details:["model", Cn_json.String config.model] ();
+
+          match Cn_llm.call ~api_key:config.anthropic_key
+                  ~model:config.model ~max_tokens:config.max_tokens
+                  ~system:pass_b_system ~messages:pass_b_messages with
+          | Error msg ->
+            Cn_trace.gemit ~component:"runtime" ~layer:Mind
+              ~event:"llm.call.error" ~severity:Error_ ~status:Error_status
+              ~trigger_id ~pass:"B" ~reason_code:"llm_error" ();
+            Error msg
+          | Ok response ->
+            (* Archive Pass B output *)
+            let outp = Cn_agent.output_path hub_path in
+            Cn_ffi.Fs.write outp response.content;
+            Cn_trace.gemit ~component:"runtime" ~layer:Mind
+              ~event:"llm.call.ok" ~severity:Info ~status:Ok_
+              ~trigger_id ~pass:"B"
+              ~details:[
+                "input_tokens", Cn_json.Int response.input_tokens;
+                "output_tokens", Cn_json.Int response.output_tokens;
+                "stop_reason", Cn_json.String response.stop_reason;
+              ] ();
+            archive_raw hub_path ~trigger_id;
+            Ok response.content
+        in
+        match Cn_orchestrator.run_two_pass ~hub_path ~trigger_id
+                ~config:config.shell ~llm_call parsed.typed_ops with
+        | Error msg ->
+          Cn_trace.gemit ~component:"runtime" ~layer:Body
+            ~event:"effects.typed_ops.error" ~severity:Error_ ~status:Error_status
+            ~trigger_id ~reason_code:"pass_b_failed"
+            ~reason:msg ();
+          None
+        | Ok result ->
+          Cn_trace.gemit ~component:"runtime" ~layer:Body
+            ~event:"effects.typed_ops.complete" ~severity:Info ~status:Ok_
+            ~trigger_id
+            ~details:[
+              "typed_op_count", Cn_json.Int (List.length parsed.typed_ops);
+              "used_two_pass", Cn_json.Bool result.used_two_pass;
+              "pass_b_receipt_count", Cn_json.Int (List.length result.pass_b_receipts);
+            ] ();
+          Some result
+      end else
+        None
+    in
+
+    (* 3c. Execute coordination ops.
+       When two-pass was used, execute Pass-A-safe ops from Pass A output,
+       then execute gated ops from Pass B. When single-pass, execute all. *)
+    (match two_pass_result with
+     | Some { used_two_pass = true; pass_b_coordination_ops; pass_b_output; _ } ->
+       (* Update final_parsed to Pass B output for projection/conversation *)
+       (match pass_b_output with
+        | Some p -> final_parsed := p
+        | None -> ());
+       (* Pass A: only pass-A-safe coordination ops *)
+       List.iter (fun op ->
+         match Cn_orchestrator.classify_coordination_pass_a op with
+         | Cn_orchestrator.Execute ->
+           Cn_agent.execute_op hub_path name trigger_id op
+         | Cn_orchestrator.Skip _ -> ()
+       ) ops;
+       (* Pass B: gated coordination ops *)
+       List.iter (fun (op, decision) ->
+         match decision with
+         | Cn_orchestrator.Execute ->
+           Cn_agent.execute_op hub_path name trigger_id op
+         | Cn_orchestrator.Skip reason ->
+           Cn_trace.gemit ~component:"runtime" ~layer:Governance
+             ~event:"coordination.gated" ~severity:Info ~status:Skipped
+             ~trigger_id ~pass:"B" ~reason_code:reason
+             ~details:["op", Cn_json.String (Cn_lib.string_of_agent_op op)] ()
+       ) pass_b_coordination_ops
+     | _ ->
+       (* Single pass or no typed ops: execute all coordination ops normally *)
+       List.iter (fun op ->
+         Cn_agent.execute_op hub_path name trigger_id op
+       ) ops);
 
     mark_ops_done hub_path trigger_id;
     Cn_trace.gemit ~component:"runtime" ~layer:Body
@@ -571,7 +675,7 @@ let finalize ~(config : Cn_config.config) ~hub_path ~name
                   ~trigger_id
                   ~details:["sink", Cn_json.String "telegram"] ();
                 let render_result =
-                  Cn_output.render_for_sink (HumanSurface `Telegram) parsed in
+                  Cn_output.render_for_sink (HumanSurface `Telegram) !final_parsed in
                 let payload = resolve_render ~trigger_id
                   ~sink_name:"telegram" render_result in
                 match Cn_telegram.send_message ~token ~chat_id ~text:payload with
@@ -603,7 +707,7 @@ let finalize ~(config : Cn_config.config) ~hub_path ~name
 
   (* 5. Append to conversation history — presentation plane only *)
   let conv_render =
-    Cn_output.render_for_sink ConversationStore parsed in
+    Cn_output.render_for_sink ConversationStore !final_parsed in
   let assistant_text = resolve_render ~trigger_id
     ~sink_name:"conversation" conv_render in
   append_conversation hub_path ~trigger_id
@@ -690,7 +794,7 @@ let process_one ~(config : Cn_config.config) ~hub_path ~name =
           ~trigger_id ~reason_code:"recovery_output_present"
           ~reason:"output.md exists, resuming finalize" ();
         finalize ~config ~hub_path ~name
-          ~trigger_id ~from ~inbound_message ~output_content
+          ~trigger_id ~from ~inbound_message ~output_content ()
 
       (* === State 2: input.md exists, no output → resume LLM call === *)
       end else if Cn_ffi.Fs.exists inp then begin
@@ -754,7 +858,7 @@ let process_one ~(config : Cn_config.config) ~hub_path ~name =
               ] ();
             finalize ~config ~hub_path ~name
               ~trigger_id ~from ~inbound_message
-              ~output_content:response.content
+              ~output_content:response.content ~packed ()
 
       (* === State 3: neither exists → queue inbox + dequeue + pipeline === *)
       end else begin
@@ -863,7 +967,7 @@ let process_one ~(config : Cn_config.config) ~hub_path ~name =
                   ] ();
                 finalize ~config ~hub_path ~name
                   ~trigger_id ~from ~inbound_message
-                  ~output_content:response.content
+                  ~output_content:response.content ~packed ()
       end
     with
     | result -> finally (); result
