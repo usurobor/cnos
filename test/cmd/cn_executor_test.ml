@@ -1106,3 +1106,78 @@ let%expect_test "git_grep path=.: .cn/secrets.env excluded from root-scoped grep
     kind=git_grep status=ok reason=(none) artifacts=1
     finds_src: true
     finds_cn: false |}]
+
+(* === git_status observe-exclusion tests === *)
+
+let%expect_test "git_status: shows src/ changes, hides .cn/ state/ logs/" =
+  with_test_hub (fun hub ->
+    init_git_repo hub;
+    let touch path content =
+      let full = Filename.concat hub path in
+      let oc = open_out full in
+      output_string oc content; close_out oc
+    in
+    touch "src/new_file.ml" "let x = 1";
+    touch ".cn/internal.dat" "internal";
+    touch "state/artifacts/art-001.txt" "artifact data";
+    touch "state/receipts/rcpt-001.json" "{}";
+    touch "logs/events.jsonl" "{\"event\":\"test\"}";
+    let status_op = { Cn_shell.kind = Observe Git_status;
+                      op_id = Some "obs-01"; fields = [] } in
+    let r = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config status_op in
+    show_receipt r;
+    let content = read_artifact hub r in
+    Printf.printf "finds_src: %b\n"
+      (try ignore (Str.search_forward (Str.regexp_string "src/") content 0); true
+       with Not_found -> false);
+    Printf.printf "finds_cn: %b\n"
+      (try ignore (Str.search_forward (Str.regexp_string ".cn/") content 0); true
+       with Not_found -> false);
+    Printf.printf "finds_state: %b\n"
+      (try ignore (Str.search_forward (Str.regexp_string "state/") content 0); true
+       with Not_found -> false);
+    Printf.printf "finds_logs: %b\n"
+      (try ignore (Str.search_forward (Str.regexp_string "logs/") content 0); true
+       with Not_found -> false));
+  [%expect {|
+    kind=git_status status=ok reason=(none) artifacts=1
+    finds_src: true
+    finds_cn: false
+    finds_state: false
+    finds_logs: false |}]
+
+let%expect_test "git_status: prior observe op artifacts do not pollute status" =
+  with_test_hub (fun hub ->
+    init_git_repo hub;
+    let touch path content =
+      let full = Filename.concat hub path in
+      let oc = open_out full in
+      output_string oc content; close_out oc
+    in
+    touch "src/main.ml" "let () = ()";
+    let _ = Cn_ffi.Process.exec_args ~prog:"git"
+      ~args:["-C"; hub; "add"; "src/main.ml"] () in
+    let _ = Cn_ffi.Process.exec_args ~prog:"git"
+      ~args:["-C"; hub; "commit"; "-m"; "baseline"] () in
+    (* Run a git_diff observe op — this creates receipt/artifact files under state/ *)
+    let diff_op = { Cn_shell.kind = Observe Git_diff;
+                    op_id = Some "obs-01"; fields = [] } in
+    let _diff_r = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config diff_op in
+    (* Now make a visible change in src/ *)
+    touch "src/main.ml" "let () = print_endline \"changed\"";
+    (* Run git_status — should see src/ change but NOT state/artifacts or state/receipts *)
+    let status_op = { Cn_shell.kind = Observe Git_status;
+                      op_id = Some "obs-02"; fields = [] } in
+    let r = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config status_op in
+    show_receipt r;
+    let content = read_artifact hub r in
+    Printf.printf "finds_src: %b\n"
+      (try ignore (Str.search_forward (Str.regexp_string "src/") content 0); true
+       with Not_found -> false);
+    Printf.printf "finds_state: %b\n"
+      (try ignore (Str.search_forward (Str.regexp_string "state/") content 0); true
+       with Not_found -> false));
+  [%expect {|
+    kind=git_status status=ok reason=(none) artifacts=1
+    finds_src: true
+    finds_state: false |}]
