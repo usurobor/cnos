@@ -259,3 +259,108 @@ let repack_for_pass_b ~hub_path ~trigger_id:_ ~config
   if excerpts <> "" then
     Buffer.add_string buf excerpts;
   Buffer.contents buf
+
+(* === Two-pass coordination result === *)
+
+type two_pass_result = {
+  pass_a_receipts : Cn_shell.receipt list;
+  pass_b_receipts : Cn_shell.receipt list;
+  pass_b_coordination_ops : (Cn_lib.agent_op * coord_decision) list;
+  pass_b_output : Cn_output.parsed_output option;
+  used_two_pass : bool;
+}
+
+(** Run the full two-pass orchestration.
+
+    Takes a mock-able [llm_call] function for testability:
+    [llm_call : repack_content -> (Ok output_string | Error msg)]
+
+    Flow:
+    1. Run Pass A (observe ops execute, effects deferred if two-pass)
+    2. If needs_pass_b:
+       a. Repack context with artifacts/receipts
+       b. Call LLM with repack content
+       c. Parse Pass B output
+       d. Run Pass B (effects execute, observe denied)
+       e. Gate coordination ops on effect success
+    3. Return combined result *)
+let run_two_pass ~hub_path ~trigger_id ~config
+      ~llm_call typed_ops =
+  (* Pass A *)
+  let pass_a = run_pass_a ~hub_path ~trigger_id ~config typed_ops in
+
+  if not pass_a.needs_pass_b then
+    (* Single pass: no Pass B needed *)
+    Ok {
+      pass_a_receipts = pass_a.receipts;
+      pass_b_receipts = [];
+      pass_b_coordination_ops = [];
+      pass_b_output = None;
+      used_two_pass = false;
+    }
+  else begin
+    (* Two-pass: repack and call LLM for Pass B *)
+    Cn_trace.gemit ~component:"orchestrator" ~layer:Body
+      ~event:"pass_b.repack.start" ~severity:Info ~status:Ok_
+      ~trigger_id ~pass:"B" ();
+
+    let repack_content = repack_for_pass_b ~hub_path ~trigger_id
+        ~config ~pass_a_receipts:pass_a.receipts in
+
+    Cn_trace.gemit ~component:"orchestrator" ~layer:Body
+      ~event:"pass_b.repack.complete" ~severity:Info ~status:Ok_
+      ~trigger_id ~pass:"B"
+      ~details:["repack_bytes", Cn_json.Int (String.length repack_content)] ();
+
+    (* Call LLM for Pass B *)
+    Cn_trace.gemit ~component:"orchestrator" ~layer:Mind
+      ~event:"pass_b.llm.start" ~severity:Info ~status:Ok_
+      ~trigger_id ~pass:"B" ();
+
+    match llm_call repack_content with
+    | Error msg ->
+      Cn_trace.gemit ~component:"orchestrator" ~layer:Mind
+        ~event:"pass_b.llm.error" ~severity:Error_ ~status:Error_status
+        ~trigger_id ~pass:"B" ~reason_code:"llm_error" ();
+      Error (Printf.sprintf "Pass B LLM call failed: %s" msg)
+    | Ok pass_b_raw_output ->
+      Cn_trace.gemit ~component:"orchestrator" ~layer:Mind
+        ~event:"pass_b.llm.ok" ~severity:Info ~status:Ok_
+        ~trigger_id ~pass:"B" ();
+
+      (* Parse Pass B output *)
+      let pass_b_parsed = Cn_output.parse_output pass_b_raw_output in
+
+      (* Execute Pass B typed ops *)
+      let pass_b_receipts =
+        if pass_b_parsed.typed_ops <> [] then
+          run_pass_b ~hub_path ~trigger_id ~config pass_b_parsed.typed_ops
+        else
+          []
+      in
+
+      (* Gate Pass B coordination ops on effect success *)
+      let gated_coord_ops =
+        List.map (fun op ->
+          let decision = gate_coordination ~effect_receipts:pass_b_receipts op in
+          (op, decision)
+        ) pass_b_parsed.coordination_ops
+      in
+
+      Cn_trace.gemit ~component:"orchestrator" ~layer:Body
+        ~event:"pass_b.complete" ~severity:Info ~status:Ok_
+        ~trigger_id ~pass:"B"
+        ~details:[
+          "typed_op_count", Cn_json.Int (List.length pass_b_parsed.typed_ops);
+          "coord_op_count", Cn_json.Int (List.length pass_b_parsed.coordination_ops);
+          "pass_b_receipt_count", Cn_json.Int (List.length pass_b_receipts);
+        ] ();
+
+      Ok {
+        pass_a_receipts = pass_a.receipts;
+        pass_b_receipts;
+        pass_b_coordination_ops = gated_coord_ops;
+        pass_b_output = Some pass_b_parsed;
+        used_two_pass = true;
+      }
+  end

@@ -111,6 +111,8 @@ The trace system now captures everything needed to reconstruct agent behavior wi
 
 ### Fixed
 
+- **Two-pass execution wired in cn_runtime (Issue #41)** — `finalize` now invokes Pass B when `needs_pass_b=true`. Previously, observe ops executed but the LLM was never re-called with evidence, making the sense→act loop dead. New `Cn_orchestrator.run_two_pass` coordinates: Pass A → repack with artifacts/receipts → LLM re-call → Parse → Pass B → coordination gating. Pass-A-safe coordination ops (ack, surface, reply) execute during Pass A; terminal ops (done, fail, send, delegate) defer to Pass B and are gated on effect success. Projection and conversation history use the final (Pass B) output. 7 integration tests added.
+
 - **`cn update` binary-only (Issue #27)** — `cn update` now exclusively downloads pre-built binaries from GitHub Releases, mirroring `install.sh`. Removed the git-based update path entirely: no more `/usr/local/lib/cnos` assumption, no `opam exec -- dune build`, no `has_git_install()` detection. One install method, one update method. `Update_git` variant removed from `update_info` type; replaced by `Update_available`. Self-update check at CLI startup uses the same binary-download path.
 
 ---
