@@ -214,7 +214,7 @@ let execute_git_op ~hub_path ~trigger_id ~config ~kind_str
 
 let execute_git_status ~hub_path ~trigger_id ~config (op : Cn_shell.typed_op) =
   execute_git_op ~hub_path ~trigger_id ~config ~kind_str:"git_status"
-    ~args:["status"; "--porcelain"] op
+    ~args:(["status"; "--porcelain"] @ git_observe_exclusions) op
 
 (** Validate a revision string: reject leading dash to prevent
     injection of git options like --output=<file>. *)
