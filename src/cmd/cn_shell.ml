@@ -279,20 +279,13 @@ let classify ops =
   (observe, effect)
 
 (** Determine if the current pass has observe ops requiring a followup.
-    Under auto: any observe op triggers continuation to the next pass.
-    Generalization of the original two-pass trigger logic. *)
+    Under auto: any observe op triggers continuation to the next pass. *)
 let needs_continuation ~two_pass_mode ops =
   match two_pass_mode with
   | "off" -> false
   | _ (* "auto" *) ->
     let observe, _ = classify ops in
     List.length observe > 0
-
-(** Determine if two-pass mode is needed.
-    Under auto: any observe op triggers two-pass.
-    Thin alias for needs_continuation — kept for backward compatibility. *)
-let needs_two_pass ~two_pass_mode ops =
-  needs_continuation ~two_pass_mode ops
 
 (* === Receipt serialization === *)
 
@@ -343,7 +336,7 @@ let receipts_to_json ~trigger_id receipts =
     or [Error msg] when orchestration failed.
 
     This is the single entry point that cn_runtime should call for
-    typed op execution — replacing direct Cn_orchestrator.run_two_pass calls. *)
+    typed op execution — delegating to the N-pass orchestrator via callback. *)
 let execute ~orchestrate ~write_denials ~typed_ops ~denial_receipts =
   if denial_receipts <> [] then
     write_denials denial_receipts;
