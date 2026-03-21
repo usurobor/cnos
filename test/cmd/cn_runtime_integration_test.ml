@@ -96,19 +96,25 @@ let make_effect ~op_id ~fields kind_str =
 (* === N-PASS INTEGRATION: run_n_pass                        === *)
 (* ============================================================ *)
 
-(* Mock LLM that returns a Pass 2 output with an fs_write effect *)
-let mock_llm_pass_2_write _repack_content =
-  Ok "---\nops: [{\"kind\":\"fs_write\",\"op_id\":\"write-01\",\"path\":\"src/new.ml\",\"content\":\"let x = 1\"}]\n---\nI wrote the file."
+(* Fresh stateful mock: first call returns effect, subsequent calls return no ops *)
+let make_mock_effect_then_terminal () =
+  let call_count = ref 0 in
+  fun _repack_content ->
+    incr call_count;
+    if !call_count = 1 then
+      Ok "---\nops: [{\"kind\":\"fs_write\",\"op_id\":\"write-01\",\"path\":\"src/new.ml\",\"content\":\"let x = 1\"}]\n---\nI wrote the file."
+    else
+      Ok "---\n---\nDone."
 
-(* Mock LLM that returns a Pass 2 output with no ops *)
-let mock_llm_pass_2_no_ops _repack_content =
+(* Mock LLM that returns no ops (terminal) *)
+let mock_llm_no_ops _repack_content =
   Ok "---\n---\nHere is what I found in the file."
 
 (* Mock LLM that fails *)
 let mock_llm_fail _repack_content =
   Error "API timeout"
 
-let%expect_test "n-pass: observe+effect → Pass 2 invoked, both passes receipted" =
+let%expect_test "n-pass: observe+effect → effect → terminal (3 passes)" =
   with_test_hub (fun hub ->
     let pass_1_ops = [
       make_observe_with ~op_id:"obs-01"
@@ -117,8 +123,9 @@ let%expect_test "n-pass: observe+effect → Pass 2 invoked, both passes receipte
         ~fields:[("path", Cn_json.String "src/new.ml");
                  ("content", Cn_json.String "let x = 1")] "fs_write";
     ] in
+    let llm_call = make_mock_effect_then_terminal () in
     let result = Cn_orchestrator.run_n_pass ~hub_path:hub ~trigger_id
-                   ~config:auto_config ~llm_call:mock_llm_pass_2_write
+                   ~config:auto_config ~llm_call
                    pass_1_ops in
     match result with
     | Error msg -> Printf.printf "ERROR: %s\n" msg
@@ -127,21 +134,22 @@ let%expect_test "n-pass: observe+effect → Pass 2 invoked, both passes receipte
       Printf.printf "--- All receipts ---\n";
       List.iter show_receipt result.all_receipts);
   [%expect {|
-    passes_used: 2
+    passes_used: 3
     --- All receipts ---
     pass=1 kind=fs_read status=ok reason=(none)
     pass=1 kind=fs_write status=skipped reason=observe_pass_requires_followup
     pass=2 kind=fs_write status=ok reason=(none) |}]
 
-let%expect_test "single-pass: effect-only → no Pass 2, normal flow" =
+let%expect_test "single-pass: effect-only → no continuation, terminal" =
   with_test_hub (fun hub ->
     let ops = [
       make_effect ~op_id:"write-01"
         ~fields:[("path", Cn_json.String "src/new.ml");
                  ("content", Cn_json.String "let x = 1")] "fs_write";
     ] in
+    let llm_call _ = failwith "should not be called for first-pass effect-only" in
     let result = Cn_orchestrator.run_n_pass ~hub_path:hub ~trigger_id
-                   ~config:auto_config ~llm_call:mock_llm_pass_2_write
+                   ~config:auto_config ~llm_call
                    ops in
     match result with
     | Error msg -> Printf.printf "ERROR: %s\n" msg
@@ -166,7 +174,7 @@ let%expect_test "n-pass: LLM failure in Pass 2 → Error propagated" =
     (match result with
      | Error msg -> Printf.printf "error: %s\n" msg
      | Ok _ -> print_endline "unexpected success"));
-  [%expect {| error: Pass 2 LLM call failed: API timeout |}]
+  [%expect {| error: Pass 1 LLM call failed: API timeout |}]
 
 let%expect_test "n-pass: observe-only Pass 1 → Pass 2 with no ops" =
   with_test_hub (fun hub ->
@@ -175,7 +183,7 @@ let%expect_test "n-pass: observe-only Pass 1 → Pass 2 with no ops" =
         ~fields:[("path", Cn_json.String "src/main.ml")] "fs_read";
     ] in
     let result = Cn_orchestrator.run_n_pass ~hub_path:hub ~trigger_id
-                   ~config:auto_config ~llm_call:mock_llm_pass_2_no_ops
+                   ~config:auto_config ~llm_call:mock_llm_no_ops
                    ops in
     match result with
     | Error msg -> Printf.printf "ERROR: %s\n" msg
@@ -195,8 +203,9 @@ let%expect_test "n-pass: receipts from both passes in one file" =
         ~fields:[("path", Cn_json.String "src/new.ml");
                  ("content", Cn_json.String "let x = 1")] "fs_write";
     ] in
+    let llm_call = make_mock_effect_then_terminal () in
     let result = Cn_orchestrator.run_n_pass ~hub_path:hub ~trigger_id
-                   ~config:auto_config ~llm_call:mock_llm_pass_2_write
+                   ~config:auto_config ~llm_call
                    ops in
     (match result with
      | Error msg -> Printf.printf "ERROR: %s\n" msg
@@ -222,18 +231,25 @@ let%expect_test "n-pass: receipts from both passes in one file" =
     1 fs_write skipped
     2 fs_write ok |}]
 
-let%expect_test "n-pass: coordination gating — Pass 2 effect denied → terminal ops gated" =
+let%expect_test "n-pass: coordination gating — effect denied → terminal ops gated" =
   with_test_hub (fun hub ->
-    (* Mock LLM returns a write to a denied path + terminal coord op *)
-    let mock_llm_denied _content =
-      Ok "---\nops: [{\"kind\":\"fs_write\",\"op_id\":\"write-bad\",\"path\":\".cn/evil.ml\",\"content\":\"bad\"}]\ndone: thread-1\n---\nDone."
+    let call_count = ref 0 in
+    let llm_call _content =
+      incr call_count;
+      match !call_count with
+      | 1 ->
+        (* Pass 2: denied effect + coordination op *)
+        Ok "---\nops: [{\"kind\":\"fs_write\",\"op_id\":\"write-bad\",\"path\":\".cn/evil.ml\",\"content\":\"bad\"}]\ndone: thread-1\n---\nDone."
+      | _ ->
+        (* Pass 3: terminal — LLM acknowledges denial *)
+        Ok "---\ndone: thread-1\n---\nDone."
     in
     let ops = [
       make_observe_with ~op_id:"obs-01"
         ~fields:[("path", Cn_json.String "src/main.ml")] "fs_read";
     ] in
     let result = Cn_orchestrator.run_n_pass ~hub_path:hub ~trigger_id
-                   ~config:auto_config ~llm_call:mock_llm_denied
+                   ~config:auto_config ~llm_call
                    ops in
     match result with
     | Error msg -> Printf.printf "ERROR: %s\n" msg
@@ -268,8 +284,9 @@ let%expect_test "n_pass=off: even with observe ops, no Pass 2" =
         ~fields:[("path", Cn_json.String "src/new.ml");
                  ("content", Cn_json.String "let x = 1")] "fs_write";
     ] in
+    let llm_call _ = failwith "should not be called with n_pass=off" in
     let result = Cn_orchestrator.run_n_pass ~hub_path:hub ~trigger_id
-                   ~config:off_config ~llm_call:mock_llm_pass_2_write
+                   ~config:off_config ~llm_call
                    ops in
     match result with
     | Error msg -> Printf.printf "ERROR: %s\n" msg

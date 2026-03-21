@@ -630,7 +630,7 @@ let%expect_test "n_pass: effect-only → single pass, no continuation" =
     total_receipts: 1
     pass=1 kind=fs_write status=ok reason=(none) |}]
 
-let%expect_test "n_pass: observe → LLM → effect (2 passes)" =
+let%expect_test "n_pass: observe → effect → terminal (3 passes)" =
   with_test_hub (fun hub ->
     let ops = [
       make_observe_with ~op_id:"obs-01"
@@ -639,10 +639,15 @@ let%expect_test "n_pass: observe → LLM → effect (2 passes)" =
     (* Pass 2 LLM returns an effect op *)
     let pass_2_output =
       "---\nid: orch-test-001\nops: [{\"kind\":\"fs_write\",\"op_id\":\"write-01\",\"path\":\"src/out.ml\",\"content\":\"let y = 2\"}]\n---\n\nDone." in
+    (* Pass 3 LLM returns no ops — terminal *)
+    let pass_3_terminal =
+      "---\nid: orch-test-001\n---\n\nAll done." in
     let call_count = ref 0 in
     let llm_call _repack =
       incr call_count;
-      Ok pass_2_output
+      match !call_count with
+      | 1 -> Ok pass_2_output
+      | _ -> Ok pass_3_terminal
     in
     match Cn_orchestrator.run_n_pass ~hub_path:hub ~trigger_id
             ~config:n_pass_config ~llm_call ops with
@@ -654,9 +659,9 @@ let%expect_test "n_pass: observe → LLM → effect (2 passes)" =
       Printf.printf "llm_calls: %d\n" !call_count;
       Printf.printf "total_receipts: %d\n" (List.length result.all_receipts));
   [%expect {|
-    passes_used: 2
+    passes_used: 3
     stop_reason: no_ops
-    llm_calls: 1
+    llm_calls: 2
     total_receipts: 2 |}]
 
 let%expect_test "n_pass: max_passes=1 → all ops in single pass" =
@@ -743,10 +748,17 @@ let%expect_test "n_pass: pass labels are numeric (1, 2, ...)" =
         ~fields:[("path", Cn_json.String "src/new.ml");
                  ("content", Cn_json.String "let x = 1")] "fs_write";
     ] in
-    (* Pass 2 LLM returns effect-only *)
-    let pass_2_output =
-      "---\nid: orch-test-001\nops: [{\"kind\":\"fs_write\",\"op_id\":\"write-02\",\"path\":\"src/out.ml\",\"content\":\"let y = 2\"}]\n---\n\nDone." in
-    let llm_call _ = Ok pass_2_output in
+    let call_count = ref 0 in
+    let llm_call _ =
+      incr call_count;
+      match !call_count with
+      | 1 ->
+        (* Pass 2: effect-only *)
+        Ok "---\nid: orch-test-001\nops: [{\"kind\":\"fs_write\",\"op_id\":\"write-02\",\"path\":\"src/out.ml\",\"content\":\"let y = 2\"}]\n---\n\nDone."
+      | _ ->
+        (* Pass 3: terminal *)
+        Ok "---\nid: orch-test-001\n---\n\nAll done."
+    in
     match Cn_orchestrator.run_n_pass ~hub_path:hub ~trigger_id
             ~config:n_pass_config ~llm_call ops with
     | Error msg -> Printf.printf "error: %s\n" msg
@@ -760,7 +772,7 @@ let%expect_test "n_pass: pass labels are numeric (1, 2, ...)" =
 (* === 3+ PASS CHAIN (observe → observe → effect → terminal) === *)
 (* ============================================================ *)
 
-let%expect_test "n_pass: 3-pass chain (observe → observe → effect → done)" =
+let%expect_test "n_pass: 4-pass chain (observe → observe → effect → terminal)" =
   with_test_hub (fun hub ->
     (* Pass 1: observe-only (fs_read) → continuation *)
     let pass_1_ops = [
@@ -773,13 +785,16 @@ let%expect_test "n_pass: 3-pass chain (observe → observe → effect → done)"
     (* Pass 3 LLM returns an effect (write based on both reads) *)
     let pass_3_effect =
       "---\nid: orch-test-001\nops: [{\"kind\":\"fs_write\",\"op_id\":\"write-01\",\"path\":\"src/out.ml\",\"content\":\"let combined = 1\"}]\n---\n\nWrote combined output." in
+    (* Pass 4 LLM returns no ops — terminal *)
+    let pass_4_terminal =
+      "---\nid: orch-test-001\n---\n\nAll done." in
     let call_count = ref 0 in
     let llm_call _repack =
       incr call_count;
       match !call_count with
       | 1 -> Ok pass_2_observe
       | 2 -> Ok pass_3_effect
-      | _ -> Error "unexpected call"
+      | _ -> Ok pass_4_terminal
     in
     match Cn_orchestrator.run_n_pass ~hub_path:hub ~trigger_id
             ~config:n_pass_config ~llm_call pass_1_ops with
@@ -794,9 +809,9 @@ let%expect_test "n_pass: 3-pass chain (observe → observe → effect → done)"
         (List.map (fun (r : Cn_shell.receipt) -> r.pass) result.all_receipts) in
       Printf.printf "pass_labels: %s\n" (String.concat ", " passes));
   [%expect {|
-    passes_used: 3
+    passes_used: 4
     stop_reason: no_ops
-    llm_calls: 2
+    llm_calls: 3
     total_receipts: 3
     pass_labels: 1, 2, 3 |}]
 
@@ -829,6 +844,91 @@ let%expect_test "n_pass: 3-pass chain hits max_passes=3 with more observe" =
   [%expect {|
     passes_used: 3
     stop_reason: max_passes_reached |}]
+
+let%expect_test "n_pass: observe → effect → verify (effect continues)" =
+  with_test_hub (fun hub ->
+    (* Pass 1: observe — read a file *)
+    let pass_1_ops = [
+      make_observe_with ~op_id:"obs-01"
+        ~fields:[("path", Cn_json.String "src/main.ml")] "fs_read"
+    ] in
+    let call_count = ref 0 in
+    let llm_call _repack =
+      incr call_count;
+      match !call_count with
+      | 1 ->
+        (* Pass 2: effect — write a file *)
+        Ok "---\nid: orch-test-001\nops: [{\"kind\":\"fs_write\",\"op_id\":\"write-01\",\"path\":\"src/out.ml\",\"content\":\"let x = 1\"}]\n---\n\nWriting."
+      | 2 ->
+        (* Pass 3: observe — verify the write *)
+        Ok "---\nid: orch-test-001\nops: [{\"kind\":\"fs_read\",\"op_id\":\"obs-02\",\"path\":\"src/out.ml\"}]\n---\n\nVerifying."
+      | 3 ->
+        (* Pass 4: terminal — confirmed *)
+        Ok "---\nid: orch-test-001\n---\n\nVerified and done."
+      | _ -> Error "unexpected call"
+    in
+    match Cn_orchestrator.run_n_pass ~hub_path:hub ~trigger_id
+            ~config:n_pass_config ~llm_call pass_1_ops with
+    | Error msg -> Printf.printf "error: %s\n" msg
+    | Ok result ->
+      Printf.printf "passes_used: %d\n" result.passes_used;
+      Printf.printf "stop_reason: %s\n"
+        (Cn_orchestrator.string_of_stop_reason result.stop_reason);
+      Printf.printf "llm_calls: %d\n" !call_count;
+      Printf.printf "total_receipts: %d\n" (List.length result.all_receipts);
+      let pass_kinds = List.map (fun (r : Cn_shell.receipt) ->
+        Printf.sprintf "%s:%s" r.pass r.kind
+      ) result.all_receipts in
+      Printf.printf "receipt_trail: %s\n" (String.concat " → " pass_kinds));
+  [%expect {|
+    passes_used: 4
+    stop_reason: no_ops
+    llm_calls: 3
+    total_receipts: 3
+    receipt_trail: 1:fs_read → 2:fs_write → 3:fs_read |}]
+
+let%expect_test "n_pass: effect → observe → effect (full generic chain)" =
+  with_test_hub (fun hub ->
+    (* Pass 1: observe — triggers continuation *)
+    let pass_1_ops = [
+      make_observe_with ~op_id:"obs-01"
+        ~fields:[("path", Cn_json.String "src/main.ml")] "fs_read"
+    ] in
+    let call_count = ref 0 in
+    let llm_call _repack =
+      incr call_count;
+      match !call_count with
+      | 1 ->
+        (* Pass 2: effect *)
+        Ok "---\nid: orch-test-001\nops: [{\"kind\":\"fs_write\",\"op_id\":\"write-01\",\"path\":\"src/a.ml\",\"content\":\"a\"}]\n---\n\nWrote a."
+      | 2 ->
+        (* Pass 3: observe (verify) *)
+        Ok "---\nid: orch-test-001\nops: [{\"kind\":\"fs_read\",\"op_id\":\"obs-02\",\"path\":\"src/a.ml\"}]\n---\n\nVerifying a."
+      | 3 ->
+        (* Pass 4: effect (fix based on verify) *)
+        Ok "---\nid: orch-test-001\nops: [{\"kind\":\"fs_write\",\"op_id\":\"write-02\",\"path\":\"src/a.ml\",\"content\":\"a_fixed\"}]\n---\n\nFixed a."
+      | 4 ->
+        (* Pass 5: terminal *)
+        Ok "---\nid: orch-test-001\n---\n\nDone."
+      | _ -> Error "unexpected call"
+    in
+    match Cn_orchestrator.run_n_pass ~hub_path:hub ~trigger_id
+            ~config:n_pass_config ~llm_call pass_1_ops with
+    | Error msg -> Printf.printf "error: %s\n" msg
+    | Ok result ->
+      Printf.printf "passes_used: %d\n" result.passes_used;
+      Printf.printf "stop_reason: %s\n"
+        (Cn_orchestrator.string_of_stop_reason result.stop_reason);
+      Printf.printf "llm_calls: %d\n" !call_count;
+      let pass_kinds = List.map (fun (r : Cn_shell.receipt) ->
+        Printf.sprintf "%s:%s" r.pass r.kind
+      ) result.all_receipts in
+      Printf.printf "receipt_trail: %s\n" (String.concat " → " pass_kinds));
+  [%expect {|
+    passes_used: 5
+    stop_reason: no_ops
+    llm_calls: 4
+    receipt_trail: 1:fs_read → 2:fs_write → 3:fs_read → 4:fs_write |}]
 
 let%expect_test "n_pass: backward compat — max_passes=2 matches N-pass" =
   with_test_hub (fun hub ->
