@@ -6,10 +6,6 @@
     - Effect-class pass: all ops execute
     - Terminal pass: no typed ops → project final output
 
-    Backward compatible: max_passes=2 reproduces the original two-pass
-    behavior. The old run_two_pass entry point is preserved as a thin
-    wrapper around run_n_pass.
-
     Delegates actual op execution to Cn_executor.
     Provides coordination op classification (pass-safe vs pass-unsafe)
     and gating logic (terminal ops gated on effect success).
@@ -49,17 +45,17 @@ let contains_sub (s : string) (sub : string) : bool =
     Pass-safe: ack, surface/mca.
     Reply: conditionally safe — only if projection is idempotent
     (has_idempotent_projection=true). Without idempotent projection,
-    reply is deferred as pass_a_unsafe per v3.3.6.
+    reply is deferred as pass_unsafe.
     Pass-unsafe: done, fail, send, delegate, defer, delete. *)
-let classify_coordination_pass_a
+let classify_coordination_pass_safe
       ?(has_idempotent_projection = true) (op : Cn_lib.agent_op) =
   match op with
   | Ack _ | Surface _ -> Execute
   | Reply _ ->
     if has_idempotent_projection then Execute
-    else Skip "pass_a_unsafe"
+    else Skip "pass_unsafe"
   | Done _ | Fail _ | Send _ | Delegate _ | Defer _ | Delete _ ->
-    Skip "pass_a_unsafe"
+    Skip "pass_unsafe"
 
 (* === Coordination gating === *)
 
@@ -97,17 +93,12 @@ let gate_coordination ~effect_receipts (op : Cn_lib.agent_op) =
 (** Convert a 0-indexed pass_index to a 1-indexed pass label string. *)
 let pass_label_of_index i = string_of_int (i + 1)
 
-(* === Generic observe pass === *)
-
-type pass_a_result = {
-  receipts : Cn_shell.receipt list;
-  needs_pass_b : bool;
-}
+(* === Observe-class pass === *)
 
 (** Run an observe-class pass.
     Observe ops execute, effect ops deferred with observe_pass_requires_followup.
     If two_pass=off or no observe ops, all ops execute (single-pass behavior).
-    Pass label is parameterized for N-pass generalization. *)
+    Returns (receipts, has_continuation). *)
 let run_observe_pass ~hub_path ~trigger_id ~config ~pass_label typed_ops =
   let has_continuation = Cn_shell.needs_continuation
       ~two_pass_mode:config.Cn_shell.two_pass typed_ops in
@@ -155,19 +146,12 @@ let run_observe_pass ~hub_path ~trigger_id ~config ~pass_label typed_ops =
   if receipts <> [] then
     Cn_executor.write_receipts ~hub_path ~trigger_id ~pass:pass_label receipts;
 
-  { receipts; needs_pass_b = has_continuation }
+  (receipts, has_continuation)
 
-(** Backward-compatible wrapper: Run Pass A with label "A". *)
-let run_pass_a ~hub_path ~trigger_id ~config typed_ops =
-  let result = run_observe_pass ~hub_path ~trigger_id ~config
-    ~pass_label:"A" typed_ops in
-  result
-
-(* === Generic effect pass === *)
+(* === Effect-class pass === *)
 
 (** Run an effect-class pass (final pass in the loop).
-    Effect ops execute normally, observe ops denied with max_passes_exceeded.
-    Pass label is parameterized for N-pass generalization. *)
+    Effect ops execute normally, observe ops denied with max_passes_exceeded. *)
 let run_effect_pass ~hub_path ~trigger_id ~config ~pass_label typed_ops =
   Cn_trace.gemit ~component:"orchestrator" ~layer:Body
     ~event:"pass.N.start" ~severity:Info ~status:Ok_
@@ -199,10 +183,6 @@ let run_effect_pass ~hub_path ~trigger_id ~config ~pass_label typed_ops =
 
   receipts
 
-(** Backward-compatible wrapper: Run Pass B with label "B". *)
-let run_pass_b ~hub_path ~trigger_id ~config typed_ops =
-  run_effect_pass ~hub_path ~trigger_id ~config ~pass_label:"B" typed_ops
-
 (* === Denial receipt pass-through === *)
 
 (** Write parser denial receipts with pass tagging.
@@ -216,7 +196,8 @@ let write_denial_receipts ~hub_path ~trigger_id ~pass denials =
 
 (** Classify a receipt as empty-result (op ran but produced no data)
     vs not-executed (op was denied/skipped/errored before producing data).
-    Used by receipts_summary to provide explicit signals to the agent. *)
+    Used by receipts_summary to provide explicit signals to the agent,
+    preventing confabulation of op results (CDD #49). *)
 let receipt_result_signal (r : Cn_shell.receipt) =
   match r.status with
   | Ok_status ->
@@ -229,9 +210,8 @@ let receipt_result_signal (r : Cn_shell.receipt) =
 (** Build bounded receipts summary for next-pass injection.
     Deterministic: iterates receipts in list order.
     Includes explicit signals distinguishing empty results from
-    non-execution, per CDD #49.
-    [pass_label] is used in the header (e.g., "Pass 1 Receipts"). *)
-let receipts_summary ?(pass_label = "A") (receipts : Cn_shell.receipt list) =
+    non-execution (anti-confabulation, CDD #49). *)
+let receipts_summary ~pass_label (receipts : Cn_shell.receipt list) =
   let buf = Buffer.create 512 in
   Buffer.add_string buf (Printf.sprintf "## Pass %s Receipts\n\n" pass_label);
   let has_failures = List.exists (fun (r : Cn_shell.receipt) ->
@@ -285,28 +265,20 @@ let artifact_excerpts ~hub_path ~config (receipts : Cn_shell.receipt list) =
 
 (** Repack context for the next pass.
     Produces a deterministic string containing:
-    1. Receipts summary (bounded)
+    1. Receipts summary with anti-confabulation signals (bounded)
     2. Artifact excerpts (bounded by max_artifact_bytes_per_op)
 
     Ordering is stable (receipt list order). Skills are NOT re-scored
-    (fixed at first pack time per spec).
-    [pass_label] is used in the header for the receipts summary. *)
+    (fixed at first pack time per spec). *)
 let repack_for_next_pass ~hub_path ~trigger_id:_ ~config
       ~pass_label ~pass_receipts =
   let buf = Buffer.create 4096 in
-  (* 1. Receipts summary *)
   Buffer.add_string buf (receipts_summary ~pass_label pass_receipts);
   Buffer.add_char buf '\n';
-  (* 2. Artifact excerpts *)
   let excerpts = artifact_excerpts ~hub_path ~config pass_receipts in
   if excerpts <> "" then
     Buffer.add_string buf excerpts;
   Buffer.contents buf
-
-(** Backward-compatible alias for repack_for_pass_b. *)
-let repack_for_pass_b ~hub_path ~trigger_id ~config ~pass_a_receipts =
-  repack_for_next_pass ~hub_path ~trigger_id ~config
-    ~pass_label:"A" ~pass_receipts:pass_a_receipts
 
 (* === N-pass stop reasons === *)
 
@@ -332,16 +304,6 @@ type n_pass_result = {
   stop_reason : pass_stop_reason;
 }
 
-(* === Backward-compatible two-pass result === *)
-
-type two_pass_result = {
-  pass_a_receipts : Cn_shell.receipt list;
-  pass_b_receipts : Cn_shell.receipt list;
-  pass_b_coordination_ops : (Cn_lib.agent_op * coord_decision) list;
-  pass_b_output : Cn_output.parsed_output option;
-  used_two_pass : bool;
-}
-
 (* === N-pass bind loop === *)
 
 (** Run the bounded N-pass bind loop.
@@ -351,11 +313,12 @@ type two_pass_result = {
 
     And an optional [indicator] handle for processing indicators.
 
-    Flow:
-    1. Classify first pass ops
-    2. For observe-class: execute observe, defer effects, repack, call LLM
-    3. For effect-class: execute all, done
-    4. Repeat until stop condition
+    Flow per pass:
+    1. Classify ops (observe-class or effect-class)
+    2. Execute (observe defers effects; effect executes all)
+    3. Collect receipts
+    4. Check stop conditions
+    5. If continuing: repack, call LLM, parse, loop
 
     Stop conditions:
     - no ops (terminal pass)
@@ -382,9 +345,9 @@ let run_n_pass ~hub_path ~trigger_id ~config
 
     if has_continuation then begin
       (* === Observe-class pass === *)
-      let pass_result = run_observe_pass ~hub_path ~trigger_id ~config
+      let (receipts, _) = run_observe_pass ~hub_path ~trigger_id ~config
           ~pass_label current_ops in
-      all_receipts := !all_receipts @ pass_result.receipts;
+      all_receipts := !all_receipts @ receipts;
       total_ops := !total_ops + List.length current_ops;
 
       (* Check stop conditions *)
@@ -395,7 +358,7 @@ let run_n_pass ~hub_path ~trigger_id ~config
           ~reason_code:"max_passes_reached"
           ~details:[
             "pass_index", Cn_json.Int pass_index;
-            "receipt_count", Cn_json.Int (List.length pass_result.receipts);
+            "receipt_count", Cn_json.Int (List.length receipts);
           ] ();
         Ok {
           all_receipts = !all_receipts;
@@ -428,12 +391,12 @@ let run_n_pass ~hub_path ~trigger_id ~config
           ~reason_code:"observe_detected"
           ~details:[
             "pass_index", Cn_json.Int pass_index;
-            "receipt_count", Cn_json.Int (List.length pass_result.receipts);
+            "receipt_count", Cn_json.Int (List.length receipts);
           ] ();
 
         (* Repack and call LLM for next pass *)
         let repack_content = repack_for_next_pass ~hub_path ~trigger_id
-            ~config ~pass_label ~pass_receipts:pass_result.receipts in
+            ~config ~pass_label ~pass_receipts:receipts in
 
         Cn_trace.gemit ~component:"orchestrator" ~layer:Mind
           ~event:"pass.N.repack" ~severity:Info ~status:Ok_
@@ -523,38 +486,3 @@ let run_n_pass ~hub_path ~trigger_id ~config
   in
 
   loop ~pass_index:0 ~current_ops:typed_ops ~last_parsed:None
-
-(* === Backward-compatible two-pass entry point === *)
-
-(** Run the full two-pass orchestration.
-    Preserved for backward compatibility — delegates to run_n_pass
-    with max_passes=2 and translates the result.
-
-    Takes a mock-able [llm_call] function for testability:
-    [llm_call : repack_content -> (Ok output_string | Error msg)] *)
-let run_two_pass ~hub_path ~trigger_id ~config
-      ~llm_call typed_ops =
-  let config_2pass = { config with Cn_shell.max_passes = 2 } in
-  match run_n_pass ~hub_path ~trigger_id ~config:config_2pass
-          ~llm_call typed_ops with
-  | Error msg -> Error msg
-  | Ok result ->
-    (* Translate n_pass_result to two_pass_result.
-       Map numeric pass labels back to "A"/"B" for backward compat. *)
-    let relabel_pass (r : Cn_shell.receipt) label =
-      { r with Cn_shell.pass = label } in
-    let pass_a_receipts = List.filter (fun (r : Cn_shell.receipt) ->
-      r.pass = "1"
-    ) result.all_receipts
-    |> List.map (fun r -> relabel_pass r "A") in
-    let pass_b_receipts = List.filter (fun (r : Cn_shell.receipt) ->
-      r.pass <> "1"
-    ) result.all_receipts
-    |> List.map (fun r -> relabel_pass r "B") in
-    Ok {
-      pass_a_receipts;
-      pass_b_receipts;
-      pass_b_coordination_ops = result.final_coordination_ops;
-      pass_b_output = result.final_output;
-      used_two_pass = result.passes_used > 1;
-    }
