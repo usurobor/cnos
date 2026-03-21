@@ -304,28 +304,28 @@ let%expect_test "classify: separate observe and effect" =
   Printf.printf "observe: %d, effect: %d\n" (List.length observe) (List.length effect);
   [%expect {| observe: 1, effect: 1 |}]
 
-(* === Two-pass decision === *)
+(* === Continuation decision === *)
 
-let%expect_test "needs_two_pass: observe ops trigger under auto" =
+let%expect_test "needs_continuation: observe ops trigger under auto" =
   let input = {|[{"kind":"fs_read","path":"a"}]|} in
   let ops, _ = Cn_shell.parse_ops_manifest input in
-  Printf.printf "%b\n" (Cn_shell.needs_two_pass ~two_pass_mode:"auto" ops);
+  Printf.printf "%b\n" (Cn_shell.needs_continuation ~two_pass_mode:"auto" ops);
   [%expect {| true |}]
 
-let%expect_test "needs_two_pass: effect-only does not trigger" =
+let%expect_test "needs_continuation: effect-only does not trigger" =
   let input = {|[{"kind":"fs_write","op_id":"w","path":"a","content":""}]|} in
   let ops, _ = Cn_shell.parse_ops_manifest input in
-  Printf.printf "%b\n" (Cn_shell.needs_two_pass ~two_pass_mode:"auto" ops);
+  Printf.printf "%b\n" (Cn_shell.needs_continuation ~two_pass_mode:"auto" ops);
   [%expect {| false |}]
 
-let%expect_test "needs_two_pass: off mode never triggers" =
+let%expect_test "needs_continuation: off mode never triggers" =
   let input = {|[{"kind":"fs_read","path":"a"}]|} in
   let ops, _ = Cn_shell.parse_ops_manifest input in
-  Printf.printf "%b\n" (Cn_shell.needs_two_pass ~two_pass_mode:"off" ops);
+  Printf.printf "%b\n" (Cn_shell.needs_continuation ~two_pass_mode:"off" ops);
   [%expect {| false |}]
 
-let%expect_test "needs_two_pass: empty ops does not trigger" =
-  Printf.printf "%b\n" (Cn_shell.needs_two_pass ~two_pass_mode:"auto" []);
+let%expect_test "needs_continuation: empty ops does not trigger" =
+  Printf.printf "%b\n" (Cn_shell.needs_continuation ~two_pass_mode:"auto" []);
   [%expect {| false |}]
 
 (* === Receipt serialization === *)

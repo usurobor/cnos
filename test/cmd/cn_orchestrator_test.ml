@@ -1,13 +1,13 @@
-(** cn_orchestrator_test: ppx_expect tests for two-pass orchestrator
+(** cn_orchestrator_test: ppx_expect tests for N-pass orchestrator
 
     Tests the orchestration logic from AGENT-RUNTIME v3.3.6:
-    - Two-pass triggering (auto vs off)
-    - Pass A: observe executes, effects deferred
-    - Pass B: effects execute, observe denied
-    - Coordination classification (pass-A-safe vs pass-A-unsafe)
+    - N-pass triggering (auto vs off)
+    - Observe pass: observe executes, effects deferred
+    - Effect pass: effects execute, observe denied
+    - Coordination classification (pass-safe vs pass-unsafe)
     - Coordination gating (terminal ops gated on effect failure)
     - Receipt pass tagging
-    - Pass B repacking (deterministic output) *)
+    - Next-pass repacking (deterministic output) *)
 
 (* === Temp hub setup === *)
 
@@ -95,37 +95,37 @@ let make_effect ~op_id ~fields kind_str =
   { Cn_shell.kind; op_id = Some op_id; fields }
 
 (* ============================================================ *)
-(* === TWO-PASS TRIGGERING                                    === *)
+(* === N-PASS TRIGGERING                                      === *)
 (* ============================================================ *)
 
-let%expect_test "auto + observe ops → needs_pass_b=true" =
+let%expect_test "auto + observe ops → has_continuation=true" =
   with_test_hub (fun hub ->
     let ops = [
       make_observe_with ~op_id:"obs-01"
         ~fields:[("path", Cn_json.String "src/main.ml")] "fs_read"
     ] in
-    let result = Cn_orchestrator.run_pass_a ~hub_path:hub ~trigger_id ~config:auto_config ops in
-    Printf.printf "needs_pass_b: %b\n" result.needs_pass_b;
-    Printf.printf "receipt_count: %d\n" (List.length result.receipts);
-    List.iter show_receipt result.receipts);
+    let (receipts, has_continuation) = Cn_orchestrator.run_observe_pass ~pass_label:"1" ~hub_path:hub ~trigger_id ~config:auto_config ops in
+    Printf.printf "has_continuation: %b\n" has_continuation;
+    Printf.printf "receipt_count: %d\n" (List.length receipts);
+    List.iter show_receipt receipts);
   [%expect {|
-    needs_pass_b: true
+    has_continuation: true
     receipt_count: 1
-    pass=A kind=fs_read status=ok reason=(none) |}]
+    pass=1 kind=fs_read status=ok reason=(none) |}]
 
-let%expect_test "auto + effect-only → needs_pass_b=false (single pass)" =
+let%expect_test "auto + effect-only → has_continuation=false (single pass)" =
   with_test_hub (fun hub ->
     let ops = [
       make_effect ~op_id:"write-01"
         ~fields:[("path", Cn_json.String "src/new.ml");
                  ("content", Cn_json.String "let x = 1")] "fs_write"
     ] in
-    let result = Cn_orchestrator.run_pass_a ~hub_path:hub ~trigger_id ~config:auto_config ops in
-    Printf.printf "needs_pass_b: %b\n" result.needs_pass_b;
-    List.iter show_receipt result.receipts);
+    let (receipts, has_continuation) = Cn_orchestrator.run_observe_pass ~pass_label:"1" ~hub_path:hub ~trigger_id ~config:auto_config ops in
+    Printf.printf "has_continuation: %b\n" has_continuation;
+    List.iter show_receipt receipts);
   [%expect {|
-    needs_pass_b: false
-    pass=A kind=fs_write status=ok reason=(none) |}]
+    has_continuation: false
+    pass=1 kind=fs_write status=ok reason=(none) |}]
 
 let%expect_test "auto + mixed observe+effect → effects deferred" =
   with_test_hub (fun hub ->
@@ -136,13 +136,13 @@ let%expect_test "auto + mixed observe+effect → effects deferred" =
         ~fields:[("path", Cn_json.String "src/new.ml");
                  ("content", Cn_json.String "let x = 1")] "fs_write";
     ] in
-    let result = Cn_orchestrator.run_pass_a ~hub_path:hub ~trigger_id ~config:auto_config ops in
-    Printf.printf "needs_pass_b: %b\n" result.needs_pass_b;
-    List.iter show_receipt result.receipts);
+    let (receipts, has_continuation) = Cn_orchestrator.run_observe_pass ~pass_label:"1" ~hub_path:hub ~trigger_id ~config:auto_config ops in
+    Printf.printf "has_continuation: %b\n" has_continuation;
+    List.iter show_receipt receipts);
   [%expect {|
-    needs_pass_b: true
-    pass=A kind=fs_read status=ok reason=(none)
-    pass=A kind=fs_write status=skipped reason=observe_pass_requires_followup |}]
+    has_continuation: true
+    pass=1 kind=fs_read status=ok reason=(none)
+    pass=1 kind=fs_write status=skipped reason=observe_pass_requires_followup |}]
 
 let%expect_test "off + mixed → all execute, single pass" =
   with_test_hub (fun hub ->
@@ -153,32 +153,32 @@ let%expect_test "off + mixed → all execute, single pass" =
         ~fields:[("path", Cn_json.String "src/new.ml");
                  ("content", Cn_json.String "let x = 1")] "fs_write";
     ] in
-    let result = Cn_orchestrator.run_pass_a ~hub_path:hub ~trigger_id ~config:off_config ops in
-    Printf.printf "needs_pass_b: %b\n" result.needs_pass_b;
-    List.iter show_receipt result.receipts);
+    let (receipts, has_continuation) = Cn_orchestrator.run_observe_pass ~pass_label:"1" ~hub_path:hub ~trigger_id ~config:off_config ops in
+    Printf.printf "has_continuation: %b\n" has_continuation;
+    List.iter show_receipt receipts);
   [%expect {|
-    needs_pass_b: false
-    pass=A kind=fs_read status=ok reason=(none)
-    pass=A kind=fs_write status=ok reason=(none) |}]
+    has_continuation: false
+    pass=1 kind=fs_read status=ok reason=(none)
+    pass=1 kind=fs_write status=ok reason=(none) |}]
 
-let%expect_test "off + observe-only → execute, no pass B" =
+let%expect_test "off + observe-only → execute, no continuation" =
   with_test_hub (fun hub ->
     let ops = [
       make_observe_with ~op_id:"obs-01"
         ~fields:[("path", Cn_json.String "src/main.ml")] "fs_read"
     ] in
-    let result = Cn_orchestrator.run_pass_a ~hub_path:hub ~trigger_id ~config:off_config ops in
-    Printf.printf "needs_pass_b: %b\n" result.needs_pass_b;
-    List.iter show_receipt result.receipts);
+    let (receipts, has_continuation) = Cn_orchestrator.run_observe_pass ~pass_label:"1" ~hub_path:hub ~trigger_id ~config:off_config ops in
+    Printf.printf "has_continuation: %b\n" has_continuation;
+    List.iter show_receipt receipts);
   [%expect {|
-    needs_pass_b: false
-    pass=A kind=fs_read status=ok reason=(none) |}]
+    has_continuation: false
+    pass=1 kind=fs_read status=ok reason=(none) |}]
 
 (* ============================================================ *)
-(* === PASS B EXECUTION                                       === *)
+(* === EFFECT PASS EXECUTION                                  === *)
 (* ============================================================ *)
 
-let%expect_test "pass B: effects execute, observe denied max_passes_exceeded" =
+let%expect_test "effect pass: effects execute, observe denied max_passes_exceeded" =
   with_test_hub (fun hub ->
     let ops = [
       make_observe_with ~op_id:"obs-01"
@@ -187,39 +187,39 @@ let%expect_test "pass B: effects execute, observe denied max_passes_exceeded" =
         ~fields:[("path", Cn_json.String "src/new.ml");
                  ("content", Cn_json.String "let x = 1")] "fs_write";
     ] in
-    let result = Cn_orchestrator.run_pass_b ~hub_path:hub ~trigger_id ~config:auto_config ops in
+    let result = Cn_orchestrator.run_effect_pass ~pass_label:"2" ~hub_path:hub ~trigger_id ~config:auto_config ops in
     List.iter show_receipt result);
   [%expect {|
-    pass=B kind=fs_read status=denied reason=max_passes_exceeded
-    pass=B kind=fs_write status=ok reason=(none) |}]
+    pass=2 kind=fs_read status=denied reason=max_passes_exceeded
+    pass=2 kind=fs_write status=ok reason=(none) |}]
 
-let%expect_test "pass B: effect-only all execute" =
+let%expect_test "effect pass: effect-only all execute" =
   with_test_hub (fun hub ->
     let ops = [
       make_effect ~op_id:"write-01"
         ~fields:[("path", Cn_json.String "src/new.ml");
                  ("content", Cn_json.String "let x = 1")] "fs_write";
     ] in
-    let result = Cn_orchestrator.run_pass_b ~hub_path:hub ~trigger_id ~config:auto_config ops in
+    let result = Cn_orchestrator.run_effect_pass ~pass_label:"2" ~hub_path:hub ~trigger_id ~config:auto_config ops in
     List.iter show_receipt result);
-  [%expect {| pass=B kind=fs_write status=ok reason=(none) |}]
+  [%expect {| pass=2 kind=fs_write status=ok reason=(none) |}]
 
-let%expect_test "pass B: denied effects still receipted" =
+let%expect_test "effect pass: denied effects still receipted" =
   with_test_hub (fun hub ->
     let ops = [
       make_effect ~op_id:"write-01"
         ~fields:[("path", Cn_json.String ".cn/evil.ml");
                  ("content", Cn_json.String "bad")] "fs_write";
     ] in
-    let result = Cn_orchestrator.run_pass_b ~hub_path:hub ~trigger_id ~config:auto_config ops in
+    let result = Cn_orchestrator.run_effect_pass ~pass_label:"2" ~hub_path:hub ~trigger_id ~config:auto_config ops in
     List.iter show_receipt result);
-  [%expect {| pass=B kind=fs_write status=denied reason=path_denied |}]
+  [%expect {| pass=2 kind=fs_write status=denied reason=path_denied |}]
 
 (* ============================================================ *)
 (* === RECEIPT PASS TAGGING                                   === *)
 (* ============================================================ *)
 
-let%expect_test "pass A receipts all tagged 'A'" =
+let%expect_test "observe pass receipts all tagged '1'" =
   with_test_hub (fun hub ->
     let ops = [
       make_observe_with ~op_id:"obs-01"
@@ -228,22 +228,22 @@ let%expect_test "pass A receipts all tagged 'A'" =
         ~fields:[("path", Cn_json.String "src/new.ml");
                  ("content", Cn_json.String "let x")] "fs_write";
     ] in
-    let result = Cn_orchestrator.run_pass_a ~hub_path:hub ~trigger_id ~config:auto_config ops in
-    let all_a = List.for_all (fun (r : Cn_shell.receipt) -> r.pass = "A") result.receipts in
-    Printf.printf "all_pass_A: %b\n" all_a);
-  [%expect {| all_pass_A: true |}]
+    let (receipts, _has_continuation) = Cn_orchestrator.run_observe_pass ~pass_label:"1" ~hub_path:hub ~trigger_id ~config:auto_config ops in
+    let all_1 = List.for_all (fun (r : Cn_shell.receipt) -> r.pass = "1") receipts in
+    Printf.printf "all_pass_1: %b\n" all_1);
+  [%expect {| all_pass_1: true |}]
 
-let%expect_test "pass B receipts all tagged 'B'" =
+let%expect_test "effect pass receipts all tagged '2'" =
   with_test_hub (fun hub ->
     let ops = [
       make_effect ~op_id:"write-01"
         ~fields:[("path", Cn_json.String "src/new.ml");
                  ("content", Cn_json.String "let x")] "fs_write";
     ] in
-    let result = Cn_orchestrator.run_pass_b ~hub_path:hub ~trigger_id ~config:auto_config ops in
-    let all_b = List.for_all (fun (r : Cn_shell.receipt) -> r.pass = "B") result in
-    Printf.printf "all_pass_B: %b\n" all_b);
-  [%expect {| all_pass_B: true |}]
+    let result = Cn_orchestrator.run_effect_pass ~pass_label:"2" ~hub_path:hub ~trigger_id ~config:auto_config ops in
+    let all_2 = List.for_all (fun (r : Cn_shell.receipt) -> r.pass = "2") result in
+    Printf.printf "all_pass_2: %b\n" all_2);
+  [%expect {| all_pass_2: true |}]
 
 (* ============================================================ *)
 (* === COORDINATION CLASSIFICATION                            === *)
@@ -254,41 +254,41 @@ let show_coord_decision d =
   | Cn_orchestrator.Execute -> print_endline "execute"
   | Cn_orchestrator.Skip reason -> Printf.printf "skip: %s\n" reason
 
-let%expect_test "pass-A-safe: ack" =
-  show_coord_decision (Cn_orchestrator.classify_coordination_pass_a (Cn_lib.Ack "test"));
+let%expect_test "pass-safe: ack" =
+  show_coord_decision (Cn_orchestrator.classify_coordination_pass_safe (Cn_lib.Ack "test"));
   [%expect {| execute |}]
 
-let%expect_test "pass-A-safe: surface" =
-  show_coord_decision (Cn_orchestrator.classify_coordination_pass_a (Cn_lib.Surface "mca"));
+let%expect_test "pass-safe: surface" =
+  show_coord_decision (Cn_orchestrator.classify_coordination_pass_safe (Cn_lib.Surface "mca"));
   [%expect {| execute |}]
 
-let%expect_test "pass-A-safe: reply" =
-  show_coord_decision (Cn_orchestrator.classify_coordination_pass_a (Cn_lib.Reply ("id", "msg")));
+let%expect_test "pass-safe: reply" =
+  show_coord_decision (Cn_orchestrator.classify_coordination_pass_safe (Cn_lib.Reply ("id", "msg")));
   [%expect {| execute |}]
 
-let%expect_test "pass-A-unsafe: done" =
-  show_coord_decision (Cn_orchestrator.classify_coordination_pass_a (Cn_lib.Done "id"));
-  [%expect {| skip: pass_a_unsafe |}]
+let%expect_test "pass-unsafe: done" =
+  show_coord_decision (Cn_orchestrator.classify_coordination_pass_safe (Cn_lib.Done "id"));
+  [%expect {| skip: pass_unsafe |}]
 
-let%expect_test "pass-A-unsafe: fail" =
-  show_coord_decision (Cn_orchestrator.classify_coordination_pass_a (Cn_lib.Fail ("id", "reason")));
-  [%expect {| skip: pass_a_unsafe |}]
+let%expect_test "pass-unsafe: fail" =
+  show_coord_decision (Cn_orchestrator.classify_coordination_pass_safe (Cn_lib.Fail ("id", "reason")));
+  [%expect {| skip: pass_unsafe |}]
 
-let%expect_test "pass-A-unsafe: send" =
-  show_coord_decision (Cn_orchestrator.classify_coordination_pass_a (Cn_lib.Send ("peer", "msg", None)));
-  [%expect {| skip: pass_a_unsafe |}]
+let%expect_test "pass-unsafe: send" =
+  show_coord_decision (Cn_orchestrator.classify_coordination_pass_safe (Cn_lib.Send ("peer", "msg", None)));
+  [%expect {| skip: pass_unsafe |}]
 
-let%expect_test "pass-A-unsafe: delegate" =
-  show_coord_decision (Cn_orchestrator.classify_coordination_pass_a (Cn_lib.Delegate ("id", "peer")));
-  [%expect {| skip: pass_a_unsafe |}]
+let%expect_test "pass-unsafe: delegate" =
+  show_coord_decision (Cn_orchestrator.classify_coordination_pass_safe (Cn_lib.Delegate ("id", "peer")));
+  [%expect {| skip: pass_unsafe |}]
 
-let%expect_test "pass-A-unsafe: defer" =
-  show_coord_decision (Cn_orchestrator.classify_coordination_pass_a (Cn_lib.Defer ("id", None)));
-  [%expect {| skip: pass_a_unsafe |}]
+let%expect_test "pass-unsafe: defer" =
+  show_coord_decision (Cn_orchestrator.classify_coordination_pass_safe (Cn_lib.Defer ("id", None)));
+  [%expect {| skip: pass_unsafe |}]
 
-let%expect_test "pass-A-unsafe: delete" =
-  show_coord_decision (Cn_orchestrator.classify_coordination_pass_a (Cn_lib.Delete "id"));
-  [%expect {| skip: pass_a_unsafe |}]
+let%expect_test "pass-unsafe: delete" =
+  show_coord_decision (Cn_orchestrator.classify_coordination_pass_safe (Cn_lib.Delete "id"));
+  [%expect {| skip: pass_unsafe |}]
 
 (* ============================================================ *)
 (* === COORDINATION GATING                                    === *)
@@ -296,7 +296,7 @@ let%expect_test "pass-A-unsafe: delete" =
 
 let%expect_test "gating: terminal ops blocked when effects failed" =
   let effect_receipts = [
-    { Cn_shell.pass = "B"; op_id = Some "write-01"; kind = "fs_write";
+    { Cn_shell.pass = "2"; op_id = Some "write-01"; kind = "fs_write";
       status = Error_status; reason = "patch_failed";
       start_time = ""; end_time = ""; artifacts = [] }
   ] in
@@ -305,7 +305,7 @@ let%expect_test "gating: terminal ops blocked when effects failed" =
 
 let%expect_test "gating: terminal ops allowed when effects succeeded" =
   let effect_receipts = [
-    { Cn_shell.pass = "B"; op_id = Some "write-01"; kind = "fs_write";
+    { Cn_shell.pass = "2"; op_id = Some "write-01"; kind = "fs_write";
       status = Ok_status; reason = "";
       start_time = ""; end_time = ""; artifacts = [] }
   ] in
@@ -314,7 +314,7 @@ let%expect_test "gating: terminal ops allowed when effects succeeded" =
 
 let%expect_test "gating: reply allowed even when effects failed" =
   let effect_receipts = [
-    { Cn_shell.pass = "B"; op_id = Some "write-01"; kind = "fs_write";
+    { Cn_shell.pass = "2"; op_id = Some "write-01"; kind = "fs_write";
       status = Error_status; reason = "patch_failed";
       start_time = ""; end_time = ""; artifacts = [] }
   ] in
@@ -323,7 +323,7 @@ let%expect_test "gating: reply allowed even when effects failed" =
 
 let%expect_test "gating: ack allowed even when effects failed" =
   let effect_receipts = [
-    { Cn_shell.pass = "B"; op_id = Some "write-01"; kind = "fs_write";
+    { Cn_shell.pass = "2"; op_id = Some "write-01"; kind = "fs_write";
       status = Denied; reason = "path_denied";
       start_time = ""; end_time = ""; artifacts = [] }
   ] in
@@ -332,7 +332,7 @@ let%expect_test "gating: ack allowed even when effects failed" =
 
 let%expect_test "gating: send blocked when effects denied" =
   let effect_receipts = [
-    { Cn_shell.pass = "B"; op_id = Some "write-01"; kind = "fs_write";
+    { Cn_shell.pass = "2"; op_id = Some "write-01"; kind = "fs_write";
       status = Denied; reason = "path_denied";
       start_time = ""; end_time = ""; artifacts = [] }
   ] in
@@ -346,7 +346,7 @@ let%expect_test "gating: no effect receipts → terminal ops allowed" =
 
 let%expect_test "gating: skipped effects (deferred) don't block" =
   let effect_receipts = [
-    { Cn_shell.pass = "A"; op_id = Some "write-01"; kind = "fs_write";
+    { Cn_shell.pass = "1"; op_id = Some "write-01"; kind = "fs_write";
       status = Skipped; reason = "observe_pass_requires_followup";
       start_time = ""; end_time = ""; artifacts = [] }
   ] in
@@ -354,20 +354,20 @@ let%expect_test "gating: skipped effects (deferred) don't block" =
   [%expect {| execute |}]
 
 (* ============================================================ *)
-(* === PASS B REPACKING                                       === *)
+(* === NEXT-PASS REPACKING                                    === *)
 (* ============================================================ *)
 
-let%expect_test "repack_for_pass_b: includes receipts summary" =
+let%expect_test "repack_for_next_pass: includes receipts summary" =
   with_test_hub (fun hub ->
     let receipts = [
-      { Cn_shell.pass = "A"; op_id = Some "obs-01"; kind = "fs_read";
+      { Cn_shell.pass = "1"; op_id = Some "obs-01"; kind = "fs_read";
         status = Ok_status; reason = "";
         start_time = "2026-01-01T00:00:00Z"; end_time = "2026-01-01T00:00:01Z";
         artifacts = [{ path = "state/artifacts/orch-test-001/obs-01.txt";
                        hash = "sha256:abc"; size = 42 }] }
     ] in
-    let content = Cn_orchestrator.repack_for_pass_b ~hub_path:hub
-                    ~trigger_id ~config:auto_config ~pass_a_receipts:receipts in
+    let content = Cn_orchestrator.repack_for_next_pass ~hub_path:hub
+                    ~trigger_id ~config:auto_config ~pass_label:"1" ~pass_receipts:receipts in
     (* Should contain receipts section *)
     let has_receipts = String.length content > 0
                        && Cn_orchestrator.contains_sub content "Receipt" in
@@ -377,76 +377,77 @@ let%expect_test "repack_for_pass_b: includes receipts summary" =
     has_receipts_section: true
     non_empty: true |}]
 
-let%expect_test "repack_for_pass_b: includes artifact excerpts" =
+let%expect_test "repack_for_next_pass: includes artifact excerpts" =
   with_test_hub (fun hub ->
     (* Write an artifact file *)
     let art_dir = Filename.concat hub "state/artifacts/orch-test-001" in
     Cn_ffi.Fs.ensure_dir art_dir;
     Cn_ffi.Fs.write (Filename.concat art_dir "obs-01.txt") "file content here";
     let receipts = [
-      { Cn_shell.pass = "A"; op_id = Some "obs-01"; kind = "fs_read";
+      { Cn_shell.pass = "1"; op_id = Some "obs-01"; kind = "fs_read";
         status = Ok_status; reason = "";
         start_time = ""; end_time = "";
         artifacts = [{ path = "state/artifacts/orch-test-001/obs-01.txt";
                        hash = "sha256:abc"; size = 17 }] }
     ] in
-    let content = Cn_orchestrator.repack_for_pass_b ~hub_path:hub
-                    ~trigger_id ~config:auto_config ~pass_a_receipts:receipts in
+    let content = Cn_orchestrator.repack_for_next_pass ~hub_path:hub
+                    ~trigger_id ~config:auto_config ~pass_label:"1" ~pass_receipts:receipts in
     let has_artifact = Cn_orchestrator.contains_sub content "file content here" in
     Printf.printf "has_artifact_content: %b\n" has_artifact);
   [%expect {| has_artifact_content: true |}]
 
-let%expect_test "repack_for_pass_b: deterministic ordering" =
+let%expect_test "repack_for_next_pass: deterministic ordering" =
   with_test_hub (fun hub ->
     let art_dir = Filename.concat hub "state/artifacts/orch-test-001" in
     Cn_ffi.Fs.ensure_dir art_dir;
     Cn_ffi.Fs.write (Filename.concat art_dir "obs-01.txt") "first";
     Cn_ffi.Fs.write (Filename.concat art_dir "obs-02.txt") "second";
     let receipts = [
-      { Cn_shell.pass = "A"; op_id = Some "obs-01"; kind = "fs_read";
+      { Cn_shell.pass = "1"; op_id = Some "obs-01"; kind = "fs_read";
         status = Ok_status; reason = "";
         start_time = ""; end_time = "";
         artifacts = [{ path = "state/artifacts/orch-test-001/obs-01.txt";
                        hash = "sha256:aaa"; size = 5 }] };
-      { Cn_shell.pass = "A"; op_id = Some "obs-02"; kind = "fs_read";
+      { Cn_shell.pass = "1"; op_id = Some "obs-02"; kind = "fs_read";
         status = Ok_status; reason = "";
         start_time = ""; end_time = "";
         artifacts = [{ path = "state/artifacts/orch-test-001/obs-02.txt";
                        hash = "sha256:bbb"; size = 6 }] };
     ] in
-    let c1 = Cn_orchestrator.repack_for_pass_b ~hub_path:hub
-               ~trigger_id ~config:auto_config ~pass_a_receipts:receipts in
-    let c2 = Cn_orchestrator.repack_for_pass_b ~hub_path:hub
-               ~trigger_id ~config:auto_config ~pass_a_receipts:receipts in
+    let c1 = Cn_orchestrator.repack_for_next_pass ~hub_path:hub
+               ~trigger_id ~config:auto_config ~pass_label:"1" ~pass_receipts:receipts in
+    let c2 = Cn_orchestrator.repack_for_next_pass ~hub_path:hub
+               ~trigger_id ~config:auto_config ~pass_label:"1" ~pass_receipts:receipts in
     Printf.printf "deterministic: %b\n" (c1 = c2));
   [%expect {| deterministic: true |}]
 
 (* ============================================================ *)
-(* === RECEIPT PERSISTENCE (pass A → pass B append)           === *)
+(* === RECEIPT PERSISTENCE (pass 1 → pass 2 append)           === *)
 (* ============================================================ *)
 
-let%expect_test "full two-pass: receipts accumulate in one file" =
+let%expect_test "full N-pass: receipts accumulate in one file" =
   with_test_hub (fun hub ->
-    (* Pass A *)
-    let pass_a_ops = [
+    (* Pass 1 (observe) *)
+    let pass_1_ops = [
       make_observe_with ~op_id:"obs-01"
         ~fields:[("path", Cn_json.String "src/main.ml")] "fs_read";
       make_effect ~op_id:"write-01"
         ~fields:[("path", Cn_json.String "src/new.ml");
                  ("content", Cn_json.String "let x = 1")] "fs_write";
     ] in
-    let pass_a = Cn_orchestrator.run_pass_a ~hub_path:hub ~trigger_id
-                   ~config:auto_config pass_a_ops in
-    assert pass_a.needs_pass_b;
+    let (receipts_1, has_continuation) = Cn_orchestrator.run_observe_pass ~pass_label:"1" ~hub_path:hub ~trigger_id
+                   ~config:auto_config pass_1_ops in
+    assert has_continuation;
+    ignore receipts_1;
 
-    (* Pass B *)
-    let pass_b_ops = [
+    (* Pass 2 (effect) *)
+    let pass_2_ops = [
       make_effect ~op_id:"write-01"
         ~fields:[("path", Cn_json.String "src/new.ml");
                  ("content", Cn_json.String "let x = 1")] "fs_write";
     ] in
-    let _pass_b = Cn_orchestrator.run_pass_b ~hub_path:hub ~trigger_id
-                    ~config:auto_config pass_b_ops in
+    let _pass_2 = Cn_orchestrator.run_effect_pass ~pass_label:"2" ~hub_path:hub ~trigger_id
+                    ~config:auto_config pass_2_ops in
 
     (* Read receipts file *)
     let path = Filename.concat hub "state/receipts/orch-test-001.json" in
@@ -465,9 +466,9 @@ let%expect_test "full two-pass: receipts accumulate in one file" =
     | Error msg -> Printf.printf "parse error: %s\n" msg);
   [%expect {|
     total_receipts: 3
-    A fs_read ok
-    A fs_write skipped
-    B fs_write ok |}]
+    1 fs_read ok
+    1 fs_write skipped
+    2 fs_write ok |}]
 
 (* ============================================================ *)
 (* === EMPTY MANIFEST                                         === *)
@@ -475,12 +476,12 @@ let%expect_test "full two-pass: receipts accumulate in one file" =
 
 let%expect_test "empty ops list → single pass, no receipts" =
   with_test_hub (fun hub ->
-    let result = Cn_orchestrator.run_pass_a ~hub_path:hub ~trigger_id
+    let (receipts, has_continuation) = Cn_orchestrator.run_observe_pass ~pass_label:"1" ~hub_path:hub ~trigger_id
                    ~config:auto_config [] in
-    Printf.printf "needs_pass_b: %b\n" result.needs_pass_b;
-    Printf.printf "receipt_count: %d\n" (List.length result.receipts));
+    Printf.printf "has_continuation: %b\n" has_continuation;
+    Printf.printf "receipt_count: %d\n" (List.length receipts));
   [%expect {|
-    needs_pass_b: false
+    has_continuation: false
     receipt_count: 0 |}]
 
 (* ============================================================ *)
@@ -582,7 +583,7 @@ let%expect_test "parser denial receipts get pass-tagged and written" =
   with_test_hub (fun hub ->
     let denial = Cn_shell.make_receipt ~pass:"" ~op_id:None ~kind:"frobnicate"
                    ~status:Denied ~reason:"unknown_op_kind" in
-    Cn_orchestrator.write_denial_receipts ~hub_path:hub ~trigger_id ~pass:"A" [denial];
+    Cn_orchestrator.write_denial_receipts ~hub_path:hub ~trigger_id ~pass:"1" [denial];
     let path = Filename.concat hub "state/receipts/orch-test-001.json" in
     let content = Cn_ffi.Fs.read path in
     match Cn_json.parse content with
@@ -594,7 +595,7 @@ let%expect_test "parser denial receipts get pass-tagged and written" =
           | _ -> print_endline "malformed")
        | _ -> print_endline "wrong count")
     | Error msg -> Printf.printf "parse error: %s\n" msg);
-  [%expect {| pass=A status=denied |}]
+  [%expect {| pass=1 status=denied |}]
 
 (* ============================================================ *)
 (* === N-PASS BIND LOOP (run_n_pass)                          === *)
