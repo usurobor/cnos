@@ -278,8 +278,10 @@ let classify ops =
   let effect = List.filter (fun (op : typed_op) -> is_effect op.kind) ops in
   (observe, effect)
 
-(** Determine if the current pass has observe ops requiring a followup.
-    Under auto: any observe op triggers continuation to the next pass. *)
+(** Determine if the current pass should defer effects.
+    Under auto: any observe op means effects are deferred (observe-class pass).
+    Under off: no deferral (all ops execute in single pass).
+    Note: this controls within-pass behavior, not loop continuation. *)
 let needs_continuation ~n_pass_mode ops =
   match n_pass_mode with
   | "off" -> false
