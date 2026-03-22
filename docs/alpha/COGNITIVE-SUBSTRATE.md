@@ -226,7 +226,7 @@ Profiles and dependency manifests determine which packages are installed.
 Identity.role MUST NOT be treated as the sole package install authority.
 Role constrains applicability, weighting, and ordering inside the installed package set.
 
-If Identity.role implies role-bearing assets that are not present in `.cn/deps.lock.json`, the hub is misconfigured.
+If Identity.role implies role-bearing assets that are not present in the installed package set (`.cn/vendor/packages/`), or if `.cn/deps.json`, `.cn/deps.lock.json`, and `.cn/vendor/packages/` disagree, the hub is misconfigured.
 
 ---
 
@@ -245,7 +245,7 @@ Identity is represented across two hub-local files:
 - the agent's standing role
 - the agent's standing purpose, persona, or self-description
 
-Equivalent headings are valid, but role MUST be explicit rather than only inferable from prose.
+For machine-parseable validation, `spec/SOUL.md` MUST contain either YAML frontmatter with a `role:` field, or a literal `Role: <value>` line within the first 10 non-blank lines. Equivalent prose headings are valid for human readers, but the machine-readable anchor is the normative parse target for `cn setup` and `cn doctor`.
 
 `spec/USER.md` MUST make explicit near the top whatever standing user context is required at wake-up.
 
