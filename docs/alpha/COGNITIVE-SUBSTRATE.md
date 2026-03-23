@@ -218,7 +218,7 @@ The runtime MUST emit a structured **Runtime Contract** at every wake. This repl
 **Self Model** — who the agent is:
 - `cn_version`: runtime binary version
 - `hub_name`: hub directory name (hub-relative, not absolute path)
-- `profile`: effective role from config
+- `profile`: effective runtime role from config (serves as `identity_role` per issue #56; derived from package profile, not parsed from SOUL.md)
 - `installed_packages`: list with per-package doctrine/mindset/skill counts
 - `active_overrides`: hub-local overrides by category (doctrine, mindsets, skills)
 
