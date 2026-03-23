@@ -140,9 +140,15 @@ let gather ~hub_path ~(shell_config : Cn_shell.shell_config)
       skills = skill_overrides;
     };
     workspace_dirs;
+    (* Derive protected from Cn_sandbox — single source of truth *)
     writable = ["src/**"; "docs/**"; "agent/**"; "threads/**"];
-    protected = [".cn/**"; ".git/**"; "state/**"; "logs/**";
-                 "spec/SOUL.md"; "spec/USER.md"];
+    protected =
+      (Cn_sandbox.default_denylist |> List.map (fun prefix ->
+        (* "state/" → "state/**" *)
+        if String.length prefix > 0 && prefix.[String.length prefix - 1] = '/' then
+          String.sub prefix 0 (String.length prefix - 1) ^ "/**"
+        else prefix ^ "/**"))
+      @ Cn_sandbox.protected_files;
     peers;
     capabilities_text;
   }
@@ -231,6 +237,12 @@ let to_json (c : runtime_contract) =
       "protected", Cn_json.Array (List.map (fun s -> Cn_json.String s) c.protected);
     ];
     "peers", Cn_json.Array (List.map (fun s -> Cn_json.String s) c.peers);
+    "capabilities", Cn_json.Object [
+      "observe", Cn_json.Array (List.map (fun s -> Cn_json.String s)
+        ["fs_read"; "fs_list"; "fs_glob"; "git_status"; "git_diff"; "git_log"; "git_grep"]);
+      "effect", Cn_json.Array (List.map (fun s -> Cn_json.String s)
+        ["fs_write"; "fs_patch"; "git_branch"; "git_stage"; "git_commit"]);
+    ];
   ]
 
 (** Write the contract to state/runtime-contract.json. *)
