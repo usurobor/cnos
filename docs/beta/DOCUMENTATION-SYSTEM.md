@@ -124,7 +124,7 @@ docs/alpha/<feature>/v1.0.6/
 ```
 
 - Directory name is the version number: `v1.0.6/`, `v3.8.0/`, etc.
-- Contents are never edited after creation — they are historical records only and never replace the feature root as the latest source of truth
+- Version directories are frozen by repository policy. After creation, their contents MUST NOT be modified in later commits. Corrections MUST be published as a new version directory or an explicit superseding note in the feature root README
 - Each version directory MUST contain a `README.md` describing the snapshot and the canonical doc(s) published for that version
 - Additional version-scoped artifacts (design narratives, migration notes) MAY be included
 
@@ -174,7 +174,7 @@ Each version directory MUST contain:
 
 | File | Purpose |
 |------|---------|
-| `README.md` | Snapshot manifest: what this version shipped and why |
+| `README.md` | Snapshot manifest: what this version shipped, why, and an explicit enumeration of the canonical files included in this snapshot |
 | Canonical doc(s) | Frozen copy of the canonical spec (`SPEC.md`, etc.) published for this version |
 
 Each version directory MAY also contain:
@@ -184,7 +184,7 @@ Each version directory MAY also contain:
 | `DESIGN.md` | Design narrative for this version's changes |
 | Other | Any version-scoped artifact (migration notes, issue summary, etc.) |
 
-All contents are immutable after creation. Legacy flat filenames (e.g., `v1.0.6.md`) MUST be mapped in the feature root README (see §6).
+Version directories are frozen by repository policy. After creation, their contents MUST NOT be modified in later commits. Corrections MUST be published as a new version directory or an explicit superseding note in the feature root README. Legacy flat filenames (e.g., `v1.0.6.md`) MUST be mapped in the feature root README (see §6).
 
 ---
 
