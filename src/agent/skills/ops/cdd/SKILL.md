@@ -503,6 +503,32 @@ CDD's output is not the feature — it is the measured coherence delta. The feat
   - ❌ Contract says "improve β" but no post-release β score recorded
   - ✅ Contract: "improve β (docs/runtime alignment)" → Result: "β held at A+, alignment verified via runtime telemetry"
 
+11.7. **Encoding lag report**
+  - Every release MUST include an encoding lag table in the CHANGELOG coherence note or release notes
+  - For each open design issue: what is the design status, what is the implementation status, what is the lag?
+  - This is not optional — it tracks whether the system's designs are being realized or accumulating as debt
+
+  ```
+  ### Encoding Lag (as of vX.Y.Z)
+  | Issue | Title | Design | Impl | Lag |
+  |-------|-------|--------|------|-----|
+  | #62   | RT Contract v2 | converged | branch exists | low |
+  | #73   | Extensions | converged | not started | growing |
+  ```
+
+  - **Lag levels:** none (shipped), low (in progress), growing (design done, no impl), stale (design aging, impl not planned)
+  - ❌ Release with 5 converged designs and no encoding lag report
+  - ✅ "Encoding lag: 2 growing, 1 low. MCI freeze recommended until #73 Phase 1 ships."
+
+11.8. **MCI freeze criteria**
+  - Freeze doctrinal iteration (no new design docs) when:
+    - Encoding lag is "growing" on ≥3 issues
+    - Design issues outnumber implementation PRs 3:1 or worse
+    - Any "SHALL" in substrate docs has no matching runtime enforcement
+  - Resume MCI when implementation has caught up to the design frontier
+  - ❌ File 10 design issues and 0 implementations with no freeze assessment
+  - ✅ "3 designs at growing lag. Freezing MCI. Next 3 sessions are pure MCA."
+
 ---
 
 ## Orchestration
