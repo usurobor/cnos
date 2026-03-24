@@ -61,12 +61,12 @@ Start at step 1. The process is complete when the coherence delta is recorded.
 
 1.4. **Branch before artifacts**
   - Create the branch before the design doc
-  - Branch name format: `{agent}/{issue}-{scope}-{version}` (e.g., `claude/75-docs-governance-v3.13.0`)
-  - `{agent}`: the actor (`claude`, `sigma`, `pi`). `{issue}`: tracker number. `{scope}`: short kebab-case topic. `{version}`: target cnos version (when known)
+  - Branch name format: `{agent}/{version}-{issue}-{scope}` (e.g., `claude/3.13.0-75-docs-governance`)
+  - `{agent}`: the actor (`claude`, `sigma`, `pi`). `{version}`: target cnos version (when known). `{issue}`: tracker number. `{scope}`: short kebab-case topic
   - **Tooling suffixes** (e.g., `-PfdYZ`) are transport artifacts. Reviews, commits, and documentation SHOULD use the logical name without the suffix
   - ❌ Work on `main`, commit design doc directly
   - ❌ Reference the transport suffix in documentation or PR body
-  - ✅ `claude/75-docs-governance-v3.13.0` — issue + scope + version
+  - ✅ `claude/3.13.0-75-docs-governance` — version + issue + scope
   - ✅ `claude/58-packages-sync` — issue + scope, no version yet
 
 ---

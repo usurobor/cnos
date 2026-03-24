@@ -216,19 +216,19 @@ Every substantial feature or change MUST be developed on its own dedicated branc
 The canonical branch name format is:
 
 ```
-{agent}/{issue}-{scope}-{version}
+{agent}/{version}-{issue}-{scope}
 ```
 
 | Segment | Required | Description | Example |
 |---------|----------|-------------|---------|
 | `{agent}` | Yes | The actor performing the work | `claude`, `sigma`, `pi` |
-| `{issue}` | Yes | Issue number from the tracker | `75` |
-| `{scope}` | Yes | Short kebab-case topic | `docs-governance` |
-| `{version}` | When known | Target cnos release version | `3.13.0` |
+| `{version}` | When known | Target cnos release version | `3.14.0` |
+| `{issue}` | Yes | Issue number from the tracker | `62` |
+| `{scope}` | Yes | Short kebab-case topic | `agent-runtime` |
 
 Examples:
-- `claude/75-docs-governance-3.13.0`
-- `sigma/42-actor-model-3.14.0`
+- `claude/3.13.0-75-docs-governance`
+- `sigma/3.14.0-42-actor-model`
 - `pi/58-packages-sync`
 
 **Tooling suffixes.** Some CI or automation systems append session identifiers to branch names (e.g., `-PfdYZ`). These are transport artifacts, not part of the logical branch name. Reviews, commit messages, and documentation SHOULD reference the branch by its logical name without the suffix.
