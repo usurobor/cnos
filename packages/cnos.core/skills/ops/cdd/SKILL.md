@@ -448,7 +448,7 @@ Before merge or release, verify each item. A missing item is a known coherence d
   - The assessment may be individual or part of an epoch assessment covering the previous release
   - This gate prevents the accumulation of unassessed releases — the failure mode described in #85
   - ❌ Tag v3.15.0 when v3.14.5 has no post-release assessment
-  - ✅ "v3.14.5 assessment exists (POST-RELEASE-EPOCH-v3.14.md covers v3.14.0–v3.14.2; individual assessments exist for v3.14.3+)"
+  - ✅ "v3.14.5 assessment exists (POST-RELEASE-EPOCH-v3.14.md covers v3.14.0–v3.14.5)"
 
 ---
 
