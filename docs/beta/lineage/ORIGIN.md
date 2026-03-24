@@ -103,4 +103,4 @@ No system gets built alone. This one did not.
 - **Ilya Feygin** gave the metric an early real-world use.
 - **Seb Holington** forced the foundational thinking to remain honest.
 - **Natalya Kuzhilina** kept the practical question of coherent relations on the table.
-- **Maggie Angelova** applied outside scientific pressure where the theory was still too loose.
+- **Maggie Angelova** gave the work early confirmation that it was finding real ground.
