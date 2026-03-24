@@ -7,7 +7,7 @@ How CNOS came to be.
 | **Version** | 3.14.0 |
 | **Status** | Converged |
 | **Doc-Class** | reference |
-| **Canonical-Path** | docs/beta/ORIGIN.md |
+| **Canonical-Path** | docs/beta/lineage/ORIGIN.md |
 | **Owns** | project genesis, architectural pivot narrative, substrate rationale |
 | **Does-Not-Own** | structural lineage (see LINEAGE.md), system specifications, doctrine |
 
@@ -97,7 +97,6 @@ CNOS looks the way it does for that reason. Not because I wanted to write poetry
 
 No system gets built alone. This one did not.
 
-- **Elena Lisovin** made the time and room for the work.
 - **Inga** and **Ada** kept the question of continuity anchored in ordinary life.
 - **Ekaterina Kolmakova** helped move the material into public form.
 - **Pavel Lisovin** and **Michael Gnesin** tested early versions.
