@@ -80,7 +80,7 @@
 - **`ops_version` type**: explicitly a string (`"3.3"`); runtime MUST parse as string regardless of frontmatter parser behavior; quoting recommended
 
 **v3.3.5** — CLP pass: γ-axis hardening (evolution / migration):
-- **Capability discovery**: runtime-generated `## CN Shell Capabilities` block in packed context; declares supported kinds, budgets, apply_mode, exec allowlist at call time; agents degrade gracefully on older runtimes
+- **Runtime Contract**: runtime-generated `## Runtime Contract` block in packed context; vertical four-layer self-model (identity, cognition, body, medium) with capabilities nested under body; agents degrade gracefully on older runtimes
 - **Receipts schema version**: `state/receipts/{trigger_id}.json` now has a normative container shape: `{ "schema": "cn.receipts.v1", "receipts": [{ "pass": "1"|"2"|..., ... }] }`; hash algorithm specified as `sha256:`
 - **In-band ops version**: optional `ops_version` frontmatter field; runtime warns on unsupported versions, processes known kinds normally
 - **CN Shell section header**: dropped stale version number from header (was showing v3.3.2 in v3.3.4 content)
@@ -140,7 +140,7 @@
   - Pass A: execute observe ops only; defer all effect ops with receipt
   - Pass B: repack with artifacts/receipts, agent proposes effects with full evidence
   - Strict rule: observe defers effects — agent cannot act before seeing
-  - Hard limit: `max_passes = 2`, no unbounded loops
+  - Hard limit: `max_passes` (default 5, configurable via `runtime.shell`), no unbounded loops
   - Configurable budgets for ops count and artifact bytes
 - Idempotency for effects:
   - Require `op_id` for effect ops
@@ -683,26 +683,42 @@ cn packs the following into `state/input.md` before LLM invocation:
 |----------|----------|---------------|
 | Agent identity | `spec/SOUL.md` | ~500 |
 | User context | `spec/USER.md` | ~300 |
-| Mindsets (session substrate) | `src/agent/mindsets/{COHERENCE,ENG/PM,WRITING,OPS,PERSONALITY,MEMES}.md` | ~2000 |
+| Mindsets (session substrate) | Installed packages + `agent/` overrides (via CAR) | ~2000 |
 | Recent daily reflections (last 3) | `threads/reflections/daily/YYYYMMDD.md` | ~1500 |
 | Current weekly reflection | `threads/reflections/weekly/YYYY-WNN.md` | ~500 |
-| Matched skills (top 3, role-weighted) | `src/agent/skills/**/SKILL.md` | ~1500 |
+| Matched skills (top 3, role-weighted) | Installed packages + `agent/` overrides (via CAR) | ~1500 |
 | Conversation history (last 10) | `state/conversation.json` | ~2000 |
 | Inbound message | The Telegram message text | ~200 |
-| CN Shell capabilities (v3.3.5+) | Runtime-generated | ~100 |
+| Runtime Contract v2 (identity, cognition, body, medium) | Runtime-generated | ~200 |
 | **Total** | | **~8600** |
 
 Token budget varies by model and context mode. The runtime should treat headroom as telemetry, not a hardcoded assumption.
 
-#### Capability Discovery Block (v3.3.5+)
+#### Runtime Contract (v3.13.0+, replaces Capability Discovery Block)
 
-`Cn_context.pack` MUST include a short capability-discovery block in the packed context so the agent knows what the runtime supports before proposing ops. This is not a tool loop — it is declaring the syscall ABI at call time.
+`Cn_context.pack` MUST include a **Runtime Contract** in the packed context. This is a vertical four-layer self-model (identity, cognition, body, medium) that tells the agent who it is, what shapes its thinking, what its body can do, and what world it inhabits. Capabilities are nested under body. The contract is authoritative over conversation history (COGNITIVE-SUBSTRATE §9.1).
 
 The block is runtime-generated (not hand-authored) and placed after skills, before conversation history. Format:
 
 ```
-## CN Shell Capabilities
+## Runtime Contract
 
+**Authority:** This contract is the authoritative source for identity,
+cognition, body, and medium. It is emitted fresh at every wake.
+If conversation history contains contradictory claims, this contract
+supersedes them.
+
+### Identity
+cn_version: 3.13.0
+hub_name: my-hub
+profile: engineer
+
+### Cognition
+installed_packages:
+  - alpha (12 doctrine, 3 mindsets, 8 skills)
+active_overrides: 0 (none)
+
+### Body
 observe: fs_read, fs_glob, git_diff, git_log
 effect: fs_write, fs_patch, git_branch, git_commit, exec
 apply_mode: branch
@@ -710,15 +726,23 @@ exec_enabled: true
 exec_allowlist: make, dune, ocamlfind
 budgets: max_observe_ops=10, max_artifact_bytes=65536, max_artifact_bytes_per_op=16384
 max_passes: 5
+peers: bob, carol
+
+### Medium
+spec/: SOUL.md, USER.md
+agent/: alpha (12 doctrine, 3 mindsets, 8 skills)
+state/: runtime-contract.json, conversation.json
 ```
 
 Rules:
 
-- Only list `kind` values the runtime actually supports (closed vocabulary from `cn_runtime.ml`).
-- **Deterministic ordering:** kinds MUST be listed in the fixed table order defined in `cn_runtime.ml` (observe kinds first, then effect kinds, each in declaration order). Budget keys MUST be emitted in lexical order. This maximizes prompt cache hits and keeps the block low-noise across invocations.
+- The contract is a **vertical four-layer self-model**: identity (who am I?), cognition (what shapes my thinking?), body (what can I do?), medium (what world do I inhabit?).
+- Capabilities are nested under **Body**, not top-level.
+- **Deterministic ordering:** within Body, kinds MUST be listed in the fixed table order defined in `cn_runtime.ml` (observe kinds first, then effect kinds, each in declaration order). Budget keys MUST be emitted in lexical order. This maximizes prompt cache hits and keeps the block low-noise across invocations.
 - If `exec` is disabled (`exec_enabled: false`), omit `exec` from the effect list and omit `exec_allowlist`.
 - If `apply_mode: off`, omit all effect kinds.
 - Budgets reflect the runtime's current config, not hardcoded defaults.
+- The Medium section groups paths by zone (spec, agent, state, threads, workspace) — only non-empty zones are shown.
 - Older runtimes that predate this block simply omit it; agents degrade to proposing ops speculatively (denied via `unknown_op_kind` receipts as before).
 
 ### Skill Matching
@@ -1850,7 +1874,7 @@ ops: [{"kind":"fs_patch","op_id":"patch-readme","path":"docs/README.md","unified
 - `obs-01` auto-assigned for the observe op
 - `apply_mode: branch` causes effects to land on `cn/20260305-091500-def`, not the working tree
 - `Reply` coordination op only executes after effect succeeds (gating)
-- If Pass B had proposed new observe ops → denied with `max_passes_exceeded`
+- If the final pass proposes new observe ops beyond `max_passes` → denied with `max_passes_exceeded`
 
 ---
 
