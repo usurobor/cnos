@@ -11,6 +11,7 @@ These are intuition-level ratings, not outputs from a running TSC engine (formal
 
 | Version | C_Σ | α (PATTERN) | β (RELATION) | γ (EXIT/PROCESS) | Coherence note                         |
 |---------|-----|-------------|--------------|------------------|----------------------------------------|
+| v3.14.5 | A   | A           | A            | A                | Organize gamma docs (#91): 6 gamma root files moved into 3 bundles (cdd, rules, essays). Bundle READMEs, frozen snapshots, 13+ cross-refs updated. Completes docs reorg trilogy: alpha→beta→gamma. |
 | v3.14.4 | A   | A           | A            | A                | Organize beta docs (#89): 7 beta root files moved into 4 thematic bundles (architecture, governance, lineage, schema). Bundle READMEs, frozen snapshots, cross-refs updated. CDD §5.1 freeze semantics note. |
 | v3.14.3 | A   | A           | A            | A                | Organize alpha docs (#86): all 18 root-level specs moved into 8 thematic bundles (doctrine, protocol, agent-runtime, runtime-extensions, cognitive-substrate, cli, security, ctb). Bundle READMEs created. Cross-references updated across 20+ files. Freeze policy updated: path-only corrections allowed. |
 | v3.14.2 | A   | A           | A            | A                | Alpha bundle migration (#81): legacy design docs and plans moved into CDD bundle structure. Version snapshot dirs with manifests. Navigation surfaces updated. |
