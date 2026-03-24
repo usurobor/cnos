@@ -9,7 +9,7 @@
 
     Structured output:
     - system[0]: Identity + Doctrine + Mindsets (stable, cache_control=true)
-    - system[1]: Reflections + Skills + Capabilities (dynamic, no cache)
+    - system[1]: Reflections + Skills + Runtime Contract (dynamic, no cache)
     - messages[]: Conversation history turns + inbound message
 
     Loading order (per unified package model):
@@ -20,7 +20,7 @@
     5. Daily reflections        → system block 2
     6. Weekly reflection        → system block 2
     7. Keyword-matched skills (via CAR) → system block 2 (scored, bounded)
-    8. Capabilities + asset summary     → system block 2
+    8. Runtime Contract (v2)             → system block 2
     9. Conversation history    → messages (real turns)
    10. Inbound message         → messages (last user turn) *)
 
@@ -147,7 +147,7 @@ let load_conversation_turns ~hub_path ~n : Cn_llm.message_turn list =
               in
               let content' = if is_stale then
                 Printf.sprintf "[stale: from cn %s — current runtime is %s. \
-Runtime Contract is authoritative for version, packages, workspace, capabilities.]\n%s"
+Runtime Contract is authoritative for identity, cognition, body, and medium.]\n%s"
                   (Option.value ~default:"unknown" entry_version) current_version content
               else content
               in
@@ -217,10 +217,9 @@ let pack ~hub_path ~trigger_id ~message ~from ?shell_config () =
     add_section dynamic_buf "Relevant Skills"
       (String.concat "\n---\n" skills);
 
-  (* Runtime Contract — after skills, before conversation.
-     Replaces the old capabilities-only block with a structured self-model
-     (version, hub, packages, overrides) + workspace layout + capabilities.
-     See RUNTIME-CONTRACT-v3.10.0.md and issue #56. *)
+  (* Runtime Contract v2 — after skills, before conversation.
+     Vertical four-layer self-model: identity, cognition, body, medium.
+     See RUNTIME-CONTRACT-v2.md and issue #62. *)
   (match shell_config with
    | Some sc ->
        let assets = Cn_assets.summarize ~hub_path in
