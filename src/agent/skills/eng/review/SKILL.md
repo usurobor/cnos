@@ -313,9 +313,9 @@ Mechanical findings reaching review are **process bugs**. If mechanical findings
 **Verdict:** APPROVED / REQUEST CHANGES
 
 **Round:** N (if multi-round)
-**Fixed this round:** `<commit hashes>` closes `<prior findings>` (if applicable)
+**Fixed this round:** {commit hashes} closes {prior findings} (if applicable)
 **CI state:** green / provisional / out of scope
-**Merge instruction:** Merge PR #`<n>` on `<branch>` / Do not merge yet
+**Merge instruction:** Merge PR #{n} on {branch} / Do not merge yet
 
 ## §2.0 Issue Contract
 
