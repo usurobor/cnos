@@ -1,10 +1,10 @@
 # Review
 
-Review code so that every verdict traces to evidence in the diff.
+Review code so that every verdict traces to evidence in the diff and its surrounding contract.
 
 ## Core Principle
 
-**Coherent review: every claim about the code is verified against the diff, and no incoherence passes without being named.**
+**Coherent review: every claim is verified against the diff, its required surrounding contract, and the relevant unchanged context — and no incoherence passes without being named.**
 
 ---
 
@@ -13,7 +13,7 @@ Review code so that every verdict traces to evidence in the diff.
 ### 1.1. Identify the parts
 
 - Diff — what changed
-- Context — unchanged code at the same abstraction level
+- Context — unchanged code, named docs/specs, required branch artifacts, CI/release-gate state
 - Verdict — approve or request changes
 - Evidence — line, commit, artifact, or behavior that supports a claim
   - ❌ "This looks wrong"
@@ -300,6 +300,20 @@ Mechanical findings reaching review are **process bugs**. If mechanical findings
 **CI state:** green / provisional / out of scope
 **Merge instruction:** Merge PR #<n> on <branch> / Do not merge yet
 
+## §2.0 Issue Contract
+
+### AC Coverage
+| # | AC | In diff? | Status | Notes |
+|---|----|----------|--------|-------|
+
+### Named Doc Updates
+| Doc / File | In diff? | Status | Notes |
+|------------|----------|--------|-------|
+
+### CDD Artifact Contract
+| Artifact | Required? | Present? | Notes |
+|----------|-----------|----------|-------|
+
 ## Findings
 
 | # | Finding | Evidence | Severity | Type |
@@ -321,5 +335,5 @@ Mechanical findings reaching review are **process bugs**. If mechanical findings
 
 ## 7. After Review
 
-- **Approved:** Reviewer merges, deletes branch
+- **Approved:** Reviewer merges (or signals merge-ready per repo workflow), branch cleaned up
 - **Changes requested:** Author fixes, re-requests; reviewer narrows on the next round
