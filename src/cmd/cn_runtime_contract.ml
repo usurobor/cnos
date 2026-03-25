@@ -136,15 +136,13 @@ let list_skill_overrides ~hub_path dir =
 let extensions_from_registry registry =
   Cn_extension.all_entries registry
   |> List.map (fun (entry : Cn_extension.extension_entry) ->
-    let (b : Cn_extension.backend) = entry.manifest.backend in
     {
       ext_name = entry.manifest.name;
       ext_version = entry.manifest.version;
       ext_package = entry.package_name;
-      ext_backend = b.kind;
+      ext_backend = entry.manifest.backend.backend_kind;
       ext_state = Cn_extension.string_of_lifecycle_state entry.state;
-      ext_ops = List.map (fun (op : Cn_extension.extension_op) ->
-        op.kind) entry.manifest.ops;
+      ext_ops = List.map (fun op -> op.Cn_extension.op_kind) entry.manifest.ops;
     })
 
 (** Build the runtime contract from current hub state. *)

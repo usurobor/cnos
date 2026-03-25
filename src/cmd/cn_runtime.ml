@@ -488,7 +488,7 @@ let rec finalize ~(config : Cn_config.config) ~hub_path ~name
       ~runtime_version:Cn_lib.version () in
   let ext_lookup kind_str =
     match Cn_extension.lookup_op ext_registry kind_str with
-    | Some (_entry, op) -> Some (op.Cn_extension.kind, op.Cn_extension.op_class)
+    | Some (_entry, op) -> Some (op.Cn_extension.op_kind, op.Cn_extension.op_class)
     | None -> None
   in
 

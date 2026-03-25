@@ -112,26 +112,26 @@ let render ?(assets : Cn_assets.asset_summary option) ?(peers : string list = []
      let ext_ops = Cn_extension.enabled_ops reg in
      if ext_ops <> [] then begin
        Buffer.add_string buf "\n### Extension Ops\n";
-       let observe_ext = List.filter (fun (_, (op : Cn_extension.extension_op)) ->
-         op.op_class = "observe") ext_ops in
-       let effect_ext = List.filter (fun (_, (op : Cn_extension.extension_op)) ->
-         op.op_class = "effect") ext_ops in
+       let observe_ext = List.filter (fun (_, op) ->
+         op.Cn_extension.op_class = "observe") ext_ops in
+       let effect_ext = List.filter (fun (_, op) ->
+         op.Cn_extension.op_class = "effect") ext_ops in
        if observe_ext <> [] then begin
          Buffer.add_string buf "extension_observe: ";
          Buffer.add_string buf (String.concat ", "
-           (List.map (fun (_, (op : Cn_extension.extension_op)) -> op.kind) observe_ext));
+           (List.map (fun (_, op) -> op.Cn_extension.op_kind) observe_ext));
          Buffer.add_char buf '\n'
        end;
        if effect_ext <> [] then begin
          Buffer.add_string buf "extension_effect: ";
          Buffer.add_string buf (String.concat ", "
-           (List.map (fun (_, (op : Cn_extension.extension_op)) -> op.kind) effect_ext));
+           (List.map (fun (_, op) -> op.Cn_extension.op_kind) effect_ext));
          Buffer.add_char buf '\n'
        end;
        (* Show provider for each extension op *)
-       ext_ops |> List.iter (fun (provider, (op : Cn_extension.extension_op)) ->
+       ext_ops |> List.iter (fun (provider, op) ->
          Buffer.add_string buf (Printf.sprintf "  %s (%s, provider: %s)\n"
-           op.kind op.op_class provider))
+           op.Cn_extension.op_kind op.Cn_extension.op_class provider))
      end);
 
   (* v3.5: Cognitive asset summary — unified package model *)

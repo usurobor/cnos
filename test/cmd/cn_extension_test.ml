@@ -9,7 +9,7 @@
 let show_manifest_result = function
   | Ok (m : Cn_extension.extension_manifest) ->
     Printf.printf "ok name=%s version=%s ops=%d backend=%s\n"
-      m.name m.version (List.length m.ops) m.backend.kind
+      m.name m.version (List.length m.ops) m.backend.backend_kind
   | Error e ->
     Printf.printf "error: %s\n" e
 
@@ -118,14 +118,14 @@ let%expect_test "version constraint: exact boundary" =
 
 let make_entry name ops_list state =
   let ops = List.map (fun (k, c) ->
-    { Cn_extension.kind = k; op_class = c;
+    { Cn_extension.op_kind = k; op_class = c;
       request_schema = None; response_format = None }
   ) ops_list in
   { Cn_extension.
     manifest = {
       schema = "cn.extension.v1"; name; version = "1.0.0";
       interface = "cn.ext.v1"; ext_kind = "capability-provider";
-      backend = { kind = "subprocess"; command = [] };
+      backend = { backend_kind = "subprocess"; command = [] };
       ops; permissions = []; engines = [];
     };
     package_name = name; package_path = "/tmp/" ^ name;
@@ -216,7 +216,7 @@ let%expect_test "registry: lookup enabled op" =
     match entry.Cn_extension.state with
     | Cn_extension.Enabled ->
       entry.manifest.ops |> List.iter (fun op ->
-        Hashtbl.replace reg.op_index op.Cn_extension.kind (entry, op))
+        Hashtbl.replace reg.op_index op.Cn_extension.op_kind (entry, op))
     | _ -> ());
   (match Cn_extension.lookup_op reg "op_a" with
    | Some (entry, op) ->
