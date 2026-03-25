@@ -194,6 +194,8 @@ dune runtest                  # run all expect tests
 
 Disambiguate record field names at the type definition. If two types in the same module share a field name, rename the fields to be distinct. Do not create a recurring annotation burden.
 
+When overlapping names are unavoidable, annotate **all** access sites in one pass — not incrementally as the compiler complains across files.
+
 ### 3.2 Purity boundary rule
 
 `lib/` and `protocol/` modules must be pure — no I/O, no Unix, no Sys. I/O lives in `ffi/`. Business logic in `cmd/` wires pure and impure.
