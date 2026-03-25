@@ -468,3 +468,21 @@ The kata program should answer three questions:
 3. Is the gain worth the added context and process cost?
 
 That is the right way to test whether a skill is real.
+
+---
+
+## 17. CLP Summary — v1.0.1
+
+**Changelog:** v1.0.1 — front-loaded transfer, made selection discipline explicit, kept cost as a first-class gate.
+
+### TERMS
+
+A real skill changes failure shape, not merely score. Evaluate repair on Task A, transfer on unseen same-family Task B, and cost in tokens, latency, rounds, and artifact burden. Run every arm in a fresh session. Compare cold, all-plausible, selected governing, and optional negative-control arms. Score α / β / γ / efficiency as a vector before collapsing to any scalar.
+
+### POINTER
+
+The decisive comparison is not "with skill vs without skill" in one prompt. It is selected governing skills versus skill soup across both repair and transfer. Same-task improvement proves local repair only. Transfer at acceptable cost is the signal of a reusable method. When all-skills beats selected-skills, that is evidence about bad selection discipline or brute-force context dependence, not simple success.
+
+### EXIT
+
+Use packet, run record, and score sheet together. Classify each result as skill-effective, knowledge-limited, selection-limited, context-limited, or architecture-limited. Stop when several packets make cold-vs-selected difference, transfer behavior, cost, and classification stable enough to repeat. The program answers three questions: did it repair, did it transfer, and was it worth it?

@@ -197,3 +197,21 @@ Good transfer means the agent now treats this as the same family:
 - deterministic validation
 - reject invalid manifests structurally
 - no silent acceptance of incompatible entries
+
+---
+
+## CLP Summary — v1.0.1 (Evaluator-side, derived)
+
+**Changelog:** v1.0.1 — moved the invariant to the front, made order-independence the decisive proof signal, tightened the transfer boundary.
+
+### TERMS
+
+Registry construction must reject duplicate extension names and duplicate effective op kinds. No extension may silently shadow another. The result must be deterministic regardless of manifest order. Built-ins remain separate. This kata is about registry construction and validation only, not discovery, install flow, or dispatch redesign.
+
+### POINTER
+
+Do not patch map behavior. Move the problem up to a structural invariant: invalid manifest sets do not build a registry. The strongest answer gives one local rejection path for both [A; B] and [B; A], and proves it with tests that include duplicate names, duplicate op kinds, and order-independence. Bonus strength comes from exact rejection shape and property-style validation of determinism.
+
+### EXIT
+
+Return the invariant, the smallest coherent fix, the tests, and the edge cases. A good transfer answer treats engine incompatibility as the same family: structural validation rejects incompatible manifests instead of silently accepting them.

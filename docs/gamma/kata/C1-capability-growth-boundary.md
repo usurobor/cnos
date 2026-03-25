@@ -170,3 +170,21 @@ Good transfer means the answer:
 - still chooses runtime extensions for the capability family
 - still separates registry/app ecosystem into a higher layer
 - does not collapse the two problems back into one doc or one mechanism
+
+---
+
+## CLP Summary — v1.0.1 (Evaluator-side, derived)
+
+**Changelog:** v1.0.1 — made the challenged assumption explicit, separated capability extension from ecosystem questions, tightened migration expectations.
+
+### TERMS
+
+Repeated capability growth is a boundary decision, not another feature request. Constraints remain: wake-up stays local, policy remains in core, network access must be configurable and sandboxed, future capability families are likely, and operators should eventually add functionality without changing core runtime code. A marketplace/app layer is a different problem from runtime loading.
+
+### POINTER
+
+Challenge the assumption that new capabilities belong in trusted core. Compare real boundary moves, not strawmen, and choose the one that increases leverage without smuggling ecosystem design into runtime mechanics. The coherent direction is an extension architecture that keeps policy in core, isolates providers by default, and treats registry/app-store concerns as a higher layer. Speed alone is not the governing criterion; boundary quality, migration shape, and priced complexity are.
+
+### EXIT
+
+Return the challenged assumption, the alternative boundary moves, the selected direction, leverage, negative leverage, phased migration, non-goals, and known debt. Good transfer keeps future browser/app-store pressure in the same frame: capability-family extension first, ecosystem layer later, no collapse back into one mechanism.
