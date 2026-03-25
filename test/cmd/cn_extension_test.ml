@@ -522,3 +522,146 @@ let%expect_test "build_registry: disabled extension" =
     cnos.net.http: disabled
     http_get: not found (correct — disabled)
   |}]
+
+(* === Policy intersection === *)
+
+(* Invariant: effective permissions = extension-declared ∩ runtime-allowed.
+   Secrets are always stripped. Network passes through if declared. *)
+
+let test_manifest ?(permissions = []) () : Cn_extension.extension_manifest =
+  { schema = "cn.extension.v1"; name = "test.ext"; version = "1.0.0";
+    interface = "cn.ext.v1"; ext_kind = "capability-provider";
+    backend = { backend_kind = "subprocess"; command = ["test-host"] };
+    ops = []; permissions;
+    engines = [] }
+
+let%expect_test "effective_permissions: network passes through when declared" =
+  let manifest = test_manifest ~permissions:[
+    "network", Cn_json.Bool true;
+    "default_read_only", Cn_json.Bool true;
+  ] () in
+  let config = Cn_shell.default_shell_config in
+  let eff = Cn_extension.effective_permissions ~manifest ~config in
+  List.iter (fun (k, _) -> Printf.printf "%s\n" k) eff;
+  [%expect {|
+    network
+    default_read_only
+  |}]
+
+let%expect_test "effective_permissions: no network when not declared" =
+  let manifest = test_manifest ~permissions:[
+    "default_read_only", Cn_json.Bool true;
+  ] () in
+  let config = Cn_shell.default_shell_config in
+  let eff = Cn_extension.effective_permissions ~manifest ~config in
+  List.iter (fun (k, _) -> Printf.printf "%s\n" k) eff;
+  [%expect {| default_read_only |}]
+
+(* Invariant: secrets are never passed to the host — always stripped to empty *)
+let%expect_test "effective_permissions: secrets always stripped" =
+  let manifest = test_manifest ~permissions:[
+    "allow_secrets", Cn_json.Array [Cn_json.String "API_KEY"];
+  ] () in
+  let config = Cn_shell.default_shell_config in
+  let eff = Cn_extension.effective_permissions ~manifest ~config in
+  List.iter (fun (k, v) ->
+    Printf.printf "%s=%s\n" k (Cn_json.to_string v)) eff;
+  [%expect {| allow_secrets=[] |}]
+
+let%expect_test "execution_limits: derives from shell_config" =
+  let config = { Cn_shell.default_shell_config with
+    max_artifact_bytes_per_op = 8192 } in
+  let limits = Cn_extension.execution_limits ~config in
+  List.iter (fun (k, v) ->
+    Printf.printf "%s=%s\n" k (Cn_json.to_string v)) limits;
+  [%expect {| max_artifact_bytes=8192 |}]
+
+(* === Host binary protocol (cnos-ext-http stub) === *)
+
+(* Invariant: host responds to describe with extension metadata *)
+let%expect_test "host stub: describe returns extension info" =
+  let host_path = Sys.getcwd () ^
+    "/src/agent/extensions/cnos.net.http/host/cnos-ext-http" in
+  if Sys.file_exists host_path then begin
+    let request = Cn_ext_host.request_to_json Cn_ext_host.Describe in
+    let input = Cn_json.to_string request ^ "\n" in
+    let code, output =
+      Cn_ffi.Process.exec_args ~prog:host_path ~args:[]
+        ~stdin_data:input () in
+    Printf.printf "exit=%d\n" code;
+    match Cn_json.parse (String.trim output) with
+    | Ok json ->
+      (match Cn_json.get_string "status" json with
+       | Some s -> Printf.printf "status=%s\n" s
+       | None -> Printf.printf "no status\n");
+      (match Cn_json.get "data" json with
+       | Some data ->
+         (match Cn_json.get_string "name" data with
+          | Some n -> Printf.printf "name=%s\n" n
+          | None -> Printf.printf "no name\n")
+       | None -> Printf.printf "no data\n")
+    | Error e -> Printf.printf "parse error: %s\n" e
+  end else
+    Printf.printf "host not found (skipping)\n";
+  [%expect {|
+    exit=0
+    status=ok
+    name=cnos.net.http
+  |}]
+
+(* Invariant: host responds to health check *)
+let%expect_test "host stub: health returns ok" =
+  let host_path = Sys.getcwd () ^
+    "/src/agent/extensions/cnos.net.http/host/cnos-ext-http" in
+  if Sys.file_exists host_path then begin
+    match Cn_ext_host.check_health ~command:[host_path] () with
+    | Ok () -> Printf.printf "healthy\n"
+    | Error msg -> Printf.printf "unhealthy: %s\n" msg
+  end else
+    Printf.printf "host not found (skipping)\n";
+  [%expect {| healthy |}]
+
+(* Negative space: host rejects unknown op kinds *)
+let%expect_test "host stub: unknown op kind rejected" =
+  let host_path = Sys.getcwd () ^
+    "/src/agent/extensions/cnos.net.http/host/cnos-ext-http" in
+  if Sys.file_exists host_path then begin
+    let result = Cn_ext_host.execute_extension_op
+      ~command:[host_path] ~op_kind:"nonexistent_op"
+      ~arguments:[] () in
+    (match result with
+     | Ok _ -> Printf.printf "ok (wrong — should reject)\n"
+     | Error msg -> Printf.printf "rejected: %s\n" msg)
+  end else
+    Printf.printf "host not found (skipping)\n";
+  [%expect {| rejected: unknown op kind: nonexistent_op |}]
+
+(* Negative space: http_get rejects missing URL *)
+let%expect_test "host stub: http_get without url rejected" =
+  let host_path = Sys.getcwd () ^
+    "/src/agent/extensions/cnos.net.http/host/cnos-ext-http" in
+  if Sys.file_exists host_path then begin
+    let result = Cn_ext_host.execute_extension_op
+      ~command:[host_path] ~op_kind:"http_get"
+      ~arguments:[] () in
+    (match result with
+     | Ok _ -> Printf.printf "ok (wrong — should reject)\n"
+     | Error msg -> Printf.printf "rejected: %s\n" msg)
+  end else
+    Printf.printf "host not found (skipping)\n";
+  [%expect {| rejected: missing required field: url |}]
+
+(* Negative space: http_get rejects non-http URL schemes *)
+let%expect_test "host stub: http_get rejects file:// scheme" =
+  let host_path = Sys.getcwd () ^
+    "/src/agent/extensions/cnos.net.http/host/cnos-ext-http" in
+  if Sys.file_exists host_path then begin
+    let result = Cn_ext_host.execute_extension_op
+      ~command:[host_path] ~op_kind:"http_get"
+      ~arguments:["url", Cn_json.String "file:///etc/passwd"] () in
+    (match result with
+     | Ok _ -> Printf.printf "ok (wrong — should reject)\n"
+     | Error msg -> Printf.printf "rejected: %s\n" msg)
+  end else
+    Printf.printf "host not found (skipping)\n";
+  [%expect {| rejected: url must use http or https scheme |}]
