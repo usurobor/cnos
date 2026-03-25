@@ -1,6 +1,6 @@
 # Self-Coherence Report — v3.16.2
 
-**Branch:** `claude/review-agent-runtime-docs-LyUlu`
+**Branch:** `claude/3.16.2-106-two-membrane-fix`
 **Issue:** #106 — Two-membrane fix: presentation leak + self-knowledge probe
 **Mode:** MCA (bugfix — internal markup on human surface, P0)
 **Author:** Claude
@@ -11,7 +11,7 @@
 |------|--------|----------|
 | 0. Observe | done | Read CHANGELOG TSC (v3.16.1: A/A/A/A), encoding lag (16 issues, #106 new P0), doctor (n/a — #59 partial), last assessment (v3.16.1: committed #106 as next MCA via §3.1 P0 override) |
 | 1. Select | done | §3.1 P0: user-visible coherence failure. v3.16.1 assessment committed #106. MCI freeze holds. |
-| 2. Branch | done | `claude/review-agent-runtime-docs-LyUlu`. Pre-flight: v3.16.2 > v3.16.1 ✓, no duplicate branch ✓, no duplicate PR ✓, scope declared ✓ |
+| 2. Branch | done | `claude/3.16.2-106-two-membrane-fix`. Pre-flight: v3.16.2 > v3.16.1 ✓, no duplicate branch ✓, no duplicate PR ✓, scope declared ✓ |
 | 3. Bootstrap | done | `docs/gamma/cdd/3.16.2/README.md` with observation inputs, gap, mode, scope, frozen artifact table |
 | 4. Gap | done | Root cause: prefix match bug + mid-body bypass + missing anti-probe. Two-membrane design from senior eng review. |
 | 5. Mode | done | MCA — blocklist is wrong, mid-body stripping missing, anti-probe absent |
@@ -122,7 +122,7 @@ Sigma review requested changes with 7 findings (5D, 2C). All addressed:
 | F2 | Reply payloads bypass mid-body stripper | D | `render_human_facing` now sanitizes all candidates (body, resolved reply, raw reply) through `sanitize` helper applying `strip_embedded_frontmatter` + `strip_xml_pseudo_tools`. Test added: `#106: reply with mid-body <tool_calls> is sanitized` |
 | F3 | Duplicate `<invoke>` entry | D | Removed duplicate. List now has one `<invoke>` entry. |
 | F4 | 3 CI expect-test mismatches | D | (a) `<invoke>` expect fixed (entry removed, `<cn:ops>` added). (b) Integration test: corrected to `Renderable: (acknowledged)` — stripping reduces body to None before `is_control_plane_like` runs, so no candidate is blocked, just empty. (c) Strip tests: extra blank line from removed block preserved in expectation. |
-| F5 | Branch name mismatch | D | All doc references updated to `claude/review-agent-runtime-docs-LyUlu` |
+| F5 | Branch name mismatch | D | All doc references updated to `claude/3.16.2-106-two-membrane-fix` |
 | F6 | Inline same-line XML not caught | C | Acknowledged as debt. Line-oriented stripping handles block-level XML (the real hallucination pattern). Inline `"Hello <tool_calls>...</tool_calls> world"` would require regex-like within-line removal — deferred as the practical risk is very low (LLMs emit XML pseudo-tools as block-level elements). |
 | F7 | `has_close` over-strips (any `</`) | C | Acknowledged as debt. Over-stripping is safe (removes content, never leaks it). Under-stripping would be worse (leaked control text on human surface). Matched-tag close would be more precise but adds complexity for a theoretical edge case. |
 
