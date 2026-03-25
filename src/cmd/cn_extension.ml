@@ -384,6 +384,42 @@ let all_entries registry = registry.extensions
 let empty_registry () =
   { extensions = []; op_index = Hashtbl.create 0 }
 
+(* === Policy intersection === *)
+
+(** Compute effective permissions for an extension op execution.
+    Effective = extension-declared ∩ runtime-allowed.
+    The extension declares what it needs; runtime config declares what's granted.
+    Returns the intersection as key-value pairs suitable for the host protocol. *)
+let effective_permissions ~(manifest : extension_manifest)
+    ~(config : Cn_shell.shell_config) =
+  (* Extension-declared permissions *)
+  let ext_perms = manifest.permissions in
+  (* Runtime policy: currently exec_enabled and network are the relevant gates *)
+  let runtime_allows_network =
+    (* Network is allowed if the extension declares it and runtime doesn't block.
+       For now, extensions with network=true are allowed if they are Enabled
+       (enablement is the policy gate). Future: explicit network allowlist. *)
+    match List.assoc_opt "network" ext_perms with
+    | Some (Cn_json.Bool true) -> true
+    | _ -> false
+  in
+  let effective = List.filter_map (fun (k, v) ->
+    match k with
+    | "network" ->
+      if runtime_allows_network then Some (k, v) else None
+    | "default_read_only" -> Some (k, v)  (* pass through *)
+    | "allow_secrets" -> Some (k, Cn_json.Array [])  (* strip secrets — never pass ambient *)
+    | _ -> Some (k, v)  (* pass through unknown permissions for forward compat *)
+  ) ext_perms in
+  effective
+
+(** Compute execution limits from runtime config.
+    Maps shell_config budgets into the host protocol limits format. *)
+let execution_limits ~(config : Cn_shell.shell_config) =
+  [
+    "max_artifact_bytes", Cn_json.Int config.max_artifact_bytes_per_op;
+  ]
+
 (* === String helpers === *)
 
 let string_of_lifecycle_state = function

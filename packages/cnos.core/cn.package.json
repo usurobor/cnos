@@ -43,6 +43,9 @@
       "release",
       "skill",
       "testing"
+    ],
+    "extensions": [
+      "cnos.net.http"
     ]
   }
 }
