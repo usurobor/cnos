@@ -203,10 +203,6 @@ let strip_embedded_frontmatter s =
     Returns None if stripping empties the body entirely. *)
 let strip_xml_pseudo_tools s =
   let lines = String.split_on_char '\n' s in
-  let is_xml_open line =
-    let t = String.trim line in
-    List.exists (fun prefix -> starts_with ~prefix t) xml_prefixes
-  in
   (* Extract the tag name from a line matching an xml_prefix.
      E.g. "<tool_calls> ..." → "tool_calls", "<cn:ops>..." → "cn:ops" *)
   let extract_tag_name line =
