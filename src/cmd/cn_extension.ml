@@ -174,34 +174,41 @@ let check_version_constraint ~runtime_version constraint_str =
     if c2 <> 0 then c2
     else compare a3 b3
   in
+  (* Parse ">=3.12.0" into (Gte, "3.12.0") etc. *)
+  let parse_constraint part =
+    let len = String.length part in
+    if len > 2 && String.sub part 0 2 = ">=" then
+      Some (`Gte, String.sub part 2 (len - 2))
+    else if len > 2 && String.sub part 0 2 = "<=" then
+      Some (`Lte, String.sub part 2 (len - 2))
+    else if len > 1 && part.[0] = '>' then
+      Some (`Gt, String.sub part 1 (len - 1))
+    else if len > 1 && part.[0] = '<' then
+      Some (`Lt, String.sub part 1 (len - 1))
+    else if len > 0 then
+      Some (`Eq, part)
+    else
+      None
+  in
   match parse_version runtime_version with
   | None -> false
   | Some rv ->
     let parts = String.split_on_char ' ' constraint_str
       |> List.filter (fun s -> s <> "") in
     List.for_all (fun part ->
-      let len = String.length part in
-      if len > 2 && String.sub part 0 2 = ">=" then
-        match parse_version (String.sub part 2 (len - 2)) with
-        | Some cv -> compare_versions rv cv >= 0
+      match parse_constraint part with
+      | None -> false
+      | Some (op, ver_str) ->
+        match parse_version ver_str with
         | None -> false
-      else if len > 1 && part.[0] = '<' then
-        match parse_version (String.sub part 1 (len - 1)) with
-        | Some cv -> compare_versions rv cv < 0
-        | None -> false
-      else if len > 2 && String.sub part 0 2 = "<=" then
-        match parse_version (String.sub part 2 (len - 2)) with
-        | Some cv -> compare_versions rv cv <= 0
-        | None -> false
-      else if len > 1 && part.[0] = '>' then
-        match parse_version (String.sub part 1 (len - 1)) with
-        | Some cv -> compare_versions rv cv > 0
-        | None -> false
-      else
-        (* Exact match *)
-        match parse_version part with
-        | Some cv -> compare_versions rv cv = 0
-        | None -> false
+        | Some cv ->
+          let cmp = compare_versions rv cv in
+          match op with
+          | `Gte -> cmp >= 0
+          | `Gt  -> cmp > 0
+          | `Lte -> cmp <= 0
+          | `Lt  -> cmp < 0
+          | `Eq  -> cmp = 0
     ) parts
 
 (* === Discovery === *)
@@ -236,7 +243,16 @@ let discover ~hub_path =
                 package_path = pkg_path;
                 state = Discovered;
               }
-            | Error _reason -> None
+            | Error reason ->
+              Cn_trace.gemit ~component:"extension" ~layer:Mind
+                ~event:"extension.parse_error" ~severity:Warn ~status:Error_status
+                ~reason_code:"manifest_parse_failed"
+                ~reason
+                ~details:[
+                  "path", Cn_json.String manifest_path;
+                  "package", Cn_json.String pkg_dir;
+                ] ();
+              None
         ) ext_dirs
     ) pkg_dirs
 
@@ -255,28 +271,32 @@ let check_compatibility ~runtime_version entry =
             constraint_str runtime_version) }
 
 (** Check for duplicate op kinds across extensions.
-    Returns updated entries with conflicts rejected. *)
+    Returns updated entries with conflicts rejected.
+    Uses fold to thread the op-owner map through the list without
+    mixing mutable state and List.map. *)
 let check_op_conflicts entries =
-  let op_owners : (string, string) Hashtbl.t = Hashtbl.create 32 in
-  List.map (fun entry ->
-    match entry.state with
-    | Rejected _ -> entry
-    | _ ->
-      let conflicts = entry.manifest.ops |> List.filter_map (fun op ->
-        match Hashtbl.find_opt op_owners op.op_kind with
-        | Some owner ->
-          Some (Printf.sprintf "op kind '%s' already provided by %s"
-                  op.op_kind owner)
-        | None -> None
-      ) in
-      if conflicts <> [] then
-        { entry with state = Rejected (String.concat "; " conflicts) }
-      else begin
-        entry.manifest.ops |> List.iter (fun op ->
-          Hashtbl.replace op_owners op.op_kind entry.manifest.name);
-        entry
-      end
-  ) entries
+  let _op_owners, result =
+    List.fold_left (fun (op_owners, acc) entry ->
+      match entry.state with
+      | Rejected _ -> (op_owners, entry :: acc)
+      | _ ->
+        let conflicts = entry.manifest.ops |> List.filter_map (fun op ->
+          match Hashtbl.find_opt op_owners op.op_kind with
+          | Some owner ->
+            Some (Printf.sprintf "op kind '%s' already provided by %s"
+                    op.op_kind owner)
+          | None -> None
+        ) in
+        if conflicts <> [] then
+          (op_owners, { entry with state = Rejected (String.concat "; " conflicts) } :: acc)
+        else begin
+          entry.manifest.ops |> List.iter (fun op ->
+            Hashtbl.replace op_owners op.op_kind entry.manifest.name);
+          (op_owners, entry :: acc)
+        end
+    ) (Hashtbl.create 32, []) entries
+  in
+  List.rev result
 
 (** Apply runtime config enablement policy.
     Extensions with state=Compatible are promoted to Enabled
@@ -333,7 +353,7 @@ let build_registry ~hub_path ~runtime_version ?(disabled_extensions = []) () =
           "ops", Cn_json.Array (List.map (fun op ->
             Cn_json.String op.op_kind) entry.manifest.ops);
         ] ()
-    | _ -> ());
+    | Discovered | Compatible -> ());
   (* Build op index from enabled extensions only *)
   let op_index = Hashtbl.create 32 in
   enabled |> List.iter (fun entry ->
