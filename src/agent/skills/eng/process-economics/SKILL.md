@@ -4,7 +4,7 @@ Add, keep, simplify, automate, or remove process only when it earns its cost.
 
 ## Core Principle
 
-**Coherent process earns its cost by preventing a named failure, producing a reusable artifact, or reducing future work more than it adds present overhead.**
+Coherent process earns its cost by preventing a named failure, producing a reusable artifact, or reducing future work more than it adds present overhead.
 
 A good process move does at least one of these:
 
@@ -29,9 +29,9 @@ A bad process move:
 
 Every process-economics decision has these parts:
 
--s future cycles th— the ritual, gate, artifact, or review action
+- Process step — the ritual, gate, artifact, or review action
 - Cost — time, latency, attention, context switching, artifact churn, merge friction
-- Process Econ— what failure it prevents or what leverage it creates
+- Benefit — what failure it prevents or what leverage it creates
 - Consumer — who actually uses the output
 - Evidence — what proves the step is paying for itself
 - Automation boundary — what should be scripted instead of ritualized
@@ -56,7 +56,7 @@ Process is coherent when:
 
 ### 1.3. Name the failure mode
 
-Process fails throughcates another artifact
+Process fails through ritual accretion:
 
 - every failure adds a new step
 - no one measures what the step costs
@@ -74,7 +74,7 @@ Process fails throughcates another artifact
 
 Every process step must begin with:
 
->t least one of these: - prevents a recurring
+> What specific failure does this prevent?
 
 Good answers:
 
@@ -92,7 +92,7 @@ Good answers:
 
 Every required artifact or gate must answer:
 
->lass of failure - makes an important state
+> Who uses this, and for what decision?
 
 Possible consumers:
 
@@ -163,7 +163,8 @@ For each step, estimate the benefit:
 
 For any proposed process addition, compare at least three options:
 
--ed elsewhere - t- lightweight note/rule
+- do nothing
+- lightweight note/rule
 - automation/check
 - full required artifact/gate
 
@@ -268,7 +269,7 @@ Process economics should vary by class.
 
 Ask:
 
->h-local summaries overrule canonical docs - ❌ "Improve quality"
+> If we removed this step, what exact failure would reappear?
 
 If the answer is vague, the step is probably too expensive.
 
@@ -385,7 +386,8 @@ A coherent process is allowed to shrink.
 
 A strong process-economics artifact or assessment should contain at least:
 
-1.e a self-coherence2. Failure class prevented
+1. Process step
+2. Failure class prevented
 3. Consumer
 4. Cost
 5. Benefit
@@ -436,27 +438,3 @@ If governance branches stabilize and template generation is universal, review wh
 
 Retroactive plans still occur during transition.
 ```
-
----
-
-## 5. Relationship to Other Skills
-
-- **architecture-evolution** — asks whether the system boundary should move
-- **performance-reliability** — asks what the system costs and how it fails
-- **testing** — proves invariants
-- **review** — checks whether process and artifacts actually support the claim
-- **CDD** — provides the lifecycle; this skill evaluates whether that lifecycle is earning its cost
-
----
-
-## 6. Summary
-
-Process economics is not:
-
-- anti-process
-- anti-discipline
-- anti-documentation
-
-It is: the discipline of making every required step, artifact, and gate justify its ongoing cost.
-
-Name the failure. Name the consumer. Price the cost. Price the benefit. Automate the mechanical. Delete what no longer earns its place.
