@@ -377,11 +377,12 @@ let string_of_lifecycle_state = function
 
 let extension_to_json entry =
   let str s = Cn_json.String s in
+  let (b : backend) = entry.manifest.backend in
   Cn_json.Object [
     "name", str entry.manifest.name;
     "version", str entry.manifest.version;
     "package", str entry.package_name;
-    "backend", str entry.manifest.backend.kind;
+    "backend", str b.kind;
     "state", str (string_of_lifecycle_state entry.state);
     "ops", Cn_json.Array (List.map (fun (op : extension_op) ->
       Cn_json.Object [
