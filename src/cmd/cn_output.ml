@@ -71,7 +71,7 @@ let xml_prefixes = [
   "<fs_write>"; "<fs_patch>"; "<git_branch>"; "<git_commit>";
   "<exec>"; "<tool_call>"; "<tool_calls>"; "<function_call>";
   "<function_calls>"; "<tool_result>"; "<tool_results>";
-  "<invoke>"; "<invoke>"; "<thinking>";
+  "<invoke>"; "<thinking>"; "<cn:ops>";
 ]
 
 (** Detect whether a candidate presentation string contains control-plane
@@ -249,24 +249,33 @@ let render_human_facing parsed =
      still a valid presentation candidate. Dedup to avoid double-checking. *)
   let resolved_reply = first_reply_payload parsed.coordination_ops in
   let raw_reply = first_reply_payload parsed.raw_coordination_ops in
-  (* Strip any embedded frontmatter blocks and XML pseudo-tool blocks
-     from the body before considering it as a human-facing candidate.
-     This catches mid-body control-plane patterns that
-     is_control_plane_like misses because the body starts with
-     normal prose. *)
+  (* Sanitize candidates: strip embedded frontmatter blocks and XML
+     pseudo-tool blocks.  Applied uniformly to body AND reply payloads
+     so mid-body control-plane patterns are caught regardless of which
+     candidate source they appear in.  is_control_plane_like (applied
+     later) only checks the start of the string — these strippers
+     handle mid-string and multi-line patterns. *)
+  let sanitize s =
+    let s = match strip_embedded_frontmatter s with Some v -> v | None -> "" in
+    if s = "" then None
+    else strip_xml_pseudo_tools s
+  in
   let sanitized_body = match parsed.body with
-    | Some b ->
-      let b = match strip_embedded_frontmatter b with Some s -> s | None -> "" in
-      if b = "" then None
-      else strip_xml_pseudo_tools b
+    | Some b -> sanitize b
     | None -> None
+  in
+  let sanitized_reply = match resolved_reply with
+    | Some r -> sanitize r
+    | None -> None
+  in
+  let sanitized_raw_reply = match raw_reply with
+    | Some r when raw_reply <> resolved_reply -> sanitize r
+    | _ -> None
   in
   let real_candidates =
     (match sanitized_body with Some b -> [b] | None -> [])
-    @ (match resolved_reply with Some msg -> [msg] | None -> [])
-    @ (match raw_reply with
-       | Some msg when raw_reply <> resolved_reply -> [msg]
-       | _ -> [])
+    @ (match sanitized_reply with Some msg -> [msg] | None -> [])
+    @ (match sanitized_raw_reply with Some msg -> [msg] | None -> [])
   in
   let rec try_candidates ~first_block = function
     | [] ->

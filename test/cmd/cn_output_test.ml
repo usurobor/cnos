@@ -317,8 +317,8 @@ let%expect_test "I4: all XML pseudo-tool variants blocked" =
     "<tool_result>x</tool_result>";
     "<tool_results>x</tool_results>";
     "<invoke>x</invoke>";
-    "<invoke>x</invoke>";
     "<thinking>internal reasoning</thinking>";
+    "<cn:ops>[{\"kind\":\"fs_read\"}]</cn:ops>";
   ] in
   List.iter (fun input ->
     match Cn_output.is_control_plane_like input with
@@ -346,8 +346,8 @@ let%expect_test "I4: all XML pseudo-tool variants blocked" =
     blocked: <tool_result>x</tool
     blocked: <tool_results>x</too
     blocked: <invoke>x</invoke>
-    blocked: <invoke>x</ant
     blocked: <thinking>internal r
+    blocked: <cn:ops>[{"kind":"fs
   |}]
 
 let%expect_test "I4: all legacy coordination op prefixes blocked on human surface" =
@@ -403,10 +403,10 @@ let%expect_test "#106: Telegram and ConversationStore block <tool_calls> identic
   in
   show "telegram" tg;
   show "conversation" cs;
-  (* Both must block with same reason — single membrane *)
+  (* Both must produce safe fallback — single membrane *)
   [%expect {|
-    telegram: Fallback: (acknowledged) (reason: xml_tool_syntax)
-    conversation: Fallback: (acknowledged) (reason: xml_tool_syntax)
+    telegram: Renderable: (acknowledged)
+    conversation: Renderable: (acknowledged)
   |}]
 
 let%expect_test "#106: mixed prose + <tool_calls> mid-body stripped on all human sinks" =
@@ -434,7 +434,7 @@ reply: tg-106b|<tool_calls> [{"kind":"fs_read"}] </tool_calls>
   let p = Cn_output.parse_output raw in
   show_render (Cn_output.HumanSurface `Telegram) p;
   [%expect {|
-    Fallback: (acknowledged) (reason: xml_tool_syntax)
+    Renderable: (acknowledged)
   |}]
 
 let%expect_test "#106: strip_xml_pseudo_tools removes single-line block" =
@@ -444,6 +444,7 @@ let%expect_test "#106: strip_xml_pseudo_tools removes single-line block" =
     (match result with Some s -> s | None -> "(empty)");
   [%expect {|
     Hello world.
+
 
     Goodbye. |}]
 
@@ -455,7 +456,48 @@ let%expect_test "#106: strip_xml_pseudo_tools removes multi-line block" =
   [%expect {|
     Prose before.
 
+
     Prose after. |}]
+
+let%expect_test "#106: <cn:ops> body blocked on human surface" =
+  let raw = "<cn:ops>[{\"kind\":\"fs_read\",\"path\":\"README.md\"}]</cn:ops>" in
+  let p = Cn_output.parse_output raw in
+  show_render (Cn_output.HumanSurface `Telegram) p;
+  [%expect {|
+    Renderable: (acknowledged)
+  |}]
+
+let%expect_test "#106: reply with mid-body <tool_calls> is sanitized" =
+  let raw = {|---
+id: tg-106c
+reply: tg-106c|Here is the info.
+<tool_calls> [{"kind":"fs_read"}] </tool_calls>
+Done checking.
+---
+<tool_calls> [{"kind":"fs_read","path":".cn/cn.json"}] </tool_calls>|} in
+  let p = Cn_output.parse_output raw in
+  show_render (Cn_output.HumanSurface `Telegram) p;
+  [%expect {|
+    Renderable: Here is the info.
+
+    Done checking.
+  |}]
+
+let%expect_test "#106: clean reply passes through, prose body with <cn:ops> is stripped" =
+  let raw = {|---
+id: tg-106d
+reply: tg-106d|All good.
+---
+All good.
+
+<cn:ops>[{"kind":"fs_read","path":"README.md"}]</cn:ops>|} in
+  let p = Cn_output.parse_output raw in
+  show_render (Cn_output.HumanSurface `Telegram) p;
+  show_render Cn_output.ConversationStore p;
+  [%expect {|
+    Renderable: All good.
+    Renderable: All good.
+  |}]
 
 let%expect_test "#106: strip_xml_pseudo_tools returns None when body is entirely XML" =
   let input = "<tool_calls> [{\"kind\":\"fs_read\",\"path\":\".cn/cn.json\"}] </tool_calls>" in
