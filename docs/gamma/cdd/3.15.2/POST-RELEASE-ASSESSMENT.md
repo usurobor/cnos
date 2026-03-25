@@ -119,15 +119,15 @@ What remains related but out of scope:
 
 ## 5. Next Move
 
-**Next MCA:** #28 — Daemon retries failed triggers forever — no retry limit or dead-letter
+**Next MCA:** #37 — cn update: end-to-end self-update (CI upload + binary naming + same-version patch)
 **Owner:** to be assigned
 **Branch:** pending creation (must follow CDD §1.4)
-**First AC:** Non-retryable errors (4xx) fail immediately without retry
-**MCI frozen until shipped?** Yes — stale backlog still unaddressed, and #28 is the operational safety net that #29's fix highlighted as missing.
+**First AC:** `cn update` downloads and replaces the running binary without manual scp
+**MCI frozen until shipped?** Yes — stale backlog still unaddressed, and a system that can't self-update can't receive any fix without manual intervention.
 
-**Rationale:** #29 removed one trigger for the infinite retry loop, but #28 is the structural fix. Any other non-retryable Claude API error (malformed prompt, token overflow, API contract change) will still wedge the daemon. This is the highest-leverage operational fix and was identified as next by both the issue body and both reviewers.
+**Rationale:** §0 selection function: §3.1 (P0 crash) — no active crash, skip. §3.2 (operational debt) — `cn update` is broken (#37). Deploy is manual scp. This is a precondition for shipping anything else, including #28. The v3.15.0 assessment committed a work plan of #37 → #29 → #16 → #28 → #74. #29 is now shipped. #37 is next per §3.3 (assessment default).
 
-**Alternative considered:** #73 (Runtime Extensions) has been stale longest and was the v3.15.0 assessment's recommended next move. However, #28 is a runtime bug with direct operational impact — per §0.6, operational infrastructure debt overrides. #73 remains the next feature MCA after #28 ships.
+**Alternative considered:** #28 (daemon retry limit) is thematically related to #29 and is a real operational risk. However, §0 selection doesn't follow thematic proximity — it follows the priority function. #37 ranks higher because a system that can't self-update can't receive #28's fix without manual intervention. #28 becomes the move after #37.
 
 **Immediate fixes** (executed in this session):
 - None required. No skill patches, no CHANGELOG corrections, no process issues to file.
