@@ -47,6 +47,12 @@ The assessment produces one artifact with five sections:
 **MCI frozen until shipped?** yes / no
 **Rationale:** ...
 
+**Closure evidence (CDD §10):**
+- Immediate outputs executed: yes / no
+  - (list each with link/commit)
+- Deferred outputs committed: yes / no
+  - (issue # / owner / branch / first AC / freeze state for each)
+
 **Immediate fixes** (executed in this session):
 - ...
 ```
