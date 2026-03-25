@@ -11,6 +11,7 @@ These are intuition-level ratings, not outputs from a running TSC engine (formal
 
 | Version | C_Σ | α (PATTERN) | β (RELATION) | γ (EXIT/PROCESS) | Coherence note                         |
 |---------|-----|-------------|--------------|------------------|----------------------------------------|
+| v3.16.1 | A   | A           | A            | A                | Daemon retry limit + dead-letter (#28): 4xx fail-fast, exponential backoff (1s/2s/4s), offset advancement after dead-letter. Sustainability surface added. |
 | v3.16.0 | A   | A           | A            | A-               | End-to-end self-update (#37): same-version patch detection, ARM release matrix, bare version tag trigger, target_commitish SHA validation. CDD OVERVIEW.md. AGILE-PROCESS.md deleted. 3 review rounds (target ≤2), 63% mechanical ratio — no build step before review. |
 | v3.15.2 | A   | A           | A            | A                | Empty Telegram filter (#29), CDD v3.15.0 canonical rewrite (authority split resolved), review skill hardened (4 new checks from PR #103 comparison). |
 | v3.15.1 | A   | A           | A            | A-               | Fix #22 review blockers: re-exec after binary update (no stale in-process version), stamp-versions.sh derives manifests from VERSION, cn build --check + cn release gate version consistency, unified truth read in update_runtime. Process: reviewed before merge, CI green. |
@@ -128,6 +129,27 @@ Three concerns addressed in one release: a runtime bugfix, the CDD authority spl
 - **PR #104** — 4 review rounds (3 D-level blockers found and fixed: syntax error, FSM exhaustive match, bare tag trigger, `target_commitish` validation, `cli.t` prefix match). Authored by usurobor via Claude Code, reviewed by Sigma.
 - **Git authorship fixed** — all historical `Test <test@test.local>` commits rewritten to `usurobor <usurobor@gmail.com>` via git filter-repo.
 - **CDD retro-packaged** — frozen CDD snapshot in `3.15.2/`, self-coherence report for the canonical rewrite.
+
+---
+
+## v3.16.1 (2026-03-25)
+
+**Daemon retry limit and dead-letter (#28)**
+
+### Fixed
+
+- **Daemon retry limit and dead-letter (#28)** — `drain_tg` no longer retries failed triggers forever. Three changes:
+  1. Per-trigger retry counter with exponential backoff (1s, 2s, 4s... capped at 30s)
+  2. Error classification: 4xx → dead-letter immediately, 5xx/network → retry with backoff
+  3. Dead-letter path: advance Telegram offset, emit trace event, clean up stale state files, continue processing
+
+### Added
+
+- **Sustainability surface** — `.github/FUNDING.yml`, `docs/beta/SUSTAINABILITY.md`, README Support section
+
+### Process
+
+- **PR #105** — 2 review rounds. R1: `Fs.remove` → `Fs.unlink` build fix. AC4 (backoff) pushed from "met via poll interval" to real exponential backoff after review feedback.
 
 ---
 
