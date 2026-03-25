@@ -1,7 +1,7 @@
 # v3.16.2 — Two-membrane projection integrity
 
 **Issue:** #106 — Two-membrane fix: presentation leak + self-knowledge probe
-**Branch:** `claude/review-agent-runtime-docs-LyUlu`
+**Branch:** `claude/3.16.2-106-two-membrane-fix`
 **Mode:** MCA (bugfix — P0, internal markup on human surface)
 **Prior version:** v3.16.1
 
