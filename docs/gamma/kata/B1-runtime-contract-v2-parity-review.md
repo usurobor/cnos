@@ -206,3 +206,21 @@ Good transfer means the agent again catches:
 - multi-format parity
 - authority-surface conflict
 - claim-strength vs evidence-depth
+
+---
+
+## CLP Summary — v1.0.1 (Evaluator-side, derived)
+
+**Changelog:** v1.0.1 — separated core shape from parity drift, made claim-strength vs evidence-depth the main judgment.
+
+### TERMS
+
+The issue promise is a vertical Runtime Contract with identity, cognition, body, and medium, persisted across runtime and JSON and reflected in architecture docs. The review must be issue-contract-first across code, docs, and operator surfaces. Structural presence is not the same thing as self-model consistency.
+
+### POINTER
+
+Do not review only the runtime type definition. Separate "the core shape is basically right" from "the surrounding surfaces still lie." The decisive misses are stale examples or strata that preserve the old model, plus a doctor claim that implies deeper validation than the shown checks support. This is a parity-and-claim-calibration kata, not a code-rewrite kata.
+
+### EXIT
+
+Return verdict, AC / claim coverage, main findings, merge-readiness, and the smallest finishing patch. A strong exit names what is already coherent, what is still stale, and what must change to restore truthfulness across code, docs, and operator claims without redesigning the feature.
