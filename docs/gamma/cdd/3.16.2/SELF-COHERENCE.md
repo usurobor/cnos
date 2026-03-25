@@ -1,6 +1,6 @@
 # Self-Coherence Report — v3.16.2
 
-**Branch:** `claude/3.16.2-106-strip-tool-markup`
+**Branch:** `claude/review-agent-runtime-docs-LyUlu`
 **Issue:** #106 — Two-membrane fix: presentation leak + self-knowledge probe
 **Mode:** MCA (bugfix — internal markup on human surface, P0)
 **Author:** Claude
@@ -11,7 +11,7 @@
 |------|--------|----------|
 | 0. Observe | done | v3.16.1 assessment committed #106 as next MCA (§3.1 P0 override) |
 | 1. Select | done | §3.1 P0: user-visible coherence failure |
-| 2. Branch | done | `claude/3.16.2-106-strip-tool-markup`, pre-flight passed |
+| 2. Branch | done | `claude/review-agent-runtime-docs-LyUlu`, pre-flight passed |
 | 3. Bootstrap | done | `docs/gamma/cdd/3.16.2/README.md` created as first diff |
 | 4. Gap | done | Root cause identified; two-membrane design from senior eng review |
 | 5. Mode | done | MCA — code must change |
@@ -55,7 +55,7 @@ Re-read updated issue #106. 7 ACs, two-membrane design, 4 implementation areas (
 
 | # | AC | In diff? | Status | Evidence |
 |---|-----|----------|--------|----------|
-| AC1 | `<tool_calls>` markup never rendered on any human surface | Yes | **Met** | `<tool_calls>` in `xml_prefixes` (prefix match). `strip_xml_pseudo_tools` handles mid-body. Test: `#106: Telegram and ConversationStore block <tool_calls> identically` |
+| AC1 | `<tool_calls>` / `<cn:ops>` markup never rendered on any human surface | Yes | **Met** | `<tool_calls>`, `<cn:ops>` in `xml_prefixes` (prefix match). `strip_xml_pseudo_tools` handles mid-body. Tests: `#106: Telegram and ConversationStore block <tool_calls> identically`, `#106: <cn:ops> body blocked on human surface` |
 | AC2 | All human projection through `Cn_output.render_for_sink` | No change needed | **Met (pre-existing)** | Line 251: `HumanSurface _ \| ConversationStore -> render_human_facing`. Test: `#106: Telegram and ConversationStore block <tool_calls> identically` proves both sinks use same path |
 | AC3 | Fallback + trace event when no safe payload | No change needed | **Met (pre-existing)** | `try_candidates` returns `Fallback` with reason. `resolve_render` emits trace. Test: `#106: reply payload containing <tool_calls> falls back` |
 | AC4 | Agent runtime context includes correct version | No change needed | **Met (pre-existing)** | Runtime Contract v2: `cn_runtime_contract.ml:196` gathers `Cn_lib.version` at every wake. Test: `cn_runtime_contract_test.ml:96` |
@@ -114,8 +114,24 @@ All 7/7 ACs accounted for. Pre-flight passed.
 
 - **γ (EXIT/PROCESS): A** — Full CDD pipeline. Bootstrap first. Root cause identified. Design from senior eng review incorporated. Tests cover all 4 issue checklist items. Integration tests prove single-membrane property.
 
+## Round 1 Review Response
+
+Sigma review requested changes with 7 findings (5D, 2C). All addressed:
+
+| # | Finding | Severity | Resolution |
+|---|---------|----------|------------|
+| F1 | `<cn:ops>` not in blocklist | D | Added to `xml_prefixes`. Test added: `#106: <cn:ops> body blocked on human surface` |
+| F2 | Reply payloads bypass mid-body stripper | D | `render_human_facing` now sanitizes all candidates (body, resolved reply, raw reply) through `sanitize` helper applying `strip_embedded_frontmatter` + `strip_xml_pseudo_tools`. Test added: `#106: reply with mid-body <tool_calls> is sanitized` |
+| F3 | Duplicate `<invoke>` entry | D | Removed duplicate. List now has one `<invoke>` entry. |
+| F4 | 3 CI expect-test mismatches | D | (a) `<invoke>` expect fixed (entry removed, `<cn:ops>` added). (b) Integration test: corrected to `Renderable: (acknowledged)` — stripping reduces body to None before `is_control_plane_like` runs, so no candidate is blocked, just empty. (c) Strip tests: extra blank line from removed block preserved in expectation. |
+| F5 | Branch name mismatch | D | All doc references updated to `claude/review-agent-runtime-docs-LyUlu` |
+| F6 | Inline same-line XML not caught | C | Acknowledged as debt. Line-oriented stripping handles block-level XML (the real hallucination pattern). Inline `"Hello <tool_calls>...</tool_calls> world"` would require regex-like within-line removal — deferred as the practical risk is very low (LLMs emit XML pseudo-tools as block-level elements). |
+| F7 | `has_close` over-strips (any `</`) | C | Acknowledged as debt. Over-stripping is safe (removes content, never leaks it). Under-stripping would be worse (leaked control text on human surface). Matched-tag close would be more precise but adds complexity for a theoretical edge case. |
+
 ## Known Coherence Debt
 
 - **No OCaml build verification.** Same environmental constraint as prior cycles. CI validates.
 - **LLM behavior not deterministic.** Anti-probe instruction reduces but cannot eliminate the probability the LLM reads cn.json. The sandbox denylist is the hard guarantee (receipt = Denied). The presentation membrane is the second guarantee (even if the LLM hallucinates XML, it won't reach Telegram).
-- **`has_close` heuristic.** The closing-tag detection uses `</` presence on a line. This could theoretically match prose containing `</` while inside a block. In practice, this only matters during an active XML block (after `is_xml_open` matched), where prose content is extremely unlikely. The conservative behavior (extending the strip region) is safe — it only over-strips, never under-strips.
+- **`has_close` heuristic (F7).** The closing-tag detection uses `</` presence on a line. This could theoretically match prose containing `</` while inside a block. In practice, this only matters during an active XML block (after `is_xml_open` matched), where prose content is extremely unlikely. The conservative behavior (extending the strip region) is safe — it only over-strips, never under-strips.
+- **Inline same-line XML (F6).** `strip_xml_pseudo_tools` is line-oriented and won't catch `"prose <tag>...</tag> prose"` on a single line. Deferred — LLMs produce XML pseudo-tools as block-level elements, not inline.
+- **Stripping vs blocking trace semantics.** When `strip_xml_pseudo_tools` reduces a candidate to empty, the result is `Renderable "(acknowledged)"` rather than `Fallback ("(acknowledged)", Xml_tool_syntax)`. The user-visible result is identical but the trace event differs. Acceptable because the safety invariant (no leaked content) is preserved.

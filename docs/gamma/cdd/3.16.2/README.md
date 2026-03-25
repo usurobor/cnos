@@ -1,7 +1,7 @@
 # v3.16.2 — Strip tool_calls markup from human surfaces
 
 **Issue:** #106
-**Branch:** `claude/3.16.2-106-strip-tool-markup`
+**Branch:** `claude/review-agent-runtime-docs-LyUlu`
 **Mode:** MCA (bugfix — internal markup leaks to human surface)
 **Scope:** Add plural XML tag variants to blocklist, add anti-probe instruction to runtime contract, tests
 
