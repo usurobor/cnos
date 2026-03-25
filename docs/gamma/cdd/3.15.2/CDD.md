@@ -430,19 +430,7 @@ RATIONALE.md explains why CDD takes this shape.
 
 ---
 
-## 12. Retro-packaging rule
-
-If a substantial change lands direct-to-main as an exception to the branch/bootstrap discipline, it must be followed immediately by:
-
-- a retro-snapshot in the appropriate version directory (frozen copies of the changed canonical artifacts)
-- a self-coherence artifact covering the change
-- a version-history entry in the bundle README
-
-This closes the loophole where substantial method rewrites bypass their own packaging discipline. The method must eat its own cooking.
-
----
-
-## 13. Non-goals
+## 12. Non-goals
 
 CDD does not:
 
