@@ -134,11 +134,23 @@ These are not "nice to have." They are preconditions for coherent development.
 
 If the last assessment named a next MCA and no stronger override fires, that MCA is selected by default. Observation may override it, but the override must be stated explicitly.
 
-### 3.4 MCI freeze check
+### 3.4 No clear winner — stale backlog re-evaluation
+
+If §3.1–§3.3 produce no actionable candidate (e.g. P0s exist but have no clear fix path, assessment doesn't commit a next MCA, no operational debt), re-evaluate stale issues before selecting new work:
+
+- For each stale issue: is it still a real gap, or has the system moved past it?
+- **Descope** issues that are no longer coherence gaps (close with rationale).
+- **Consolidate** issues that overlap or could be addressed by one MCA.
+- **Commit** the stale issue with the clearest fix path as the next MCA.
+- If no stale issue has a clear fix path either, enter observation mode (§3.9).
+
+Stale backlog accumulating across multiple cycles without re-evaluation is itself an incoherence.
+
+### 3.5 MCI freeze check
 
 If the lag table contains stale issues, the next substantial MCA must come from the stale set. New design work is frozen until at least one stale item ships.
 
-### 3.5 Weakest-axis rule
+### 3.6 Weakest-axis rule
 
 If no stronger rule decides selection, choose work that addresses the weakest current axis:
 
@@ -146,19 +158,19 @@ If no stronger rule decides selection, choose work that addresses the weakest cu
 - β → alignment / integration work
 - γ → process / evolution work
 
-### 3.6 Maximum leverage
+### 3.7 Maximum leverage
 
 Among candidates that address the weakest axis, choose the one that moves the most lag entries.
 
-### 3.7 Dependency order
+### 3.8 Dependency order
 
 If A blocks B blocks C, choose A regardless of local excitement or presentation value.
 
-### 3.8 Effort-adjusted tie-break
+### 3.9 Effort-adjusted tie-break
 
 Between candidates with equal leverage and axis effect, choose the smaller one. Ship sooner, observe sooner, correct sooner.
 
-### 3.9 No-gap case
+### 3.10 No-gap case
 
 If:
 
