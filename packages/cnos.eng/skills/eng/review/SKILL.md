@@ -121,9 +121,11 @@ Read the diff for internal coherence.
     - Grep for duplicate entries in any list/array literal added or modified
     - Verify branch name matches project convention (e.g. CDD branch format)
     - If tests are in the diff, verify expect-test outputs are plausible (exact strings, whitespace)
+    - Check new type definitions for overlapping field names within the same module — each shared name creates a disambiguation burden at every access site (see OCaml skill §3.1)
   - These are deterministic — two reviewers running the same grep must find the same results.
   - ❌ Read the diff for logic only
   - ✅ "L74: `<invoke>` appears twice in `xml_prefixes` — duplicate entry"
+  - ✅ "`extension_op.kind` and `backend.kind` share field name in same module — rename to `op_kind`/`backend_kind`"
 
 ---
 
