@@ -4,6 +4,20 @@
     Tests the pure parsing core and registry logic.
     Discovery tests use temp directories. *)
 
+let mk_temp_dir prefix =
+  let base = Filename.get_temp_dir_name () in
+  let rec attempt k =
+    if k = 0 then failwith "mk_temp_dir: exhausted attempts";
+    let dir =
+      Filename.concat base
+        (Printf.sprintf "%s-%d-%06d" prefix (Unix.getpid ()) (Random.int 1_000_000))
+    in
+    try Unix.mkdir dir 0o700; dir
+    with Unix.Unix_error (Unix.EEXIST, _, _) -> attempt (k - 1)
+  in
+  Random.self_init ();
+  attempt 50
+
 (* === Manifest parsing === *)
 
 let show_manifest_result = function
@@ -369,7 +383,7 @@ let%expect_test "host: parse error response" =
 (* === Discovery integration (filesystem) === *)
 
 let%expect_test "discover: empty vendor dir" =
-  let tmp = Filename.temp_dir "cn-ext-test" "" in
+  let tmp = mk_temp_dir "cn-ext-test" in
   let vendor = tmp ^ "/.cn/vendor/packages" in
   Cn_ffi.Fs.ensure_dir vendor;
   let entries = Cn_extension.discover ~hub_path:tmp in
@@ -377,7 +391,7 @@ let%expect_test "discover: empty vendor dir" =
   [%expect {| found=0 |}]
 
 let%expect_test "discover: finds extension manifest" =
-  let tmp = Filename.temp_dir "cn-ext-test" "" in
+  let tmp = mk_temp_dir "cn-ext-test" in
   let ext_dir = tmp ^ "/.cn/vendor/packages/cnos.net.http@1.0.0/extensions/cnos.net.http" in
   Cn_ffi.Fs.ensure_dir ext_dir;
   Cn_ffi.Fs.write (ext_dir ^ "/cn.extension.json") {|{
@@ -405,7 +419,7 @@ let%expect_test "discover: finds extension manifest" =
   |}]
 
 let%expect_test "build_registry: full lifecycle" =
-  let tmp = Filename.temp_dir "cn-ext-test" "" in
+  let tmp = mk_temp_dir "cn-ext-test" in
   let ext_dir = tmp ^ "/.cn/vendor/packages/cnos.net.http@1.0.0/extensions/cnos.net.http" in
   Cn_ffi.Fs.ensure_dir ext_dir;
   Cn_ffi.Fs.write (ext_dir ^ "/cn.extension.json") {|{
@@ -447,7 +461,7 @@ let%expect_test "build_registry: full lifecycle" =
   |}]
 
 let%expect_test "build_registry: incompatible engine rejected" =
-  let tmp = Filename.temp_dir "cn-ext-test" "" in
+  let tmp = mk_temp_dir "cn-ext-test" in
   let ext_dir = tmp ^ "/.cn/vendor/packages/old.ext@1.0.0/extensions/old.ext" in
   Cn_ffi.Fs.ensure_dir ext_dir;
   Cn_ffi.Fs.write (ext_dir ^ "/cn.extension.json") {|{
@@ -474,7 +488,7 @@ let%expect_test "build_registry: incompatible engine rejected" =
   |}]
 
 let%expect_test "build_registry: disabled extension" =
-  let tmp = Filename.temp_dir "cn-ext-test" "" in
+  let tmp = mk_temp_dir "cn-ext-test" in
   let ext_dir = tmp ^ "/.cn/vendor/packages/cnos.net.http@1.0.0/extensions/cnos.net.http" in
   Cn_ffi.Fs.ensure_dir ext_dir;
   Cn_ffi.Fs.write (ext_dir ^ "/cn.extension.json") {|{

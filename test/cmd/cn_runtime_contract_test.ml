@@ -147,7 +147,7 @@ let%expect_test "render_markdown: contains all four layers" =
   with_test_hub (fun hub ->
     let assets = Cn_assets.summarize ~hub_path:hub in
     let c = Cn_runtime_contract.gather ~hub_path:hub
-              ~shell_config:default_shell_config ~assets ~peers:["sigma"] in
+              ~shell_config:default_shell_config ~assets ~peers:["sigma"] () in
     let md = Cn_runtime_contract.render_markdown c in
     let has sec = if Cn_orchestrator.contains_sub md sec then "yes" else "no" in
     Printf.printf "Runtime Contract: %s\n" (has "## Runtime Contract");
@@ -226,7 +226,7 @@ let%expect_test "to_json: v2 schema with four layers" =
   with_test_hub (fun hub ->
     let assets = Cn_assets.summarize ~hub_path:hub in
     let c = Cn_runtime_contract.gather ~hub_path:hub
-              ~shell_config:default_shell_config ~assets ~peers:["sigma"] in
+              ~shell_config:default_shell_config ~assets ~peers:["sigma"] () in
     let json = Cn_runtime_contract.to_json ~shell_config:default_shell_config c in
     let has key = Cn_json.get key json <> None in
     Printf.printf "schema: %b\n" (has "schema");
