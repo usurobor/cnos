@@ -264,12 +264,12 @@ let restore_one ~hub_path (dep : locked_dep) =
           let src_root = if dep.subdir <> "" then
             Cn_ffi.Path.join tmp_dir dep.subdir
           else tmp_dir in
-          (* Copy all asset directories: doctrine, mindsets, skills, plus metadata *)
+          (* Copy all content categories — must match cn_build.ml source_decl *)
           List.iter (fun sub ->
             let src = Cn_ffi.Path.join src_root sub in
             if Cn_ffi.Fs.exists src then
               copy_tree src (Cn_ffi.Path.join pkg_dir sub)
-          ) ["doctrine"; "mindsets"; "skills"];
+          ) ["doctrine"; "mindsets"; "skills"; "extensions"; "profiles"];
           (* Copy cn.package.json if present *)
           let pkg_json = Cn_ffi.Path.join src_root "cn.package.json" in
           if Cn_ffi.Fs.exists pkg_json then
@@ -372,35 +372,27 @@ let default_manifest_for_profile profile =
 
 (** Create a lockfile with first-party package entries.
     First-party entries use VERSION + cnos_commit for exact coherence.
-    Third-party entries query the source repo via ls-remote. *)
+    Third-party packages are rejected — no registry exists yet. *)
 let lockfile_for_manifest (m : manifest) =
   let first_party_rev = Cn_lib.cnos_commit in
-  let third_party_rev =
-    let (code, output) = Cn_ffi.Process.exec_args ~prog:"git"
-      ~args:["ls-remote"; default_first_party_source; "HEAD"] () in
-    if code = 0 then
-      let trimmed = String.trim output in
-      (match String.index_opt trimmed '\t' with
-       | Some i -> String.sub trimmed 0 i
-       | None -> trimmed)
-    else ""
-  in
-  let packages = m.packages |> List.map (fun (dep : manifest_dep) ->
-    let source, subdir =
-      if is_first_party dep.name then
-        (default_first_party_source,
-         Printf.sprintf "%s/%s" packages_subdir dep.name)
-      else
-        ("", "")
-    in
-    let version = if is_first_party dep.name then Cn_lib.version
-      else dep.version in
-    let rev = if is_first_party dep.name then first_party_rev
-      else third_party_rev in
-    { name = dep.name; version; source; rev; subdir;
-      integrity = None }
-  ) in
-  { schema = "cn.deps.lock.v1"; packages }
+  let third_party = m.packages
+    |> List.filter (fun (dep : manifest_dep) -> not (is_first_party dep.name)) in
+  if third_party <> [] then
+    let names = third_party
+      |> List.map (fun (d : manifest_dep) -> d.name)
+      |> String.concat ", " in
+    Error (Printf.sprintf
+      "Third-party packages not supported (no registry): %s" names)
+  else
+    let packages = m.packages |> List.map (fun (dep : manifest_dep) ->
+      { name = dep.name;
+        version = Cn_lib.version;
+        source = default_first_party_source;
+        rev = first_party_rev;
+        subdir = Printf.sprintf "%s/%s" packages_subdir dep.name;
+        integrity = None }
+    ) in
+    Ok { schema = "cn.deps.lock.v1"; packages }
 
 let empty_lockfile =
   { schema = "cn.deps.lock.v1"; packages = [] }
