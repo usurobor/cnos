@@ -259,22 +259,12 @@ let restore_one ~hub_path (dep : locked_dep) =
           Some (Printf.sprintf "Failed to fetch %s@%s from %s (rev %s): %s"
             dep.name dep.version dep.source dep.rev msg)
       | Ok () ->
-          Cn_ffi.Fs.ensure_dir pkg_dir;
-          (* Copy from subdir if specified, else copy entire checkout *)
+          (* Copy full package tree — matches local first-party path behavior.
+             Both paths now do copy_tree src pkg_dir. *)
           let src_root = if dep.subdir <> "" then
             Cn_ffi.Path.join tmp_dir dep.subdir
           else tmp_dir in
-          (* Copy all content categories — must match cn_build.ml source_decl *)
-          List.iter (fun sub ->
-            let src = Cn_ffi.Path.join src_root sub in
-            if Cn_ffi.Fs.exists src then
-              copy_tree src (Cn_ffi.Path.join pkg_dir sub)
-          ) ["doctrine"; "mindsets"; "skills"; "extensions"; "profiles"];
-          (* Copy cn.package.json if present *)
-          let pkg_json = Cn_ffi.Path.join src_root "cn.package.json" in
-          if Cn_ffi.Fs.exists pkg_json then
-            Cn_ffi.Fs.write (Cn_ffi.Path.join pkg_dir "cn.package.json")
-              (Cn_ffi.Fs.read pkg_json);
+          copy_tree src_root pkg_dir;
           rm_tree tmp_dir;
           None
 

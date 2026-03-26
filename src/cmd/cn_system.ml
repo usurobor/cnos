@@ -410,7 +410,7 @@ let reconcile_packages hub_path =
        print_endline (Cn_fmt.fail msg);
        Cn_ffi.Process.exit 1
    | Ok lock ->
-  Cn_deps.write_lockfile ~hub_path lock);
+       Cn_deps.write_lockfile ~hub_path lock);
   (match Cn_deps.restore ~hub_path with
    | Ok () ->
      print_endline (Cn_fmt.ok (Printf.sprintf "Packages reconciled to %s" version));

@@ -1,10 +1,11 @@
 (** cn_deps_test: ppx_expect tests for package restore and lockfile generation
 
     Invariants tested:
-    I1 — restore_one copies ALL declared content categories, not a subset
+    I1 — copy_tree preserves full directory structure (restore primitive)
     I2 — lockfile_for_manifest rejects third-party packages explicitly
     I3 — lockfile_for_manifest produces valid entries for first-party packages
-    I4 — restore_one skips already-installed packages (idempotent) *)
+    I4 — restore_one skips already-installed packages (idempotent)
+    I5 — no lock entry ever has empty source or subdir *)
 
 (* === Temp directory helpers === *)
 
@@ -39,67 +40,54 @@ let touch dir file content =
   output_string oc content;
   close_out oc
 
-(** Set up a fake vendor package directory simulating a package source tree.
-    Returns (hub_path, source_dir) where source_dir has all 5 content categories. *)
-let with_package_source f =
-  let hub = mk_temp_dir "cn-deps-test" in
-  let source = mk_temp_dir "cn-deps-src" in
-  (* Create all 5 content categories in source *)
-  touch (Filename.concat source "doctrine") "CORE.md" "# Core";
-  touch (Filename.concat source "mindsets") "ENG.md" "# Engineering";
-  touch (Filename.concat source "skills/agent/hello") "SKILL.md" "# Hello";
-  touch (Filename.concat source "extensions/net.http") "cn.extension.json" "{}";
-  touch (Filename.concat source "profiles") "engineer.json" "{\"profile\":\"eng\"}";
-  touch source "cn.package.json" "{\"name\":\"test\"}";
-  Fun.protect
-    ~finally:(fun () -> rm_tree hub; rm_tree source)
-    (fun () -> f hub source)
+(** Collect all files under a directory, sorted, relative to root. *)
+let rec collect_files root dir =
+  let full = Filename.concat root dir in
+  if not (Sys.file_exists full) then []
+  else if Sys.is_directory full then
+    Sys.readdir full |> Array.to_list
+    |> List.concat_map (fun entry ->
+      collect_files root (Filename.concat dir entry))
+  else [dir]
 
-(* === Step 1: Full package restore — I1 === *)
+(* === I1: copy_tree preserves full directory structure === *)
 
-let%expect_test "restore_one copies all 5 content categories (I1)" =
-  with_package_source (fun hub source ->
-    (* Simulate what restore_one does after git checkout:
-       copy from source into vendor package dir *)
-    let pkg_dir = Filename.concat hub "pkg" in
-    Cn_ffi.Fs.ensure_dir pkg_dir;
-    List.iter (fun sub ->
-      let src = Cn_ffi.Path.join source sub in
-      if Cn_ffi.Fs.exists src then
-        Cn_deps.copy_tree src (Cn_ffi.Path.join pkg_dir sub)
-    ) ["doctrine"; "mindsets"; "skills"; "extensions"; "profiles"];
-    (* Verify each category was copied *)
-    let check cat file =
-      let path = Filename.concat (Filename.concat pkg_dir cat) file in
-      Printf.printf "%s/%s: %b\n" cat file (Sys.file_exists path)
-    in
-    check "doctrine" "CORE.md";
-    check "mindsets" "ENG.md";
-    check "skills/agent/hello" "SKILL.md";
-    check "extensions/net.http" "cn.extension.json";
-    check "profiles" "engineer.json");
+(* copy_tree is the shared primitive used by both local and remote restore paths.
+   Both do: copy_tree source_root pkg_dir. Testing copy_tree proves both paths. *)
+let%expect_test "copy_tree preserves full package structure (I1)" =
+  let src = mk_temp_dir "cn-deps-src" in
+  let dst = mk_temp_dir "cn-deps-dst" in
+  Fun.protect ~finally:(fun () -> rm_tree src; rm_tree dst) (fun () ->
+    (* Create a realistic package tree with all content categories *)
+    touch (Filename.concat src "doctrine") "CORE.md" "# Core";
+    touch (Filename.concat src "mindsets") "ENG.md" "# Engineering";
+    touch (Filename.concat src "skills/agent/hello") "SKILL.md" "# Hello";
+    touch (Filename.concat src "extensions/net.http") "cn.extension.json" "{}";
+    touch src "cn.package.json" "{\"name\":\"test\"}";
+    (* copy_tree — same call both restore paths use *)
+    Cn_deps.copy_tree src dst;
+    let files = collect_files dst "." |> List.sort String.compare in
+    List.iter print_endline files);
   [%expect {|
-    doctrine/CORE.md: true
-    mindsets/ENG.md: true
-    skills/agent/hello/SKILL.md: true
-    extensions/net.http/cn.extension.json: true
-    profiles/engineer.json: true
+    ./cn.package.json
+    ./doctrine/CORE.md
+    ./extensions/net.http/cn.extension.json
+    ./mindsets/ENG.md
+    ./skills/agent/hello/SKILL.md
   |}]
 
-let%expect_test "restore_one content list matches cn_build source_decl (I1)" =
-  (* Invariant: the categories in restore must be a superset of cn_build's *)
-  let restore_categories = ["doctrine"; "mindsets"; "skills"; "extensions"; "profiles"] in
-  let build_categories = ["doctrine"; "mindsets"; "skills"; "extensions"] in
-  let missing = List.filter (fun c ->
-    not (List.mem c restore_categories)
-  ) build_categories in
-  Printf.printf "missing from restore: %d\n" (List.length missing);
-  List.iter (fun m -> Printf.printf "  %s\n" m) missing;
-  [%expect {|
-    missing from restore: 0
-  |}]
+(* Invariant: copy_tree copies file content, not just structure *)
+let%expect_test "copy_tree preserves file content (I1)" =
+  let src = mk_temp_dir "cn-deps-content-src" in
+  let dst = mk_temp_dir "cn-deps-content-dst" in
+  Fun.protect ~finally:(fun () -> rm_tree src; rm_tree dst) (fun () ->
+    touch (Filename.concat src "doctrine") "CORE.md" "# Core doctrine content";
+    Cn_deps.copy_tree src dst;
+    let content = Cn_ffi.Fs.read (Filename.concat dst "doctrine/CORE.md") in
+    print_endline content);
+  [%expect {| # Core doctrine content |}]
 
-(* === Step 2: Honest third-party handling — I2, I3 === *)
+(* === I2: lockfile_for_manifest rejects third-party packages === *)
 
 let%expect_test "lockfile_for_manifest rejects third-party packages (I2)" =
   let manifest : Cn_deps.manifest = {
@@ -133,6 +121,8 @@ let%expect_test "lockfile_for_manifest rejects multiple third-party (I2)" =
     Third-party packages not supported (no registry): foo.bar, baz.qux
   |}]
 
+(* === I3: lockfile_for_manifest produces valid first-party entries === *)
+
 let%expect_test "lockfile_for_manifest accepts all first-party (I3)" =
   let manifest : Cn_deps.manifest = {
     schema = "cn.deps.v1";
@@ -158,9 +148,28 @@ let%expect_test "lockfile_for_manifest accepts all first-party (I3)" =
     cnos.eng: source=true subdir=true rev=true
   |}]
 
-(* === Negative space (I2): no silent empty entries === *)
+let%expect_test "first-party subdir follows packages/<name> pattern (I3)" =
+  let manifest : Cn_deps.manifest = {
+    schema = "cn.deps.v1";
+    profile = "engineer";
+    packages = [
+      { name = "cnos.core"; version = "3.17.0" };
+      { name = "cnos.eng"; version = "3.17.0" };
+    ];
+  } in
+  (match Cn_deps.lockfile_for_manifest manifest with
+   | Ok lock ->
+       lock.packages |> List.iter (fun (dep : Cn_deps.locked_dep) ->
+         Printf.printf "%s -> %s\n" dep.name dep.subdir)
+   | Error msg -> Printf.printf "ERROR: %s\n" msg);
+  [%expect {|
+    cnos.core -> packages/cnos.core
+    cnos.eng -> packages/cnos.eng
+  |}]
 
-let%expect_test "no lock entry ever has empty source (I2 negative)" =
+(* === I5: no lock entry has empty source (negative space) === *)
+
+let%expect_test "no lock entry ever has empty source (I5 negative)" =
   let manifest : Cn_deps.manifest = {
     schema = "cn.deps.v1";
     profile = "engineer";
@@ -176,23 +185,4 @@ let%expect_test "no lock entry ever has empty source (I2 negative)" =
    | Error _ -> print_endline "rejected (also acceptable)");
   [%expect {|
     entries with empty source: 0
-  |}]
-
-let%expect_test "first-party subdir follows packages/<name> pattern (I3)" =
-  let manifest : Cn_deps.manifest = {
-    schema = "cn.deps.v1";
-    profile = "pm";
-    packages = [
-      { name = "cnos.core"; version = "3.17.0" };
-      { name = "cnos.pm"; version = "3.17.0" };
-    ];
-  } in
-  (match Cn_deps.lockfile_for_manifest manifest with
-   | Ok lock ->
-       lock.packages |> List.iter (fun (dep : Cn_deps.locked_dep) ->
-         Printf.printf "%s -> %s\n" dep.name dep.subdir)
-   | Error msg -> Printf.printf "ERROR: %s\n" msg);
-  [%expect {|
-    cnos.core -> packages/cnos.core
-    cnos.pm -> packages/cnos.pm
   |}]

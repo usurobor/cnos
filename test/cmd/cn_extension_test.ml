@@ -535,13 +535,15 @@ let test_manifest ?(permissions = []) () : Cn_extension.extension_manifest =
     ops = []; permissions;
     engines = [] }
 
+(* exec_enabled=true to test permission intersection; false tested below *)
+let exec_config = { Cn_shell.default_shell_config with exec_enabled = true }
+
 let%expect_test "effective_permissions: network passes through when declared" =
   let manifest = test_manifest ~permissions:[
     "network", Cn_json.Bool true;
     "default_read_only", Cn_json.Bool true;
   ] () in
-  let config = Cn_shell.default_shell_config in
-  let eff = Cn_extension.effective_permissions ~manifest ~config in
+  let eff = Cn_extension.effective_permissions ~manifest ~config:exec_config in
   List.iter (fun (k, _) -> Printf.printf "%s\n" k) eff;
   [%expect {|
     network
@@ -552,8 +554,7 @@ let%expect_test "effective_permissions: no network when not declared" =
   let manifest = test_manifest ~permissions:[
     "default_read_only", Cn_json.Bool true;
   ] () in
-  let config = Cn_shell.default_shell_config in
-  let eff = Cn_extension.effective_permissions ~manifest ~config in
+  let eff = Cn_extension.effective_permissions ~manifest ~config:exec_config in
   List.iter (fun (k, _) -> Printf.printf "%s\n" k) eff;
   [%expect {| default_read_only |}]
 
@@ -562,11 +563,22 @@ let%expect_test "effective_permissions: secrets always stripped" =
   let manifest = test_manifest ~permissions:[
     "allow_secrets", Cn_json.Array [Cn_json.String "API_KEY"];
   ] () in
-  let config = Cn_shell.default_shell_config in
-  let eff = Cn_extension.effective_permissions ~manifest ~config in
+  let eff = Cn_extension.effective_permissions ~manifest ~config:exec_config in
   List.iter (fun (k, v) ->
     Printf.printf "%s=%s\n" k (Cn_json.to_string v)) eff;
   [%expect {| allow_secrets=[] |}]
+
+(* Invariant: exec_enabled=false gates ALL permissions — nothing passes through *)
+let%expect_test "effective_permissions: exec_disabled returns empty" =
+  let manifest = test_manifest ~permissions:[
+    "network", Cn_json.Bool true;
+    "default_read_only", Cn_json.Bool true;
+    "allow_secrets", Cn_json.Array [Cn_json.String "KEY"];
+  ] () in
+  let config = Cn_shell.default_shell_config in (* exec_enabled=false *)
+  let eff = Cn_extension.effective_permissions ~manifest ~config in
+  Printf.printf "permissions count: %d\n" (List.length eff);
+  [%expect {| permissions count: 0 |}]
 
 let%expect_test "execution_limits: derives from shell_config" =
   let config = { Cn_shell.default_shell_config with
