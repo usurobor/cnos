@@ -744,7 +744,7 @@ let execute_extension_op ~hub_path ~trigger_id ~config ~ext_registry
       status = Cn_shell.Denied; reason = "extension_not_found";
       start_time = start; end_time = now_iso (); artifacts = [] }
   | Some (entry, _ext_op) ->
-    let command = entry.manifest.backend.command in
+    let command = Cn_extension.resolve_command entry in
     let arguments = op.Cn_shell.fields in
     let permissions =
       Cn_extension.effective_permissions ~manifest:entry.manifest ~config in

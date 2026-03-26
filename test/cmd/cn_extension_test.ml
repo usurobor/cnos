@@ -151,6 +151,7 @@ let make_entry name ops_list state =
       ops; permissions = []; engines = [];
     };
     package_name = name; package_path = "/tmp/" ^ name;
+    extension_path = "/tmp/" ^ name ^ "/extensions/" ^ name;
     state;
   }
 
@@ -683,3 +684,177 @@ let%expect_test "host stub: http_get rejects file:// scheme" =
      | Ok _ -> Printf.printf "ok (wrong — should reject)\n"
      | Error msg -> Printf.printf "rejected: %s\n" msg);
   [%expect {| rejected: url must use http or https scheme |}]
+
+(* === Command resolution === *)
+
+let%expect_test "resolve_command: bare name resolved to extension host dir" =
+  let entry = { Cn_extension.
+    manifest = {
+      schema = "cn.extension.v1"; name = "cnos.net.http"; version = "1.0.0";
+      interface = "cn.ext.v1"; ext_kind = "capability-provider";
+      backend = { backend_kind = "subprocess"; command = ["cnos-ext-http"] };
+      ops = []; permissions = []; engines = [];
+    };
+    package_name = "cnos.core";
+    package_path = "/hub/.cn/vendor/packages/cnos.core@3.17.0";
+    extension_path = "/hub/.cn/vendor/packages/cnos.core@3.17.0/extensions/cnos.net.http";
+    state = Enabled;
+  } in
+  let resolved = Cn_extension.resolve_command entry in
+  List.iter (Printf.printf "%s\n") resolved;
+  [%expect {| /hub/.cn/vendor/packages/cnos.core@3.17.0/extensions/cnos.net.http/host/cnos-ext-http |}]
+
+let%expect_test "resolve_command: absolute path passed through" =
+  let entry = { Cn_extension.
+    manifest = {
+      schema = "cn.extension.v1"; name = "test.ext"; version = "1.0.0";
+      interface = "cn.ext.v1"; ext_kind = "capability-provider";
+      backend = { backend_kind = "subprocess"; command = ["/usr/bin/python3"; "host.py"] };
+      ops = []; permissions = []; engines = [];
+    };
+    package_name = "test.pkg";
+    package_path = "/tmp/test.pkg";
+    extension_path = "/tmp/test.pkg/extensions/test.ext";
+    state = Enabled;
+  } in
+  let resolved = Cn_extension.resolve_command entry in
+  List.iter (Printf.printf "%s\n") resolved;
+  [%expect {|
+    /usr/bin/python3
+    host.py |}]
+
+let%expect_test "resolve_command: empty command stays empty" =
+  let entry = { Cn_extension.
+    manifest = {
+      schema = "cn.extension.v1"; name = "test.ext"; version = "1.0.0";
+      interface = "cn.ext.v1"; ext_kind = "capability-provider";
+      backend = { backend_kind = "subprocess"; command = [] };
+      ops = []; permissions = []; engines = [];
+    };
+    package_name = "test.pkg";
+    package_path = "/tmp/test.pkg";
+    extension_path = "/tmp/test.pkg/extensions/test.ext";
+    state = Enabled;
+  } in
+  let resolved = Cn_extension.resolve_command entry in
+  Printf.printf "len=%d\n" (List.length resolved);
+  [%expect {| len=0 |}]
+
+(* === End-to-end dispatch: discovery → registry → resolve → host === *)
+
+let%expect_test "e2e: discovered extension resolves command through installed path" =
+  let hub = mk_temp_dir "ext-e2e" in
+  let pkg_dir = hub ^ "/.cn/vendor/packages/cnos.core@3.17.0" in
+  let ext_dir = pkg_dir ^ "/extensions/cnos.net.http" in
+  Unix.mkdir (hub ^ "/.cn") 0o700;
+  Unix.mkdir (hub ^ "/.cn/vendor") 0o700;
+  Unix.mkdir (hub ^ "/.cn/vendor/packages") 0o700;
+  Unix.mkdir pkg_dir 0o700;
+  Unix.mkdir (pkg_dir ^ "/extensions") 0o700;
+  Unix.mkdir ext_dir 0o700;
+  let manifest = {|{
+    "schema": "cn.extension.v1",
+    "name": "cnos.net.http",
+    "version": "1.0.0",
+    "interface": "cn.ext.v1",
+    "backend": { "kind": "subprocess", "command": ["cnos-ext-http"] },
+    "ops": [{ "kind": "http_get", "class": "observe" }],
+    "permissions": { "network": true },
+    "engines": {}
+  }|} in
+  let oc = open_out (ext_dir ^ "/cn.extension.json") in
+  output_string oc manifest; close_out oc;
+  let reg = Cn_extension.build_registry ~hub_path:hub ~runtime_version:"3.17.0" () in
+  let entries = Cn_extension.all_entries reg in
+  (match entries with
+   | [e] ->
+     Printf.printf "name=%s state=%s\n" e.Cn_extension.manifest.name
+       (Cn_extension.string_of_lifecycle_state e.state);
+     (* Verify extension_path ends with the expected suffix *)
+     let has_suffix s suffix =
+       let sl = String.length s and xl = String.length suffix in
+       sl >= xl && String.sub s (sl - xl) xl = suffix in
+     Printf.printf "ext_path_suffix=%b\n"
+       (has_suffix e.extension_path "/extensions/cnos.net.http");
+     (* Verify resolved command ends with host/cnos-ext-http *)
+     let resolved = Cn_extension.resolve_command e in
+     (match resolved with
+      | [cmd] ->
+        Printf.printf "resolved_suffix=%b\n"
+          (has_suffix cmd "/extensions/cnos.net.http/host/cnos-ext-http")
+      | _ -> Printf.printf "unexpected command length: %d\n" (List.length resolved))
+   | _ -> Printf.printf "unexpected entry count: %d\n" (List.length entries));
+  [%expect {|
+    name=cnos.net.http state=enabled
+    ext_path_suffix=true
+    resolved_suffix=true |}]
+
+let%expect_test "e2e: resolve_command + host health through installed layout" =
+  (* Set up an installed layout with the real host binary *)
+  (match find_host_binary () with
+   | None -> Printf.printf "host not found (skipping)\n"
+   | Some real_host_path ->
+     let hub = mk_temp_dir "ext-e2e-host" in
+     let pkg_dir = hub ^ "/.cn/vendor/packages/cnos.core@3.17.0" in
+     let ext_dir = pkg_dir ^ "/extensions/cnos.net.http" in
+     let host_dir = ext_dir ^ "/host" in
+     Unix.mkdir (hub ^ "/.cn") 0o700;
+     Unix.mkdir (hub ^ "/.cn/vendor") 0o700;
+     Unix.mkdir (hub ^ "/.cn/vendor/packages") 0o700;
+     Unix.mkdir pkg_dir 0o700;
+     Unix.mkdir (pkg_dir ^ "/extensions") 0o700;
+     Unix.mkdir ext_dir 0o700;
+     Unix.mkdir host_dir 0o700;
+     (* Copy real host binary into installed layout *)
+     let content = let ic = open_in real_host_path in
+       let n = in_channel_length ic in
+       let s = Bytes.create n in
+       really_input ic s 0 n; close_in ic; Bytes.to_string s in
+     let dest = host_dir ^ "/cnos-ext-http" in
+     let oc = open_out dest in
+     output_string oc content; close_out oc;
+     Unix.chmod dest 0o755;
+     (* Write manifest *)
+     let manifest = {|{
+       "schema": "cn.extension.v1",
+       "name": "cnos.net.http",
+       "version": "1.0.0",
+       "interface": "cn.ext.v1",
+       "backend": { "kind": "subprocess", "command": ["cnos-ext-http"] },
+       "ops": [{ "kind": "http_get", "class": "observe" }],
+       "permissions": { "network": true },
+       "engines": {}
+     }|} in
+     let oc = open_out (ext_dir ^ "/cn.extension.json") in
+     output_string oc manifest; close_out oc;
+     (* Build registry — simulates boot-time discovery *)
+     let reg = Cn_extension.build_registry ~hub_path:hub ~runtime_version:"3.17.0" () in
+     let entries = Cn_extension.all_entries reg in
+     match entries with
+     | [e] ->
+       (* Resolve command through the installed path *)
+       let cmd = Cn_extension.resolve_command e in
+       (* Run health check through resolved command — proves e2e dispatch *)
+       (match Cn_ext_host.check_health ~command:cmd () with
+        | Ok () -> Printf.printf "health=ok\n"
+        | Error msg -> Printf.printf "health=error: %s\n" msg);
+       (* Run describe through resolved command *)
+       (match cmd with
+        | prog :: args ->
+          let request = Cn_ext_host.request_to_json Cn_ext_host.Describe in
+          let input = Cn_json.to_string request ^ "\n" in
+          let code, output = Cn_ffi.Process.exec_args ~prog ~args
+            ~stdin_data:input () in
+          Printf.printf "describe_exit=%d\n" code;
+          (match Cn_json.parse (String.trim output) with
+           | Ok json ->
+             (match Cn_json.get_string "status" json with
+              | Some s -> Printf.printf "describe_status=%s\n" s
+              | None -> Printf.printf "no status\n")
+           | Error _ -> Printf.printf "parse error\n")
+        | [] -> Printf.printf "empty command\n")
+     | _ -> Printf.printf "unexpected entry count: %d\n" (List.length entries));
+  [%expect {|
+    health=ok
+    describe_exit=0
+    describe_status=ok |}]

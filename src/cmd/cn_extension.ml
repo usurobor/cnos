@@ -55,6 +55,7 @@ type extension_entry = {
   manifest : extension_manifest;
   package_name : string;
   package_path : string;
+  extension_path : string;
   state : lifecycle_state;
 }
 
@@ -241,6 +242,7 @@ let discover ~hub_path =
                 manifest;
                 package_name = pkg_name;
                 package_path = pkg_path;
+                extension_path = ext_path;
                 state = Discovered;
               }
             | Error reason ->
@@ -413,6 +415,27 @@ let execution_limits ~(config : Cn_shell.shell_config) =
   [
     "max_artifact_bytes", Cn_json.Int config.max_artifact_bytes_per_op;
   ]
+
+(* === Command resolution === *)
+
+(** Resolve the host command for an extension entry.
+    Bare command names (not starting with '/') are resolved relative to the
+    extension's installed host/ directory: {extension_path}/host/{prog}.
+    Absolute paths are passed through unchanged.
+
+    This bridges the manifest's portable command declaration (e.g. ["cnos-ext-http"])
+    to the actual installed binary path (e.g.
+    ".cn/vendor/packages/cnos.core@3.17.0/extensions/cnos.net.http/host/cnos-ext-http"). *)
+let resolve_command entry =
+  match entry.manifest.backend.command with
+  | [] -> []
+  | prog :: args ->
+    if String.length prog > 0 && prog.[0] = '/' then
+      prog :: args
+    else
+      let host_dir = Cn_ffi.Path.join entry.extension_path "host" in
+      let resolved = Cn_ffi.Path.join host_dir prog in
+      resolved :: args
 
 (* === String helpers === *)
 
