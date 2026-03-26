@@ -186,6 +186,8 @@ After release:
 - execute immediate outputs
 - commit deferred outputs concretely
 
+Skill/spec patches produced as immediate outputs must pass CLP β: does this change create a mismatch with any canonical or derived surface? If the skill has a canonical spec (§5), both must be updated together.
+
 A cycle is not closed until both classes of output are handled.
 
 ---
@@ -230,6 +232,10 @@ Derive secondary surfaces from the canonical one.
 ### 3.3 Build-sync source assets
 
 If you edit anything under `src/agent/`, run `cn build` before commit so packaged copies stay in sync.
+
+### 3.3a Authority-sync on skill/spec changes
+
+If you edit an executable skill that declares a canonical source (§5), verify the canonical source is updated in the same commit. If you edit a canonical spec, verify derived skills are updated. One-directional edits to paired surfaces create β drift — the review caught this in `20add78` (skill updated, spec not).
 
 ### 3.4 No review without a contract
 
