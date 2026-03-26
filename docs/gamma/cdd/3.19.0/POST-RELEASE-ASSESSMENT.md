@@ -62,7 +62,7 @@
 **Superseded PRs:** 0 (target: 0) — **PASSED**
 **Finding breakdown:** 1 mechanical / 2 judgment / 3 total
 **Mechanical ratio:** 33% (threshold: 20%) — improved but still above threshold
-**Action:** Ratio improved from 57% → 33%. Root cause (no OCaml toolchain) unchanged but impact reduced by better self-review. Continue applying eng/ocaml actively during generation rather than relying on post-hoc review.
+**Action:** Ratio improved from 57% → 33%. Root cause (no OCaml toolchain) unchanged but impact reduced by better self-review. Filed #117 (pre-push build/test gate) per CDD post-release skill §5.5.
 
 Findings by round:
 
@@ -76,6 +76,7 @@ Findings by round:
 **Next MCA:** #113 AC8 — Extensions and future bundles/apps sit above package substrate without redesign
 **Owner:** sigma
 **Branch:** pending
+**First AC:** AC8 — extensions and future bundles/apps sit above substrate without redesign
 **Rationale:** AC3-AC7 shipped. AC8 is the final AC for #113 — validates that the substrate supports extensions and future content types without requiring package system changes. After AC8, #113 closes and MCI freeze can be re-evaluated.
 
 **Alternative:** If AC8 is already met by existing extension architecture (extensions already sit above packages), close #113 and move to MCI freeze resolution — address #65 or #67 directly.
