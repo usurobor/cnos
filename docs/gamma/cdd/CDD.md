@@ -426,6 +426,8 @@ These must be executed within the same cycle:
 - lag-table updates
 - metadata fixes
 
+Skill/spec patches produced as immediate outputs must pass CLP β: does this change create a mismatch with any canonical or derived surface? If the edited artifact has a paired authority surface (executable skill ↔ canonical spec), both must be updated in the same commit.
+
 ### 10.2 Deferred outputs
 
 These may become the next cycle's work, but must be committed concretely:
