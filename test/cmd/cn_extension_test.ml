@@ -590,31 +590,45 @@ let%expect_test "execution_limits: derives from shell_config" =
 
 (* === Host binary protocol (cnos-ext-http stub) === *)
 
+(* Resolve host binary path. Works from repo root (local dev),
+   dune build sandbox (_build/default/test/cmd/), and dune inline_tests.
+   The dune (deps) stanza ensures the file is available. *)
+let find_host_binary () =
+  let rel = "src/agent/extensions/cnos.net.http/host/cnos-ext-http" in
+  let candidates = [
+    (* dune inline_tests: deps path relative to test/cmd/ *)
+    "../../" ^ rel;
+    (* repo root (cwd = repo root) *)
+    Sys.getcwd () ^ "/" ^ rel;
+    (* walk up from cwd to find repo root *)
+    "../../../" ^ rel;
+    "../../../../" ^ rel;
+  ] in
+  List.find_opt Sys.file_exists candidates
+
 (* Invariant: host responds to describe with extension metadata *)
 let%expect_test "host stub: describe returns extension info" =
-  let host_path = Sys.getcwd () ^
-    "/src/agent/extensions/cnos.net.http/host/cnos-ext-http" in
-  if Sys.file_exists host_path then begin
-    let request = Cn_ext_host.request_to_json Cn_ext_host.Describe in
-    let input = Cn_json.to_string request ^ "\n" in
-    let code, output =
-      Cn_ffi.Process.exec_args ~prog:host_path ~args:[]
-        ~stdin_data:input () in
-    Printf.printf "exit=%d\n" code;
-    match Cn_json.parse (String.trim output) with
-    | Ok json ->
-      (match Cn_json.get_string "status" json with
-       | Some s -> Printf.printf "status=%s\n" s
-       | None -> Printf.printf "no status\n");
-      (match Cn_json.get "data" json with
-       | Some data ->
-         (match Cn_json.get_string "name" data with
-          | Some n -> Printf.printf "name=%s\n" n
-          | None -> Printf.printf "no name\n")
-       | None -> Printf.printf "no data\n")
-    | Error e -> Printf.printf "parse error: %s\n" e
-  end else
-    Printf.printf "host not found (skipping)\n";
+  (match find_host_binary () with
+   | None -> Printf.printf "host not found (skipping)\n"
+   | Some host_path ->
+     let request = Cn_ext_host.request_to_json Cn_ext_host.Describe in
+     let input = Cn_json.to_string request ^ "\n" in
+     let code, output =
+       Cn_ffi.Process.exec_args ~prog:host_path ~args:[]
+         ~stdin_data:input () in
+     Printf.printf "exit=%d\n" code;
+     (match Cn_json.parse (String.trim output) with
+      | Ok json ->
+        (match Cn_json.get_string "status" json with
+         | Some s -> Printf.printf "status=%s\n" s
+         | None -> Printf.printf "no status\n");
+        (match Cn_json.get "data" json with
+         | Some data ->
+           (match Cn_json.get_string "name" data with
+            | Some n -> Printf.printf "name=%s\n" n
+            | None -> Printf.printf "no name\n")
+         | None -> Printf.printf "no data\n")
+      | Error e -> Printf.printf "parse error: %s\n" e));
   [%expect {|
     exit=0
     status=ok
@@ -623,57 +637,49 @@ let%expect_test "host stub: describe returns extension info" =
 
 (* Invariant: host responds to health check *)
 let%expect_test "host stub: health returns ok" =
-  let host_path = Sys.getcwd () ^
-    "/src/agent/extensions/cnos.net.http/host/cnos-ext-http" in
-  if Sys.file_exists host_path then begin
-    match Cn_ext_host.check_health ~command:[host_path] () with
-    | Ok () -> Printf.printf "healthy\n"
-    | Error msg -> Printf.printf "unhealthy: %s\n" msg
-  end else
-    Printf.printf "host not found (skipping)\n";
+  (match find_host_binary () with
+   | None -> Printf.printf "host not found (skipping)\n"
+   | Some host_path ->
+     match Cn_ext_host.check_health ~command:[host_path] () with
+     | Ok () -> Printf.printf "healthy\n"
+     | Error msg -> Printf.printf "unhealthy: %s\n" msg);
   [%expect {| healthy |}]
 
 (* Negative space: host rejects unknown op kinds *)
 let%expect_test "host stub: unknown op kind rejected" =
-  let host_path = Sys.getcwd () ^
-    "/src/agent/extensions/cnos.net.http/host/cnos-ext-http" in
-  if Sys.file_exists host_path then begin
-    let result = Cn_ext_host.execute_extension_op
-      ~command:[host_path] ~op_kind:"nonexistent_op"
-      ~arguments:[] () in
-    (match result with
+  (match find_host_binary () with
+   | None -> Printf.printf "host not found (skipping)\n"
+   | Some host_path ->
+     let result = Cn_ext_host.execute_extension_op
+       ~command:[host_path] ~op_kind:"nonexistent_op"
+       ~arguments:[] () in
+     match result with
      | Ok _ -> Printf.printf "ok (wrong — should reject)\n"
-     | Error msg -> Printf.printf "rejected: %s\n" msg)
-  end else
-    Printf.printf "host not found (skipping)\n";
+     | Error msg -> Printf.printf "rejected: %s\n" msg);
   [%expect {| rejected: unknown op kind: nonexistent_op |}]
 
 (* Negative space: http_get rejects missing URL *)
 let%expect_test "host stub: http_get without url rejected" =
-  let host_path = Sys.getcwd () ^
-    "/src/agent/extensions/cnos.net.http/host/cnos-ext-http" in
-  if Sys.file_exists host_path then begin
-    let result = Cn_ext_host.execute_extension_op
-      ~command:[host_path] ~op_kind:"http_get"
-      ~arguments:[] () in
-    (match result with
+  (match find_host_binary () with
+   | None -> Printf.printf "host not found (skipping)\n"
+   | Some host_path ->
+     let result = Cn_ext_host.execute_extension_op
+       ~command:[host_path] ~op_kind:"http_get"
+       ~arguments:[] () in
+     match result with
      | Ok _ -> Printf.printf "ok (wrong — should reject)\n"
-     | Error msg -> Printf.printf "rejected: %s\n" msg)
-  end else
-    Printf.printf "host not found (skipping)\n";
+     | Error msg -> Printf.printf "rejected: %s\n" msg);
   [%expect {| rejected: missing required field: url |}]
 
 (* Negative space: http_get rejects non-http URL schemes *)
 let%expect_test "host stub: http_get rejects file:// scheme" =
-  let host_path = Sys.getcwd () ^
-    "/src/agent/extensions/cnos.net.http/host/cnos-ext-http" in
-  if Sys.file_exists host_path then begin
-    let result = Cn_ext_host.execute_extension_op
-      ~command:[host_path] ~op_kind:"http_get"
-      ~arguments:["url", Cn_json.String "file:///etc/passwd"] () in
-    (match result with
+  (match find_host_binary () with
+   | None -> Printf.printf "host not found (skipping)\n"
+   | Some host_path ->
+     let result = Cn_ext_host.execute_extension_op
+       ~command:[host_path] ~op_kind:"http_get"
+       ~arguments:["url", Cn_json.String "file:///etc/passwd"] () in
+     match result with
      | Ok _ -> Printf.printf "ok (wrong — should reject)\n"
-     | Error msg -> Printf.printf "rejected: %s\n" msg)
-  end else
-    Printf.printf "host not found (skipping)\n";
+     | Error msg -> Printf.printf "rejected: %s\n" msg);
   [%expect {| rejected: url must use http or https scheme |}]

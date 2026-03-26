@@ -157,5 +157,6 @@
  (name cn_extension_test)
  (modules cn_extension_test)
  (libraries cn_cmd cn_ffi cn_lib unix)
- (inline_tests)
+ (inline_tests
+  (deps ../../src/agent/extensions/cnos.net.http/host/cnos-ext-http))
  (preprocess (pps ppx_expect)))
