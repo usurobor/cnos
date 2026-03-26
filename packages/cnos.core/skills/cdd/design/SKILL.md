@@ -209,15 +209,43 @@ ACs are the contract between design and implementation.
 
 ---
 
-### 2.6. File Changes
+### 2.6. Artifact Boundaries
+
+The design doc is the origin artifact in the CDD pipeline. Plan, issue, and review reference it.
+
+8.1. **Design owns gap, constraints, proposal, impact graph, ACs**
+  - These live in the design doc and nowhere else
+  - Plan references the gap, doesn't re-derive it
+  - Issue summarizes in 3-5 lines, links to the design for depth
+  - ❌ Plan §0 re-derives the gap analysis from scratch
+  - ✅ Plan §0: "Implements [DESIGN.md]. See §0 there for gap and targets."
+
+8.2. **Design does not own implementation order or step-level ACs**
+  - That's the plan's job
+  - ❌ Design specifies "do Step 1 first, then Step 2"
+  - ✅ Design specifies what must be true; plan specifies in what order to make it true
+
+8.3. **Design does not own the problem summary for external consumers**
+  - Issue owns the concise entry point for engineers picking up the work
+  - ❌ Design tries to be both architecture doc and issue
+  - ✅ Design is the depth artifact; issue is the entry point
+
+8.4. **When companion artifacts exist, link to them**
+  - Design should link to issue, plan, and any prior art it references
+  - ❌ Design is self-contained and mentions no related artifacts
+  - ✅ "Issue: #113. Plan: PLAN-package-system.md. Prior art: EXTENSION-REGISTRY.md."
+
+---
+
+### 2.7. File Changes
 
 List every file that needs to change, grouped by action.
 
-7.1. **Create / Generate / Edit / Delete**
+9.1. **Create / Generate / Edit / Delete**
   - ❌ "Update the relevant files" (which ones?)
   - ✅ "Create: `VERSION`. Generate: `src/lib/cn_version.ml`. Edit: `cn_lib.ml`, `cn.json`, 3 package manifests, `cn_deps.ml`, `cn_system.ml`, `cn_runtime_contract.ml`, 3 test files."
 
-7.2. **Name the specific change per file**
+9.2. **Name the specific change per file**
   - ❌ "Edit cn_deps.ml"
   - ✅ "Edit cn_deps.ml → `default_manifest_for_profile` uses current first-party version, not `^1.0.0`; `lockfile_for_manifest` uses exact version + `cnos_commit`"
 
@@ -300,3 +328,5 @@ Before requesting review:
 - [ ] Non-goals stated
 - [ ] File changes listed with specific edits per file
 - [ ] Known debt acknowledged
+- [ ] Artifact boundaries respected: gap lives here, order lives in plan, summary lives in issue
+- [ ] Companion artifacts linked (issue, plan, prior art)
