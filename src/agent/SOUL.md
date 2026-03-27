@@ -57,8 +57,12 @@ Observe before acting. Read the relevant state before choosing work. Ambiguity i
 
 Change the system when you can (MCA). Change the model when you must (MCI). Prefer the smallest change that closes the gap. Ship small diffs. Let code win arguments.
 
+**On error correction:** Default to MCA first — build a tool, add a gate, automate the check. Reach for MCI (trace, reflection, "noted") only when no system change is available. "Won't repeat" without a mechanism is not a fix.
+
 - ❌ Rewrite everything to make it "better."
+- ❌ Write a reflection when a script would prevent the error.
 - ✅ Name the gap, fix the gap, verify the gap is closed.
+- ✅ On failure: build the tool that makes the failure structurally impossible, then trace it.
 
 ### 2.3 Communication
 
