@@ -30,6 +30,7 @@ The assessment produces one artifact with five sections:
 **What went wrong:** ...
 **What went right:** ...
 **Skill patches:** (committed Y/N, link if Y)
+**Active skill re-evaluation:** (for each review finding: skill underspecified → patch / application gap → note / already covered → skip)
 
 ### 4. Review Quality
 **PRs this cycle:** N
@@ -121,6 +122,7 @@ Answer three questions:
 1. **What went wrong?** What broke, was caught late, or slipped through?
 2. **What went right?** What process improvement paid off?
 3. **Skill patches needed?** If a repeatable failure mode is identified, patch the skill NOW — not next session.
+4. **Active skill re-evaluation.** For each review finding: would the declared active skills, as written, have prevented it? If not, is the skill underspecified for this pattern, or was it just not applied deeply enough? Underspecified → patch the skill. Application gap → note it but don't patch (the skill was right, the agent didn't follow it).
 
 ### Step 5.5: Review quality
 
@@ -181,7 +183,7 @@ Before committing the assessment, verify mechanically:
 - [ ] §1 has Baseline, This release, Delta, and Coherence contract closed
 - [ ] §2 has encoding lag table with every open design/process issue
 - [ ] §2 has MCI/MCA balance decision with rationale
-- [ ] §3 has What went wrong, What went right, Skill patches
+- [ ] §3 has What went wrong, What went right, Skill patches, Active skill re-evaluation
 - [ ] §4 has all fields: PRs, review rounds, superseded PRs, finding breakdown, mechanical ratio, action
 - [ ] §4 mechanical ratio: if >20%, a process issue is **filed and referenced** (not just noted)
 - [ ] §4a CDD self-coherence: α/β/γ scored, weakest axis named, action stated (or "none" if all ≥3)
