@@ -1,4 +1,4 @@
-## CDD Selection — Post v3.22.0
+## CDD Selection -- Post v3.22.0
 
 **Date:** 2026-03-27
 **Inputs read:** CHANGELOG TSC, encoding lag table, v3.22.0 post-release assessment
@@ -9,11 +9,11 @@
 
 | Signal | Value |
 |--------|-------|
-| Baseline | v3.22.0 — α A-, β A, γ A- |
-| Weakest axis | α (A-) — structural |
+| Baseline | v3.22.0 -- alpha A-, beta A, gamma A- |
+| Weakest axis | alpha (A-) -- structural |
 | Mechanical ratio | 0% (v3.22.0 cycle) |
-| Review rounds | 1 (v3.22.0 cycle, target ≤2) |
-| MCI state | **Resumed** — freeze lifted in v3.20.0 |
+| Review rounds | 1 (v3.22.0 cycle, target <=2) |
+| MCI state | **Resumed** -- freeze lifted in v3.20.0 |
 | Stale issues | 0 |
 | Growing issues | 14 |
 | P0 bugs | 2 (#64 filesystem probing, #119 setup stubs) |
@@ -23,9 +23,9 @@
 | Priority | Rule | Result |
 |----------|------|--------|
 | 1 | P0 override | **Yes.** Two P0 bugs: #64 (v3.11.0), #119 (recent). |
-| 2 | Operational infrastructure | Skipped — P0 fires first. |
-| 3 | Assessment commitment | v3.22.0 deferred selection — no committed next MCA. |
-| 4 | MCI freeze check | N/A — freeze lifted. |
+| 2 | Operational infrastructure | Skipped -- P0 fires first. |
+| 3 | Assessment commitment | v3.22.0 deferred selection -- no committed next MCA. |
+| 4 | MCI freeze check | N/A -- freeze lifted. |
 
 ### 3. P0 triage
 
@@ -42,15 +42,15 @@
 
 ### 4. Selected gap
 
-**Next MCA:** #119 — P0: cn setup uses hardcoded stubs instead of distributed templates
+**Next MCA:** #119 -- P0: cn setup uses hardcoded stubs instead of distributed templates
 
-**Incoherence:** The package system distributes 5 asset categories (doctrine, mindsets, skills, extensions, plus cn.package.json) but NOT the agent identity templates (SOUL.md, USER.md). The setup path hardcodes 10-line stubs that diverge from the 149-line distributed template. CDD §3.2 (one canonical source per fact) is violated: the inline stubs are a stale copy that never receives updates from the source of truth.
+**Incoherence:** The package system distributes 5 asset categories (doctrine, mindsets, skills, extensions, plus cn.package.json) but NOT the agent identity templates (SOUL.md, USER.md). The setup path hardcodes 10-line stubs that diverge from the 149-line distributed template. CDD S3.2 (one canonical source per fact) is violated: the inline stubs are a stale copy that never receives updates from the source of truth.
 
 **What fails if skipped:** Every new hub starts with a degraded soul. The autonomy defaults, correction protocol, identity structure, conduct rules, and invariants in the distributed SOUL.md never reach new agents. Updates to the template (e.g., bef1cf7 added anti-patterns) never propagate. Trust gap: the system ships complete packages but incomplete agent identity.
 
 ### 5. Mode
 
-**MCA** — extend the package system with a templates source category; modify setup to read from installed package.
+**MCA** -- extend the package system with a templates source category; modify setup to read from installed package.
 
 ### 6. Acceptance criteria
 
@@ -66,7 +66,7 @@
 
 **Architecture-evolution framing:**
 
-- **Pressure:** Hardcoded stubs are a recurring pattern — the same content is duplicated between `src/agent/` and inline strings in `cn_system.ml`. Updates to one never reach the other.
+- **Pressure:** Hardcoded stubs are a recurring pattern -- the same content is duplicated between `src/agent/` and inline strings in `cn_system.ml`. Updates to one never reach the other.
 - **Challenged assumption:** "SOUL.md and USER.md are hub-local configuration, not package-distributed content." Partially wrong: they ARE hub-local (operators customize them), but their *initial content* should come from the distributed package.
 - **Selected move:** Add `templates` as a 6th source category in the package system. This follows the existing pattern (doctrine, mindsets, skills, extensions) and uses the same build/install infrastructure.
 
@@ -80,11 +80,11 @@
 
 ### 8. Active skills
 
-- eng/ocaml — Result types, type safety, purity boundary
-- eng/coding — single source of truth, graceful degradation, no duplication
-- eng/architecture-evolution — package system extension as platform move
+- eng/ocaml -- Result types, type safety, purity boundary
+- eng/coding -- single source of truth, graceful degradation, no duplication
+- eng/architecture-evolution -- package system extension as platform move
 
 ### 9. Deferred
 
-- #64 (filesystem probing) — next P0 after #119
-- #117 (pre-push gate) — process improvement, not P0
+- #64 (filesystem probing) -- next P0 after #119
+- #117 (pre-push gate) -- process improvement, not P0
