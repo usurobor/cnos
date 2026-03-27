@@ -39,6 +39,13 @@ The assessment produces one artifact with five sections:
 **Mechanical ratio:** N% (threshold: 20% → file process issue)
 **Action:** none / filed #NN
 
+### 4a. CDD Self-Coherence
+- **CDD α:** _/4 — (artifact integrity)
+- **CDD β:** _/4 — (surface agreement)
+- **CDD γ:** _/4 — (cycle economics)
+- **Weakest axis:** α / β / γ
+- **Action:** none / patch skill / patch doc / automate check
+
 ### 5. Next Move
 **Next MCA:** #NN — title
 **Owner:** ...
@@ -125,6 +132,31 @@ For every PR in this release cycle, record:
 
 This step closes the loop from CDD §9 (Assessment). The review quality section in the output template must be filled.
 
+### Step 5.6: CDD self-coherence
+
+Did this cycle itself follow CDD coherently? Score each axis 1–4:
+
+- **CDD α (artifact integrity):** required artifacts present? Bootstrap/frozen snapshot complete? Self-coherence present?
+- **CDD β (surface agreement):** canonical doc, executable skill, PR artifacts, changelog, and assessment agree? Authority conflicts or stale references?
+- **CDD γ (cycle economics):** review rounds within target? Superseded PRs low? Mechanical ratio under threshold? Immediate outputs executed, deferred outputs committed?
+
+```markdown
+### 4a. CDD Self-Coherence
+
+- **CDD α:** _/4 — (rationale)
+- **CDD β:** _/4 — (rationale)
+- **CDD γ:** _/4 — (rationale)
+- **Weakest axis:** α / β / γ
+- **Action:** none / patch skill / patch doc / automate check
+```
+
+This drives action, not score-keeping:
+- low α → patch artifact contract / templates / bootstrap
+- low β → patch canonical doc / executable skill / authority hierarchy
+- low γ → automate mechanical checks, reduce ceremony, tighten selection
+
+If no axis scores below 3, write "no action" and move on.
+
 ### Step 6: Decide next move
 
 Based on measurement + lag + learning, state what happens next as a **concrete commitment**:
@@ -152,6 +184,7 @@ Before committing the assessment, verify mechanically:
 - [ ] §3 has What went wrong, What went right, Skill patches
 - [ ] §4 has all fields: PRs, review rounds, superseded PRs, finding breakdown, mechanical ratio, action
 - [ ] §4 mechanical ratio: if >20%, a process issue is **filed and referenced** (not just noted)
+- [ ] §4a CDD self-coherence: α/β/γ scored, weakest axis named, action stated (or "none" if all ≥3)
 - [ ] §5 has all 6 fields: Next MCA, Owner, Branch, **First AC**, MCI frozen?, Rationale
 - [ ] §5 Closure evidence: immediate outputs listed with links, deferred outputs with issue/owner
 - [ ] CHANGELOG TSC row added or updated to match assessment scores
