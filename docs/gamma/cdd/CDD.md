@@ -454,7 +454,7 @@ That is the handoff from step 13 back to step 0.
 
 ### 11.1 Executable summary
 
-`src/agent/skills/ops/cdd/SKILL.md` is the executable summary of this spec.
+`src/agent/skills/cdd/SKILL.md` is the executable summary of this spec.
 
 ### 11.2 Companion rationale
 
