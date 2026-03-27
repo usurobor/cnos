@@ -744,7 +744,18 @@ let execute_extension_op ~hub_path ~trigger_id ~config ~ext_registry
       status = Cn_shell.Denied; reason = "extension_not_found";
       start_time = start; end_time = now_iso (); artifacts = [] }
   | Some (entry, _ext_op) ->
-    let command = Cn_extension.resolve_command entry in
+    (match Cn_extension.resolve_command entry with
+    | Error reason ->
+      Cn_trace.gemit ~component:"extension" ~layer:Body
+        ~event:"extension.op.error" ~severity:Warn ~status:Error_status
+        ~trigger_id ~reason_code:"host_resolution_failed"
+        ~reason
+        ~details:["kind", Cn_json.String kind_name;
+                   "provider", Cn_json.String entry.manifest.name] ();
+      { Cn_shell.pass = ""; op_id = op.op_id; kind = kind_name;
+        status = Cn_shell.Error_status; reason;
+        start_time = start; end_time = now_iso (); artifacts = [] }
+    | Ok command ->
     let arguments = op.Cn_shell.fields in
     let permissions =
       Cn_extension.effective_permissions ~manifest:entry.manifest ~config in
@@ -779,7 +790,7 @@ let execute_extension_op ~hub_path ~trigger_id ~config ~ext_registry
         ] ();
       { Cn_shell.pass = ""; op_id = op.op_id; kind = kind_name;
         status = Cn_shell.Error_status; reason;
-        start_time = start; end_time = now_iso (); artifacts = [] }
+        start_time = start; end_time = now_iso (); artifacts = [] })
 
 let execute_op ~hub_path ~trigger_id ~config
     ?(ext_registry = Cn_extension.empty_registry ())

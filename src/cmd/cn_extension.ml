@@ -418,24 +418,37 @@ let execution_limits ~(config : Cn_shell.shell_config) =
 
 (* === Command resolution === *)
 
+(** Subdirectory within the extension layout that contains host binaries.
+    Convention established in RUNTIME-EXTENSIONS.md v1.0.6 §5 (Isolation):
+    "Extension host binaries live at {extension_path}/host/{prog}."
+    If the layout convention changes, update this constant. *)
+let host_subdir = "host"
+
 (** Resolve the host command for an extension entry.
     Bare command names (not starting with '/') are resolved relative to the
     extension's installed host/ directory: {extension_path}/host/{prog}.
     Absolute paths are passed through unchanged.
 
-    This bridges the manifest's portable command declaration (e.g. ["cnos-ext-http"])
-    to the actual installed binary path (e.g.
-    ".cn/vendor/packages/cnos.core@3.17.0/extensions/cnos.net.http/host/cnos-ext-http"). *)
+    Returns Error if the resolved binary does not exist or is not executable.
+    This catches package-system issues (missing binary, bad install) at
+    resolution time rather than at subprocess exec time. *)
 let resolve_command entry =
   match entry.manifest.backend.command with
-  | [] -> []
+  | [] -> Error "extension declares empty command"
   | prog :: args ->
-    if String.length prog > 0 && prog.[0] = '/' then
-      prog :: args
+    let resolved_prog =
+      if String.length prog > 0 && prog.[0] = '/' then prog
+      else
+        let host_dir = Cn_ffi.Path.join entry.extension_path host_subdir in
+        Cn_ffi.Path.join host_dir prog
+    in
+    if not (Cn_ffi.Fs.exists resolved_prog) then
+      Error (Printf.sprintf "host binary not found: %s" resolved_prog)
+    else if not (try Unix.access resolved_prog [Unix.X_OK]; true
+                 with Unix.Unix_error _ -> false) then
+      Error (Printf.sprintf "host binary not executable: %s" resolved_prog)
     else
-      let host_dir = Cn_ffi.Path.join entry.extension_path "host" in
-      let resolved = Cn_ffi.Path.join host_dir prog in
-      resolved :: args
+      Ok (resolved_prog :: args)
 
 (* === String helpers === *)
 

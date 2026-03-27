@@ -248,10 +248,12 @@ let run_doctor hub_path =
        e.Cn_extension.state = Cn_extension.Disabled) |> List.length in
      (* Check host health for enabled extensions *)
      let unhealthy = enabled_entries |> List.filter_map (fun e ->
-       let cmd = Cn_extension.resolve_command e in
-       match Cn_ext_host.check_health ~command:cmd () with
-       | Ok () -> None
-       | Error msg -> Some (Printf.sprintf "%s: %s" e.manifest.name msg)
+       match Cn_extension.resolve_command e with
+       | Error reason -> Some (Printf.sprintf "%s: %s" e.manifest.name reason)
+       | Ok cmd ->
+         match Cn_ext_host.check_health ~command:cmd () with
+         | Ok () -> None
+         | Error msg -> Some (Printf.sprintf "%s: %s" e.manifest.name msg)
      ) in
      if total = 0 then
        { name = "extensions"; passed = true; value = "none installed" }
