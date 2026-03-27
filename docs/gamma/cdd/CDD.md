@@ -405,6 +405,7 @@ Post-release assessment is mandatory for substantial releases. It must record:
 - MCA/MCI balance
 - process learning
 - review quality metrics
+- CDD self-coherence (α artifact integrity, β surface agreement, γ cycle economics)
 - next move commitment
 
 The CHANGELOG TSC entry at release time is provisional. Assessment governs the final judgment of the cycle.
