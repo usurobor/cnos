@@ -55,6 +55,7 @@ type extension_entry = {
   manifest : extension_manifest;
   package_name : string;
   package_path : string;
+  extension_path : string;
   state : lifecycle_state;
 }
 
@@ -241,6 +242,7 @@ let discover ~hub_path =
                 manifest;
                 package_name = pkg_name;
                 package_path = pkg_path;
+                extension_path = ext_path;
                 state = Discovered;
               }
             | Error reason ->
@@ -413,6 +415,51 @@ let execution_limits ~(config : Cn_shell.shell_config) =
   [
     "max_artifact_bytes", Cn_json.Int config.max_artifact_bytes_per_op;
   ]
+
+(* === Command resolution === *)
+
+(** Subdirectory within the extension layout that contains host binaries.
+    Convention established in RUNTIME-EXTENSIONS.md v1.0.6 §5 (Isolation):
+    "Extension host binaries live at {extension_path}/host/{prog}."
+    If the layout convention changes, update this constant. *)
+let host_subdir = "host"
+
+(** Resolve the host command for an extension entry.
+    Bare command names (not starting with '/') are resolved relative to the
+    extension's installed host/ directory: {extension_path}/host/{prog}.
+    Absolute paths are passed through unchanged.
+
+    Returns Error if the resolved binary does not exist or is not executable.
+    This catches package-system issues (missing binary, bad install) at
+    resolution time rather than at subprocess exec time. *)
+let resolve_command entry =
+  match entry.manifest.backend.command with
+  | [] -> Error "extension declares empty command"
+  | prog :: args ->
+    if String.length prog > 0 && prog.[0] = '/' then
+      (* Absolute path — pass through with existence check *)
+      if not (Cn_ffi.Fs.exists prog) then
+        Error (Printf.sprintf "host binary not found: %s" prog)
+      else if not (try Unix.access prog [Unix.X_OK]; true
+                   with Unix.Unix_error _ -> false) then
+        Error (Printf.sprintf "host binary not executable: %s" prog)
+      else
+        Ok (prog :: args)
+    else if String.contains prog '/' then
+      (* Relative path with separators — reject to prevent traversal *)
+      Error (Printf.sprintf
+        "command contains path separator: %s (only bare names allowed)" prog)
+    else
+      (* Bare name — resolve relative to host subdirectory *)
+      let host_dir = Cn_ffi.Path.join entry.extension_path host_subdir in
+      let resolved = Cn_ffi.Path.join host_dir prog in
+      if not (Cn_ffi.Fs.exists resolved) then
+        Error (Printf.sprintf "host binary not found: %s" resolved)
+      else if not (try Unix.access resolved [Unix.X_OK]; true
+                   with Unix.Unix_error _ -> false) then
+        Error (Printf.sprintf "host binary not executable: %s" resolved)
+      else
+        Ok (resolved :: args)
 
 (* === String helpers === *)
 
