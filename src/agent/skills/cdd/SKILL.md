@@ -134,7 +134,7 @@ State:
 
 State why MCI is required if action is blocked.
 
-Name 2–3 skills as hard generation constraints for this change. All others are reference only. Fewer constraints deeply applied > many constraints lightly checked. (CDD §4.4)
+Name 2–3 skills as hard generation constraints for this change. **Read each SKILL.md file before beginning any work step.** Naming a skill without reading it is not loading it. All others are reference only. Fewer constraints deeply applied > many constraints lightly checked. (CDD §4.4)
 
 ### 2.5 Build artifacts in order
 
