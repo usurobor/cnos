@@ -53,6 +53,10 @@
     ],
     "extensions": [
       "cnos.net.http"
+    ],
+    "templates": [
+      "SOUL.md",
+      "USER.md"
     ]
   }
 }

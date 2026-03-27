@@ -53,6 +53,9 @@ let with_test_repo f =
   touch skill_dir "kata.md" "# Kata";
   let eng_skill = Filename.concat agent "skills/eng/coding" in
   touch eng_skill "SKILL.md" "# Coding";
+  (* Create src/agent/templates/ *)
+  touch (Filename.concat agent "templates") "SOUL.md" "# Soul\n\nDefault template.";
+  touch (Filename.concat agent "templates") "USER.md" "# User\n\nDefault template.";
   (* Create packages/ with manifests *)
   let core_dir = Filename.concat root "packages/cnos.core" in
   touch core_dir "cn.package.json"
@@ -65,7 +68,8 @@ let with_test_repo f =
   "sources": {
     "doctrine": ["*"],
     "mindsets": ["ENGINEERING.md", "PM.md", "WISDOM.md"],
-    "skills": ["agent/hello-world"]
+    "skills": ["agent/hello-world"],
+    "templates": ["SOUL.md", "USER.md"]
   }
 }|};
   let eng_dir = Filename.concat root "packages/cnos.eng" in
@@ -309,4 +313,101 @@ let%expect_test "check passes when packages match source" =
     Printf.printf "%s: %d issues\n" name (List.length mismatches));
   [%expect {|
     cnos.core: 0 issues
+  |}]
+
+(* === Templates === *)
+
+let%expect_test "build_one copies templates to package" =
+  with_test_repo (fun root ->
+    let agent_root = Filename.concat root "src/agent" in
+    let pkgs_dir = Filename.concat root "packages" in
+    let packages = Cn_build.discover_packages root in
+    let (dir_name, pkg) = List.hd packages in
+    let _pkg = Cn_build.build_one ~agent_root ~pkgs_dir (dir_name, pkg) in
+    let templates_dir = Filename.concat pkgs_dir "cnos.core/templates" in
+    let files = Sys.readdir templates_dir |> Array.to_list |> List.sort String.compare in
+    List.iter print_endline files;
+    let content = Cn_ffi.Fs.read (Filename.concat templates_dir "SOUL.md") in
+    print_endline content);
+  [%expect {|
+    SOUL.md
+    USER.md
+    # Soul\n\nDefault template.
+  |}]
+
+let%expect_test "clean removes templates directory" =
+  with_test_repo (fun root ->
+    let agent_root = Filename.concat root "src/agent" in
+    let pkgs_dir = Filename.concat root "packages" in
+    let packages = Cn_build.discover_packages root in
+    let (dir_name, pkg) = List.hd packages in
+    let _pkg = Cn_build.build_one ~agent_root ~pkgs_dir (dir_name, pkg) in
+    let pkg_dir = Filename.concat pkgs_dir dir_name in
+    Cn_build.clean_package_dir pkg_dir;
+    let templates_exists = Sys.file_exists (Filename.concat pkg_dir "templates") in
+    Printf.printf "templates=%b\n" templates_exists);
+  [%expect {|
+    templates=false
+  |}]
+
+let%expect_test "check detects template drift" =
+  with_test_repo (fun root ->
+    let agent_root = Filename.concat root "src/agent" in
+    let pkgs_dir = Filename.concat root "packages" in
+    let packages = Cn_build.discover_packages root in
+    let (dir_name, pkg) = List.hd packages in
+    let _pkg = Cn_build.build_one ~agent_root ~pkgs_dir (dir_name, pkg) in
+    (* Modify template source *)
+    Cn_ffi.Fs.write
+      (Filename.concat root "src/agent/templates/SOUL.md")
+      "# Soul v2 — updated";
+    let (name, mismatches) = Cn_build.check_one ~agent_root ~pkgs_dir (dir_name, pkg) in
+    Printf.printf "%s: %d issues\n" name (List.length mismatches);
+    List.iter (fun m -> print_endline m) mismatches);
+  [%expect {|
+    cnos.core: 1 issues
+    differs: templates/SOUL.md
+  |}]
+
+(* === Template resolution (cn_system.read_template) === *)
+
+let%expect_test "read_template returns Ok when cnos.core installed with templates" =
+  let hub = mk_temp_dir "cn-template-test" in
+  Fun.protect ~finally:(fun () -> rm_tree hub) (fun () ->
+    (* Simulate installed package with templates *)
+    let pkg_dir = Filename.concat hub ".cn/vendor/packages/cnos.core@1.0.0/templates" in
+    touch pkg_dir "SOUL.md" "# Full Soul Template";
+    touch pkg_dir "USER.md" "# Full User Template";
+    match Cn_system.read_template ~hub_path:hub "SOUL.md" with
+    | Ok content -> Printf.printf "ok: %s\n" content
+    | Error reason -> Printf.printf "error: %s\n" reason);
+  [%expect {|
+    ok: # Full Soul Template
+  |}]
+
+let%expect_test "read_template returns Error when cnos.core not installed" =
+  let hub = mk_temp_dir "cn-template-test" in
+  Fun.protect ~finally:(fun () -> rm_tree hub) (fun () ->
+    (* No packages installed *)
+    match Cn_system.read_template ~hub_path:hub "SOUL.md" with
+    | Ok content -> Printf.printf "ok: %s\n" content
+    | Error reason -> Printf.printf "error: %s\n" reason);
+  [%expect {|
+    error: cnos.core not installed
+  |}]
+
+let%expect_test "read_template returns Error when template file missing" =
+  let hub = mk_temp_dir "cn-template-test" in
+  Fun.protect ~finally:(fun () -> rm_tree hub) (fun () ->
+    (* Package installed but no templates/ directory *)
+    let pkg_dir = Filename.concat hub ".cn/vendor/packages/cnos.core@1.0.0" in
+    touch pkg_dir "cn.package.json" "{}";
+    match Cn_system.read_template ~hub_path:hub "SOUL.md" with
+    | Ok content -> Printf.printf "ok: %s\n" content
+    | Error reason ->
+        (* Check it says "not found" rather than printing the full path *)
+        let has_not_found = String.length reason > 10 in
+        Printf.printf "error: has_reason=%b\n" has_not_found);
+  [%expect {|
+    error: has_reason=true
   |}]
