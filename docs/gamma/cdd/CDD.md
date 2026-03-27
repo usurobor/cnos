@@ -403,7 +403,7 @@ Post-release assessment is mandatory for substantial releases. It must record:
 - measured coherence delta
 - encoding lag table
 - MCA/MCI balance
-- process learning
+- process learning (including active skill re-evaluation against review findings)
 - review quality metrics
 - CDD self-coherence (α artifact integrity, β surface agreement, γ cycle economics)
 - next move commitment
