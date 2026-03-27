@@ -186,6 +186,8 @@ Examples:
 
   - ❌ Test only the allowed path
   - ✅ Test the forbidden path with the same seriousness
+  - ❌ Negative space only at unit level (e2e tests cover only the happy path)
+  - ✅ E2e tests include failure modes: missing binary, bad permissions, malformed response
 
 ### 2.8. Test across projections when the system has more than one view
 

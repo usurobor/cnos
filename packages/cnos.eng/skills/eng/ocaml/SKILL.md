@@ -204,6 +204,11 @@ When overlapping names are unavoidable, annotate **all** access sites in one pas
 
 Use `Result` types for expected failures. Reserve exceptions for truly unexpected conditions. Never `with _ ->`.
 
+Functions that resolve or construct paths to external resources (binaries, config files, package contents) should validate existence or return `Result` — don't construct a path and return it bare, deferring discovery of missing resources to the caller's opaque exec/IO failure.
+
+  - ❌ `let resolve name = Path.join dir name` (caller gets `ENOENT` from exec)
+  - ✅ `let resolve name = let p = Path.join dir name in if exists p then Ok p else Error (sprintf "not found: %s" p)`
+
 ### 3.4 Test rule
 
 Every module gets ppx_expect inline tests. The expect-test output is the behavioral contract. If the output changes, the test fails — review the diff.
