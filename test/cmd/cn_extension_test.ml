@@ -151,6 +151,7 @@ let make_entry name ops_list state =
       ops; permissions = []; engines = [];
     };
     package_name = name; package_path = "/tmp/" ^ name;
+    extension_path = "/tmp/" ^ name ^ "/extensions/" ^ name;
     state;
   }
 
@@ -683,3 +684,423 @@ let%expect_test "host stub: http_get rejects file:// scheme" =
      | Ok _ -> Printf.printf "ok (wrong — should reject)\n"
      | Error msg -> Printf.printf "rejected: %s\n" msg);
   [%expect {| rejected: url must use http or https scheme |}]
+
+(* === Command resolution === *)
+
+let%expect_test "resolve_command: bare name resolved to extension host dir" =
+  (* Create a real host binary so resolve_command can find it *)
+  let tmp = mk_temp_dir "resolve-bare" in
+  let ext_path = tmp ^ "/extensions/cnos.net.http" in
+  let host_dir = ext_path ^ "/host" in
+  Unix.mkdir (tmp ^ "/extensions") 0o700;
+  Unix.mkdir ext_path 0o700;
+  Unix.mkdir host_dir 0o700;
+  let prog_path = host_dir ^ "/cnos-ext-http" in
+  let oc = open_out prog_path in
+  output_string oc "#!/bin/sh\n"; close_out oc;
+  Unix.chmod prog_path 0o755;
+  let entry = { Cn_extension.
+    manifest = {
+      schema = "cn.extension.v1"; name = "cnos.net.http"; version = "1.0.0";
+      interface = "cn.ext.v1"; ext_kind = "capability-provider";
+      backend = { backend_kind = "subprocess"; command = ["cnos-ext-http"] };
+      ops = []; permissions = []; engines = [];
+    };
+    package_name = "cnos.core";
+    package_path = tmp;
+    extension_path = ext_path;
+    state = Enabled;
+  } in
+  (match Cn_extension.resolve_command entry with
+   | Ok cmd ->
+     let has_suffix s suffix =
+       let sl = String.length s and xl = String.length suffix in
+       sl >= xl && String.sub s (sl - xl) xl = suffix in
+     Printf.printf "ok suffix=%b\n"
+       (has_suffix (List.hd cmd) "/extensions/cnos.net.http/host/cnos-ext-http")
+   | Error e -> Printf.printf "error: %s\n" e);
+  [%expect {| ok suffix=true |}]
+
+let%expect_test "resolve_command: missing host binary returns error" =
+  let entry = { Cn_extension.
+    manifest = {
+      schema = "cn.extension.v1"; name = "cnos.net.http"; version = "1.0.0";
+      interface = "cn.ext.v1"; ext_kind = "capability-provider";
+      backend = { backend_kind = "subprocess"; command = ["cnos-ext-http"] };
+      ops = []; permissions = []; engines = [];
+    };
+    package_name = "cnos.core";
+    package_path = "/nonexistent/pkg";
+    extension_path = "/nonexistent/pkg/extensions/cnos.net.http";
+    state = Enabled;
+  } in
+  (match Cn_extension.resolve_command entry with
+   | Ok _ -> Printf.printf "ok (unexpected)\n"
+   | Error e -> Printf.printf "error: %s\n" e);
+  [%expect {| error: host binary not found: /nonexistent/pkg/extensions/cnos.net.http/host/cnos-ext-http |}]
+
+let%expect_test "resolve_command: non-executable host binary returns error" =
+  let tmp = mk_temp_dir "resolve-noexec" in
+  let ext_path = tmp ^ "/extensions/test.ext" in
+  let host_dir = ext_path ^ "/host" in
+  Unix.mkdir (tmp ^ "/extensions") 0o700;
+  Unix.mkdir ext_path 0o700;
+  Unix.mkdir host_dir 0o700;
+  let prog_path = host_dir ^ "/test-prog" in
+  let oc = open_out prog_path in
+  output_string oc "not executable"; close_out oc;
+  Unix.chmod prog_path 0o644;  (* readable but not executable *)
+  let entry = { Cn_extension.
+    manifest = {
+      schema = "cn.extension.v1"; name = "test.ext"; version = "1.0.0";
+      interface = "cn.ext.v1"; ext_kind = "capability-provider";
+      backend = { backend_kind = "subprocess"; command = ["test-prog"] };
+      ops = []; permissions = []; engines = [];
+    };
+    package_name = "test.pkg";
+    package_path = tmp;
+    extension_path = ext_path;
+    state = Enabled;
+  } in
+  (match Cn_extension.resolve_command entry with
+   | Ok _ -> Printf.printf "ok (unexpected)\n"
+   | Error e ->
+     let has_sub s sub =
+       let sl = String.length s and xl = String.length sub in
+       let rec check i = i + xl <= sl &&
+         (String.sub s i xl = sub || check (i + 1)) in
+       check 0 in
+     Printf.printf "error_contains_not_executable=%b\n"
+       (has_sub e "not executable"));
+  [%expect {| error_contains_not_executable=true |}]
+
+let%expect_test "resolve_command: absolute path passed through" =
+  (* /bin/sh exists and is executable on all POSIX systems *)
+  let entry = { Cn_extension.
+    manifest = {
+      schema = "cn.extension.v1"; name = "test.ext"; version = "1.0.0";
+      interface = "cn.ext.v1"; ext_kind = "capability-provider";
+      backend = { backend_kind = "subprocess"; command = ["/bin/sh"; "-c"; "echo hi"] };
+      ops = []; permissions = []; engines = [];
+    };
+    package_name = "test.pkg";
+    package_path = "/tmp/test.pkg";
+    extension_path = "/tmp/test.pkg/extensions/test.ext";
+    state = Enabled;
+  } in
+  (match Cn_extension.resolve_command entry with
+   | Ok cmd -> List.iter (Printf.printf "%s\n") cmd
+   | Error e -> Printf.printf "error: %s\n" e);
+  [%expect {|
+    /bin/sh
+    -c
+    echo hi |}]
+
+let%expect_test "resolve_command: empty command returns error" =
+  let entry = { Cn_extension.
+    manifest = {
+      schema = "cn.extension.v1"; name = "test.ext"; version = "1.0.0";
+      interface = "cn.ext.v1"; ext_kind = "capability-provider";
+      backend = { backend_kind = "subprocess"; command = [] };
+      ops = []; permissions = []; engines = [];
+    };
+    package_name = "test.pkg";
+    package_path = "/tmp/test.pkg";
+    extension_path = "/tmp/test.pkg/extensions/test.ext";
+    state = Enabled;
+  } in
+  (match Cn_extension.resolve_command entry with
+   | Ok _ -> Printf.printf "ok (unexpected)\n"
+   | Error e -> Printf.printf "error: %s\n" e);
+  [%expect {| error: extension declares empty command |}]
+
+let%expect_test "resolve_command: path traversal rejected" =
+  let entry = { Cn_extension.
+    manifest = {
+      schema = "cn.extension.v1"; name = "test.ext"; version = "1.0.0";
+      interface = "cn.ext.v1"; ext_kind = "capability-provider";
+      backend = { backend_kind = "subprocess"; command = ["../escape"] };
+      ops = []; permissions = []; engines = [];
+    };
+    package_name = "test.pkg";
+    package_path = "/tmp/test.pkg";
+    extension_path = "/tmp/test.pkg/extensions/test.ext";
+    state = Enabled;
+  } in
+  (match Cn_extension.resolve_command entry with
+   | Ok _ -> Printf.printf "ok (unexpected)\n"
+   | Error e -> Printf.printf "error: %s\n" e);
+  [%expect {| error: command contains path separator: ../escape (only bare names allowed) |}]
+
+let%expect_test "resolve_command: subdirectory traversal rejected" =
+  let entry = { Cn_extension.
+    manifest = {
+      schema = "cn.extension.v1"; name = "test.ext"; version = "1.0.0";
+      interface = "cn.ext.v1"; ext_kind = "capability-provider";
+      backend = { backend_kind = "subprocess"; command = ["subdir/prog"] };
+      ops = []; permissions = []; engines = [];
+    };
+    package_name = "test.pkg";
+    package_path = "/tmp/test.pkg";
+    extension_path = "/tmp/test.pkg/extensions/test.ext";
+    state = Enabled;
+  } in
+  (match Cn_extension.resolve_command entry with
+   | Ok _ -> Printf.printf "ok (unexpected)\n"
+   | Error e -> Printf.printf "error: %s\n" e);
+  [%expect {| error: command contains path separator: subdir/prog (only bare names allowed) |}]
+
+(* === End-to-end dispatch: discovery → registry → resolve → host === *)
+
+let%expect_test "e2e: discovered extension resolves command through installed path" =
+  let hub = mk_temp_dir "ext-e2e" in
+  let pkg_dir = hub ^ "/.cn/vendor/packages/cnos.core@3.17.0" in
+  let ext_dir = pkg_dir ^ "/extensions/cnos.net.http" in
+  Unix.mkdir (hub ^ "/.cn") 0o700;
+  Unix.mkdir (hub ^ "/.cn/vendor") 0o700;
+  Unix.mkdir (hub ^ "/.cn/vendor/packages") 0o700;
+  Unix.mkdir pkg_dir 0o700;
+  Unix.mkdir (pkg_dir ^ "/extensions") 0o700;
+  Unix.mkdir ext_dir 0o700;
+  let manifest = {|{
+    "schema": "cn.extension.v1",
+    "name": "cnos.net.http",
+    "version": "1.0.0",
+    "interface": "cn.ext.v1",
+    "backend": { "kind": "subprocess", "command": ["cnos-ext-http"] },
+    "ops": [{ "kind": "http_get", "class": "observe" }],
+    "permissions": { "network": true },
+    "engines": {}
+  }|} in
+  let oc = open_out (ext_dir ^ "/cn.extension.json") in
+  output_string oc manifest; close_out oc;
+  let reg = Cn_extension.build_registry ~hub_path:hub ~runtime_version:"3.17.0" () in
+  let entries = Cn_extension.all_entries reg in
+  (match entries with
+   | [e] ->
+     Printf.printf "name=%s state=%s\n" e.Cn_extension.manifest.name
+       (Cn_extension.string_of_lifecycle_state e.state);
+     (* Verify extension_path ends with the expected suffix *)
+     let has_suffix s suffix =
+       let sl = String.length s and xl = String.length suffix in
+       sl >= xl && String.sub s (sl - xl) xl = suffix in
+     Printf.printf "ext_path_suffix=%b\n"
+       (has_suffix e.extension_path "/extensions/cnos.net.http");
+     (* resolve_command returns Error because host binary doesn't exist in this
+        minimal layout — but we can verify the path structure from the error *)
+     (match Cn_extension.resolve_command e with
+      | Ok _ -> Printf.printf "resolved=ok (unexpected — no binary installed)\n"
+      | Error msg ->
+        Printf.printf "resolved_error_has_correct_path=%b\n"
+          (has_suffix msg "/extensions/cnos.net.http/host/cnos-ext-http"))
+   | _ -> Printf.printf "unexpected entry count: %d\n" (List.length entries));
+  [%expect {|
+    name=cnos.net.http state=enabled
+    ext_path_suffix=true
+    resolved_error_has_correct_path=true |}]
+
+let%expect_test "e2e: resolve_command + host health through installed layout" =
+  (* Set up an installed layout with the real host binary *)
+  (match find_host_binary () with
+   | None -> Printf.printf "host not found (skipping)\n"
+   | Some real_host_path ->
+     let hub = mk_temp_dir "ext-e2e-host" in
+     let pkg_dir = hub ^ "/.cn/vendor/packages/cnos.core@3.17.0" in
+     let ext_dir = pkg_dir ^ "/extensions/cnos.net.http" in
+     let host_dir = ext_dir ^ "/host" in
+     Unix.mkdir (hub ^ "/.cn") 0o700;
+     Unix.mkdir (hub ^ "/.cn/vendor") 0o700;
+     Unix.mkdir (hub ^ "/.cn/vendor/packages") 0o700;
+     Unix.mkdir pkg_dir 0o700;
+     Unix.mkdir (pkg_dir ^ "/extensions") 0o700;
+     Unix.mkdir ext_dir 0o700;
+     Unix.mkdir host_dir 0o700;
+     (* Copy real host binary into installed layout *)
+     let content = let ic = open_in real_host_path in
+       let n = in_channel_length ic in
+       let s = Bytes.create n in
+       really_input ic s 0 n; close_in ic; Bytes.to_string s in
+     let dest = host_dir ^ "/cnos-ext-http" in
+     let oc = open_out dest in
+     output_string oc content; close_out oc;
+     Unix.chmod dest 0o755;
+     (* Write manifest *)
+     let manifest = {|{
+       "schema": "cn.extension.v1",
+       "name": "cnos.net.http",
+       "version": "1.0.0",
+       "interface": "cn.ext.v1",
+       "backend": { "kind": "subprocess", "command": ["cnos-ext-http"] },
+       "ops": [{ "kind": "http_get", "class": "observe" }],
+       "permissions": { "network": true },
+       "engines": {}
+     }|} in
+     let oc = open_out (ext_dir ^ "/cn.extension.json") in
+     output_string oc manifest; close_out oc;
+     (* Build registry — simulates boot-time discovery *)
+     let reg = Cn_extension.build_registry ~hub_path:hub ~runtime_version:"3.17.0" () in
+     let entries = Cn_extension.all_entries reg in
+     match entries with
+     | [e] ->
+       (* Resolve command through the installed path *)
+       (match Cn_extension.resolve_command e with
+        | Error reason -> Printf.printf "resolve error: %s\n" reason
+        | Ok cmd ->
+          (* Run health check through resolved command — proves e2e dispatch *)
+          (match Cn_ext_host.check_health ~command:cmd () with
+           | Ok () -> Printf.printf "health=ok\n"
+           | Error msg -> Printf.printf "health=error: %s\n" msg);
+          (* Run describe through resolved command *)
+          (match cmd with
+           | prog :: args ->
+             let request = Cn_ext_host.request_to_json Cn_ext_host.Describe in
+             let input = Cn_json.to_string request ^ "\n" in
+             let code, output = Cn_ffi.Process.exec_args ~prog ~args
+               ~stdin_data:input () in
+             Printf.printf "describe_exit=%d\n" code;
+             (match Cn_json.parse (String.trim output) with
+              | Ok json ->
+                (match Cn_json.get_string "status" json with
+                 | Some s -> Printf.printf "describe_status=%s\n" s
+                 | None -> Printf.printf "no status\n")
+              | Error _ -> Printf.printf "parse error\n")
+           | [] -> Printf.printf "empty command\n"))
+     | _ -> Printf.printf "unexpected entry count: %d\n" (List.length entries));
+  [%expect {|
+    health=ok
+    describe_exit=0
+    describe_status=ok |}]
+
+(* === E2E negative paths === *)
+
+let%expect_test "e2e negative: missing host binary detected at resolution" =
+  let hub = mk_temp_dir "ext-e2e-nohost" in
+  let pkg_dir = hub ^ "/.cn/vendor/packages/cnos.core@3.17.0" in
+  let ext_dir = pkg_dir ^ "/extensions/cnos.net.http" in
+  Unix.mkdir (hub ^ "/.cn") 0o700;
+  Unix.mkdir (hub ^ "/.cn/vendor") 0o700;
+  Unix.mkdir (hub ^ "/.cn/vendor/packages") 0o700;
+  Unix.mkdir pkg_dir 0o700;
+  Unix.mkdir (pkg_dir ^ "/extensions") 0o700;
+  Unix.mkdir ext_dir 0o700;
+  (* No host/ directory — binary is missing *)
+  let manifest = {|{
+    "schema": "cn.extension.v1",
+    "name": "cnos.net.http",
+    "version": "1.0.0",
+    "interface": "cn.ext.v1",
+    "backend": { "kind": "subprocess", "command": ["cnos-ext-http"] },
+    "ops": [{ "kind": "http_get", "class": "observe" }],
+    "permissions": {},
+    "engines": {}
+  }|} in
+  let oc = open_out (ext_dir ^ "/cn.extension.json") in
+  output_string oc manifest; close_out oc;
+  let reg = Cn_extension.build_registry ~hub_path:hub ~runtime_version:"3.17.0" () in
+  let entries = Cn_extension.all_entries reg in
+  (match entries with
+   | [e] ->
+     (match Cn_extension.resolve_command e with
+      | Ok _ -> Printf.printf "resolved (unexpected)\n"
+      | Error msg ->
+        let has_sub s sub =
+          let sl = String.length s and xl = String.length sub in
+          let rec check i = i + xl <= sl &&
+            (String.sub s i xl = sub || check (i + 1)) in
+          check 0 in
+        Printf.printf "error_is_not_found=%b\n" (has_sub msg "not found"))
+   | _ -> Printf.printf "unexpected entry count\n");
+  [%expect {| error_is_not_found=true |}]
+
+let%expect_test "e2e negative: non-executable host binary detected at resolution" =
+  let hub = mk_temp_dir "ext-e2e-noexec" in
+  let pkg_dir = hub ^ "/.cn/vendor/packages/cnos.core@3.17.0" in
+  let ext_dir = pkg_dir ^ "/extensions/cnos.net.http" in
+  let host_dir = ext_dir ^ "/host" in
+  Unix.mkdir (hub ^ "/.cn") 0o700;
+  Unix.mkdir (hub ^ "/.cn/vendor") 0o700;
+  Unix.mkdir (hub ^ "/.cn/vendor/packages") 0o700;
+  Unix.mkdir pkg_dir 0o700;
+  Unix.mkdir (pkg_dir ^ "/extensions") 0o700;
+  Unix.mkdir ext_dir 0o700;
+  Unix.mkdir host_dir 0o700;
+  (* Write binary but don't set executable bit *)
+  let prog = host_dir ^ "/cnos-ext-http" in
+  let oc = open_out prog in
+  output_string oc "#!/bin/sh\necho hi"; close_out oc;
+  Unix.chmod prog 0o644;
+  let manifest = {|{
+    "schema": "cn.extension.v1",
+    "name": "cnos.net.http",
+    "version": "1.0.0",
+    "interface": "cn.ext.v1",
+    "backend": { "kind": "subprocess", "command": ["cnos-ext-http"] },
+    "ops": [{ "kind": "http_get", "class": "observe" }],
+    "permissions": {},
+    "engines": {}
+  }|} in
+  let oc = open_out (ext_dir ^ "/cn.extension.json") in
+  output_string oc manifest; close_out oc;
+  let reg = Cn_extension.build_registry ~hub_path:hub ~runtime_version:"3.17.0" () in
+  let entries = Cn_extension.all_entries reg in
+  (match entries with
+   | [e] ->
+     (match Cn_extension.resolve_command e with
+      | Ok _ -> Printf.printf "resolved (unexpected)\n"
+      | Error msg ->
+        let has_sub s sub =
+          let sl = String.length s and xl = String.length sub in
+          let rec check i = i + xl <= sl &&
+            (String.sub s i xl = sub || check (i + 1)) in
+          check 0 in
+        Printf.printf "error_is_not_executable=%b\n" (has_sub msg "not executable"))
+   | _ -> Printf.printf "unexpected entry count\n");
+  [%expect {| error_is_not_executable=true |}]
+
+let%expect_test "e2e negative: host returns malformed JSON" =
+  let hub = mk_temp_dir "ext-e2e-badjson" in
+  let pkg_dir = hub ^ "/.cn/vendor/packages/cnos.core@3.17.0" in
+  let ext_dir = pkg_dir ^ "/extensions/cnos.bad" in
+  let host_dir = ext_dir ^ "/host" in
+  Unix.mkdir (hub ^ "/.cn") 0o700;
+  Unix.mkdir (hub ^ "/.cn/vendor") 0o700;
+  Unix.mkdir (hub ^ "/.cn/vendor/packages") 0o700;
+  Unix.mkdir pkg_dir 0o700;
+  Unix.mkdir (pkg_dir ^ "/extensions") 0o700;
+  Unix.mkdir ext_dir 0o700;
+  Unix.mkdir host_dir 0o700;
+  (* Write a host that returns garbage *)
+  let prog = host_dir ^ "/bad-host" in
+  let oc = open_out prog in
+  output_string oc "#!/bin/sh\necho 'NOT VALID JSON'\n"; close_out oc;
+  Unix.chmod prog 0o755;
+  let manifest = {|{
+    "schema": "cn.extension.v1",
+    "name": "cnos.bad",
+    "version": "1.0.0",
+    "interface": "cn.ext.v1",
+    "backend": { "kind": "subprocess", "command": ["bad-host"] },
+    "ops": [{ "kind": "bad_op", "class": "observe" }],
+    "permissions": {},
+    "engines": {}
+  }|} in
+  let oc = open_out (ext_dir ^ "/cn.extension.json") in
+  output_string oc manifest; close_out oc;
+  let reg = Cn_extension.build_registry ~hub_path:hub ~runtime_version:"3.17.0" () in
+  (match Cn_extension.lookup_op reg "bad_op" with
+   | None -> Printf.printf "op not found (unexpected)\n"
+   | Some (entry, _op) ->
+     match Cn_extension.resolve_command entry with
+     | Error reason -> Printf.printf "resolve error: %s\n" reason
+     | Ok cmd ->
+       match Cn_ext_host.execute_extension_op ~command:cmd ~op_kind:"bad_op"
+               ~arguments:[] () with
+       | Ok _ -> Printf.printf "ok (unexpected)\n"
+       | Error msg ->
+         let has_sub s sub =
+           let sl = String.length s and xl = String.length sub in
+           let rec check i = i + xl <= sl &&
+             (String.sub s i xl = sub || check (i + 1)) in
+           check 0 in
+         Printf.printf "error_is_parse=%b\n" (has_sub msg "parse error"));
+  [%expect {| error_is_parse=true |}]
