@@ -436,19 +436,30 @@ let resolve_command entry =
   match entry.manifest.backend.command with
   | [] -> Error "extension declares empty command"
   | prog :: args ->
-    let resolved_prog =
-      if String.length prog > 0 && prog.[0] = '/' then prog
+    if String.length prog > 0 && prog.[0] = '/' then
+      (* Absolute path — pass through with existence check *)
+      if not (Cn_ffi.Fs.exists prog) then
+        Error (Printf.sprintf "host binary not found: %s" prog)
+      else if not (try Unix.access prog [Unix.X_OK]; true
+                   with Unix.Unix_error _ -> false) then
+        Error (Printf.sprintf "host binary not executable: %s" prog)
       else
-        let host_dir = Cn_ffi.Path.join entry.extension_path host_subdir in
-        Cn_ffi.Path.join host_dir prog
-    in
-    if not (Cn_ffi.Fs.exists resolved_prog) then
-      Error (Printf.sprintf "host binary not found: %s" resolved_prog)
-    else if not (try Unix.access resolved_prog [Unix.X_OK]; true
-                 with Unix.Unix_error _ -> false) then
-      Error (Printf.sprintf "host binary not executable: %s" resolved_prog)
+        Ok (prog :: args)
+    else if String.contains prog '/' then
+      (* Relative path with separators — reject to prevent traversal *)
+      Error (Printf.sprintf
+        "command contains path separator: %s (only bare names allowed)" prog)
     else
-      Ok (resolved_prog :: args)
+      (* Bare name — resolve relative to host subdirectory *)
+      let host_dir = Cn_ffi.Path.join entry.extension_path host_subdir in
+      let resolved = Cn_ffi.Path.join host_dir prog in
+      if not (Cn_ffi.Fs.exists resolved) then
+        Error (Printf.sprintf "host binary not found: %s" resolved)
+      else if not (try Unix.access resolved [Unix.X_OK]; true
+                   with Unix.Unix_error _ -> false) then
+        Error (Printf.sprintf "host binary not executable: %s" resolved)
+      else
+        Ok (resolved :: args)
 
 (* === String helpers === *)
 

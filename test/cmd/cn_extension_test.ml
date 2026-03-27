@@ -814,6 +814,42 @@ let%expect_test "resolve_command: empty command returns error" =
    | Error e -> Printf.printf "error: %s\n" e);
   [%expect {| error: extension declares empty command |}]
 
+let%expect_test "resolve_command: path traversal rejected" =
+  let entry = { Cn_extension.
+    manifest = {
+      schema = "cn.extension.v1"; name = "test.ext"; version = "1.0.0";
+      interface = "cn.ext.v1"; ext_kind = "capability-provider";
+      backend = { backend_kind = "subprocess"; command = ["../escape"] };
+      ops = []; permissions = []; engines = [];
+    };
+    package_name = "test.pkg";
+    package_path = "/tmp/test.pkg";
+    extension_path = "/tmp/test.pkg/extensions/test.ext";
+    state = Enabled;
+  } in
+  (match Cn_extension.resolve_command entry with
+   | Ok _ -> Printf.printf "ok (unexpected)\n"
+   | Error e -> Printf.printf "error: %s\n" e);
+  [%expect {| error: command contains path separator: ../escape (only bare names allowed) |}]
+
+let%expect_test "resolve_command: subdirectory traversal rejected" =
+  let entry = { Cn_extension.
+    manifest = {
+      schema = "cn.extension.v1"; name = "test.ext"; version = "1.0.0";
+      interface = "cn.ext.v1"; ext_kind = "capability-provider";
+      backend = { backend_kind = "subprocess"; command = ["subdir/prog"] };
+      ops = []; permissions = []; engines = [];
+    };
+    package_name = "test.pkg";
+    package_path = "/tmp/test.pkg";
+    extension_path = "/tmp/test.pkg/extensions/test.ext";
+    state = Enabled;
+  } in
+  (match Cn_extension.resolve_command entry with
+   | Ok _ -> Printf.printf "ok (unexpected)\n"
+   | Error e -> Printf.printf "error: %s\n" e);
+  [%expect {| error: command contains path separator: subdir/prog (only bare names allowed) |}]
+
 (* === End-to-end dispatch: discovery → registry → resolve → host === *)
 
 let%expect_test "e2e: discovered extension resolves command through installed path" =
