@@ -242,7 +242,7 @@ Before creating the branch, verify:
 
 ### 4.4 Skill selection
 
-At step 5 (Mode), the implementer must name the 2–3 skills that govern this change and load them as **hard generation constraints** — not post-hoc review checklists. All other skills remain available as reference but do not bind generation.
+At step 5 (Mode), the implementer must name the 2–3 skills that govern this change and **read each SKILL.md file** before beginning any work step. Naming a skill without reading it is not loading it. The loaded skills are **hard generation constraints** — not post-hoc review checklists. All other skills remain available as reference but do not bind generation.
 
 Rationale: breadth without depth produces checklist engineering. Ten skills loaded at surface level means none are deeply internalized. Fewer constraints, deeply applied, prevent more defects than many constraints lightly checked.
 
