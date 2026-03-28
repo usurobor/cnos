@@ -63,26 +63,26 @@ See [RELEASE-LEVEL-CLASSIFICATION.md](docs/gamma/essays/RELEASE-LEVEL-CLASSIFICA
 | v3.4.0  | A+  | A+          | A+           | A+               | L7    | CAR: three-layer cognitive asset resolver + package system. Fresh hubs wake with full substrate. Git-native deps, lockfile, hub-local overrides. |
 | v3.3.1  | A+  | A+          | A+           | A+               | L6    | Agent instruction alignment: canonical ops examples in capabilities block, stale path fixes, output discipline. Prevents hallucinated tool syntaxes. |
 | v3.3.0  | A+  | A+          | A+           | A+               | L7    | CN Shell: typed ops, two-pass execution, path sandbox, crash recovery. Pure-pipe preserved — ops are post-call, governed, receipted. Zero new runtime deps. |
-| v3.2.0  | A+  | A+          | A+           | A+               |       | Structured LLM schema: system blocks with cache control + real multi-turn messages. Mindsets in context packer. Role-weighted skill scoring. Setup installer design. |
-| v3.0.0  | A+  | A+          | A+           | A+               |       | Native agent runtime. OpenClaw removed. Pure-pipe: LLM = `string → string`, cn = all effects. Zero runtime deps. |
-| v2.4.0  | A+  | A+          | A+           | A+               |       | Typed FSM protocol. All 4 state machines (sender, receiver, thread, actor) enforced at compile time. |
-| v2.3.x  | A+  | A+          | A+           | A                |       | Native OCaml binary, 10-module refactor. No more Node.js dependency. |
-| v2.2.0  | A+  | A+          | A+           | A+               |       | First hash consensus. Actor model complete: 5-min cron, input/output protocol, bidirectional messaging, verified sync. |
-| v2.1.x  | A+  | A+          | A+           | A                |       | Actor model iterations: cn sync/process/queue, auto-commit, wake mechanism fixes. |
-| v2.0.0  | A+  | A+          | A+           | A+               |       | Everything through cn. CLI v0.1, UX-CLI spec, SYSTEM.md, cn_actions library. Paradigm shift: agent purity enforced. |
-| v1.8.0  | A+  | A+          | A            | A+               |       | Agent purity (agent=brain, cn=body). CN Protocol, skills/eng/, ship/audit/adhoc-thread skills, AGILE-PROCESS, THREADS-UNIFIED. |
-| v1.7.0  | A   | A           | A            | A                |       | Actor model + inbox tool. GTD triage, RCA process, docs/design/ reorg. Erlang-inspired: your repo = your mailbox. |
-| v1.6.0  | A−  | A−          | A−           | A−               |       | Agent coordination: threads/, peer, peer-sync, HANDSHAKE.md, CA loops. First git-CN handshake. |
-| v1.5.0  | B+  | A−          | A−           | B+               |       | Robust CLI: rerunnable setup, safe attach, better preflights. |
-| v1.4.0  | B+  | A−          | A−           | B+               |       | Repo-quality hardening (CLI tests, input safety, docs aligned). |
-| v1.3.2  | B+  | A−          | B+           | B+               |       | CLI preflights git+gh; same hub/symlink design. |
-| v1.3.1  | B+  | A−          | B+           | B+               |       | Internal tweaks between tags.          |
-| v1.3.0  | B+  | A−          | B+           | B+               |       | CLI creates hub + symlinks; self-cohere wires. |
-| v1.2.1  | B+  | A−          | B+           | B+               |       | CLI cue + onboarding tweaks.           |
-| v1.2.0  | B+  | A−          | B+           | B+               |       | Audit + restructure; mindsets as dimensions. |
-| v1.1.0  | B   | B+          | B            | B                |       | Template layout; git-CN naming; CLI added.   |
-| v1.0.0  | B−  | B−          | C+           | B−               |       | First public template; git-CN hub + self-cohere. |
-| v0.1.0  | C−  | C           | C−           | D+               |       | Moltbook-coupled prototype with SQLite. |
+| v3.2.0  | A+  | A+          | A+           | A+               | L7    | Structured LLM schema: system blocks with cache control + real multi-turn messages. Mindsets in context packer. Role-weighted skill scoring. Setup installer design. |
+| v3.0.0  | A+  | A+          | A+           | A+               | L7    | Native agent runtime. OpenClaw removed. Pure-pipe: LLM = `string → string`, cn = all effects. Zero runtime deps. |
+| v2.4.0  | A+  | A+          | A+           | A+               | L7    | Typed FSM protocol. All 4 state machines (sender, receiver, thread, actor) enforced at compile time. |
+| v2.3.x  | A+  | A+          | A+           | A                | L7    | Native OCaml binary, 10-module refactor. No more Node.js dependency. |
+| v2.2.0  | A+  | A+          | A+           | A+               | L7    | First hash consensus. Actor model complete: 5-min cron, input/output protocol, bidirectional messaging, verified sync. |
+| v2.1.x  | A+  | A+          | A+           | A                | L6    | Actor model iterations: cn sync/process/queue, auto-commit, wake mechanism fixes. |
+| v2.0.0  | A+  | A+          | A+           | A+               | L7    | Everything through cn. CLI v0.1, UX-CLI spec, SYSTEM.md, cn_actions library. Paradigm shift: agent purity enforced. |
+| v1.8.0  | A+  | A+          | A            | A+               | L7    | Agent purity (agent=brain, cn=body). CN Protocol, skills/eng/, ship/audit/adhoc-thread skills, AGILE-PROCESS, THREADS-UNIFIED. |
+| v1.7.0  | A   | A           | A            | A                | L7    | Actor model + inbox tool. GTD triage, RCA process, docs/design/ reorg. Erlang-inspired: your repo = your mailbox. |
+| v1.6.0  | A−  | A−          | A−           | A−               | L6    | Agent coordination: threads/, peer, peer-sync, HANDSHAKE.md, CA loops. First git-CN handshake. |
+| v1.5.0  | B+  | A−          | A−           | B+               | L5    | Robust CLI: rerunnable setup, safe attach, better preflights. |
+| v1.4.0  | B+  | A−          | A−           | B+               | L5    | Repo-quality hardening (CLI tests, input safety, docs aligned). |
+| v1.3.2  | B+  | A−          | B+           | B+               | L5    | CLI preflights git+gh; same hub/symlink design. |
+| v1.3.1  | B+  | A−          | B+           | B+               | L5    | Internal tweaks between tags.          |
+| v1.3.0  | B+  | A−          | B+           | B+               | L6    | CLI creates hub + symlinks; self-cohere wires. |
+| v1.2.1  | B+  | A−          | B+           | B+               | L5    | CLI cue + onboarding tweaks.           |
+| v1.2.0  | B+  | A−          | B+           | B+               | L6    | Audit + restructure; mindsets as dimensions. |
+| v1.1.0  | B   | B+          | B            | B                | L5    | Template layout; git-CN naming; CLI added.   |
+| v1.0.0  | B−  | B−          | C+           | B−               | L5    | First public template; git-CN hub + self-cohere. |
+| v0.1.0  | C−  | C           | C−           | D+               | L5    | Moltbook-coupled prototype with SQLite. |
 
 ---
 
