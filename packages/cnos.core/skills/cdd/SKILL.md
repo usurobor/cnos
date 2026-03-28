@@ -183,6 +183,7 @@ After release:
 
 - observe runtime/design alignment
 - write the post-release assessment
+- if the cycle hit avoidable friction (extra review rounds, mechanical errors, tooling failures): include cycle iteration — what went wrong in the process, root cause, MCA shipped or proposed (CDD §9.1)
 - execute immediate outputs
 - commit deferred outputs concretely
 

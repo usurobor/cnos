@@ -406,9 +406,20 @@ Post-release assessment is mandatory for substantial releases. It must record:
 - process learning (including active skill re-evaluation against review findings)
 - review quality metrics
 - CDD self-coherence (α artifact integrity, β surface agreement, γ cycle economics)
+- cycle iteration (see §9.1)
 - next move commitment
 
 The CHANGELOG TSC entry at release time is provisional. Assessment governs the final judgment of the cycle.
+
+### 9.1 Cycle iteration
+
+When a cycle exceeded expected effort — extra review rounds, avoidable mechanical errors, tooling failures, or environmental surprises — the assessment must include a brief process iteration:
+
+- what went wrong in the cycle itself (not the code, the process)
+- root cause: design flaw, skill gap, tooling gap, or environmental
+- MCA shipped or proposed to prevent recurrence
+
+Cycle iteration is not a retrospective essay. It is a concrete answer to: "what system change makes this class of friction disappear?" If the answer is "none — it was a one-off," say so. If the cycle went cleanly, cycle iteration may be omitted.
 
 ---
 
