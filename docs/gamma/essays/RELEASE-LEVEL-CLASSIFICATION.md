@@ -1,6 +1,6 @@
 # Release-Level Classification
 
-**Scope**: All 39 releases in the coherence grade table (v3.3.0–3.23.0)
+**Scope**: All 40 releases in the coherence grade table (v3.3.0–3.24.0)
 **Rubric**: `docs/gamma/ENGINEERING-LEVELS.md` §8 (diff-level) + `docs/gamma/cdd/CDD.md` §9.1 (cycle-level caps)
 **Date**: 2026-03-28
 
@@ -51,7 +51,7 @@ Where mechanical ratio data is available in the coherence note, it is applied as
 | v3.14.3 | A   | **L5** | Organize alpha docs: 18 specs → 8 bundles — applies established bundle pattern, no new primitive |
 | v3.14.4 | A   | **L5** | Organize beta docs: 7 files → 4 bundles — same organizational pattern |
 | v3.14.5 | A   | **L5** | Organize gamma docs: completes trilogy — same organizational pattern |
-| v3.14.6 | A   | **L6** | Retroactive epoch assessments + §9.11 release gate — new gate mechanism ensures assessment coverage |
+| v3.14.6 | A   | **L7** | Retroactive epoch assessments + §9.11 release gate — new process primitive: previous release must have assessment before tagging, governs all future releases |
 | v3.14.7 | A   | **L7** | Review skill: pre-flight validation, scope enumeration, quality metrics, finding taxonomy — changes how review works for all future cycles |
 | v3.15.0 | A-  | **L5** | Version coherence chain sound but: 0 review rounds, self-merged with red CI, 3 post-fix commits — process failures cap execution |
 | v3.15.1 | A   | **L6** | Cross-surface fix: re-exec after update + stamp-versions.sh + build/release gates — coherence across version surfaces |
@@ -65,6 +65,7 @@ Where mechanical ratio data is available in the coherence note, it is applied as
 | v3.20.0 | B+  | **L6** | Runtime Extensions e2e: 0% mechanical, host command resolution with validation — system-safe completion of extension pipeline |
 | v3.22.0 | A-  | **L6** | Version-drift detection as 8th maintenance primitive with drain guard — extends existing maintenance architecture |
 | 3.23.0  | A-  | **L7** | Pre-push gate + CDD §9.1 cycle iteration framework + ENGINEERING-LEVELS.md — meta-level tooling that changes how all future cycles execute |
+| 3.24.0  | A   | **L7** | Templates as 6th content class in package system: `read_template` with Result-typed resolution, PACKAGE-SYSTEM.md architecture doc — new content primitive governs future template distribution |
 
 ---
 
@@ -74,27 +75,27 @@ Where mechanical ratio data is available in the coherence note, it is applied as
 
 | Level | Count | Percentage |
 |-------|-------|------------|
-| L5    | 10    | 26%        |
-| L6    | 16    | 41%        |
-| L7    | 13    | 33%        |
+| L5    | 10    | 25%        |
+| L6    | 15    | 38%        |
+| L7    | 15    | 38%        |
 
 #### Shift over time
 
-Split at v3.11.0 (release 16 of 39), roughly the boundary between the architecture-building phase and the hardening/process phase:
+Split at v3.11.0 (release 16 of 40), roughly the boundary between the architecture-building phase and the hardening/process phase:
 
 | Period | Releases | L5 | L6 | L7 |
 |--------|----------|----|----|----|
 | Early (v3.3.0–v3.10.0)  | 15 | 1 (7%)   | 6 (40%)  | 8 (53%)  |
-| Late (v3.11.0–3.23.0)   | 24 | 9 (38%)  | 10 (42%) | 5 (21%)  |
+| Late (v3.11.0–3.24.0)   | 25 | 9 (36%)  | 9 (36%)  | 7 (28%)  |
 
-The L7 rate dropped from 53% to 21%. The L5 rate rose from 7% to 38%. The L6 rate held steady (~40%). The system transitioned from boundary-creation to hardening, with mechanical-ratio caps suppressing the late-period level.
+The L7 rate dropped from 53% to 28%. The L5 rate rose from 7% to 36%. The L6 rate held roughly steady. The system transitioned from boundary-creation to hardening, with mechanical-ratio caps suppressing the late-period level.
 
 ### 2. Grade–Level Correlation
 
 | Grade | L5 | L6 | L7 |
 |-------|----|----|-----|
 | A+    | 1 (v3.9.1) | 5 | 8 |
-| A     | 4 (v3.14.2–5, v3.16.0) | 7 | 2 |
+| A     | 4 (v3.14.2–5, v3.16.0) | 6 | 4 (v3.14.0, v3.14.6, v3.14.7, 3.24.0) |
 | A-    | 3 (v3.15.0, v3.19.0) | 0 | 3 (v3.13.0, 3.23.0) |
 | B+    | 2 (v3.17.0, v3.18.0) | 1 (v3.20.0) | 0 |
 
@@ -114,9 +115,9 @@ The L7 rate dropped from 53% to 21%. The L5 rate rose from 7% to 38%. The L6 rat
 | **L7 clusters** | v3.12.0, v3.13.0, v3.14.0 | Runtime Contract → CDD pipeline → RC v2. Three L7s in 5 releases during the process formalization phase. |
 | **L5 plateau** | v3.14.2–v3.14.5 | Four consecutive L5 releases (doc reorganization). Organizationally necessary but architecturally flat. |
 | **Mechanical cap era** | v3.15.0–v3.19.0 | Five of six releases capped at L5 by process failures (red CI, high mechanical ratios). The architecture attempted was L6–L7 but execution quality forced the cap. |
-| **L7 recovery** | 3.23.0 | Pre-push gate + cycle iteration framework. Meta-level L7: the tooling created by this release directly addresses the mechanical caps that suppressed prior releases. |
+| **L7 recovery** | 3.23.0, 3.24.0 | Pre-push gate + cycle iteration framework (3.23.0), then templates as 6th content class (3.24.0). Back-to-back L7s with clean execution (1 round, 1 mechanical finding). The gate works. |
 
-The transitions tell a clear story: **build → harden → cap → recover**. The pre-push gate in 3.23.0 is the MCA for the entire mechanical-cap era.
+The transitions tell a clear story: **build → harden → cap → recover**. The pre-push gate in 3.23.0 is the MCA for the entire mechanical-cap era. 3.24.0 is the first post-gate L7 — evidence that the recovery is real.
 
 ### 4. Leverage Density
 
@@ -141,6 +142,7 @@ The transitions tell a clear story: **build → harden → cap → recover**. Th
 
 | Mechanical Ratio | Review Rounds | Releases | Median Level |
 |-----------------|---------------|----------|-------------|
+| ~0% (1 finding) | 1             | 3.24.0   | L7          |
 | 0%              | 1             | v3.22.0  | L6          |
 | 0%              | 3             | v3.20.0  | L6          |
 | 12%             | 5             | v3.16.2  | L6          |
@@ -198,6 +200,6 @@ The release history shows three distinct eras:
 
 1. **Architecture era** (v3.3.0–v3.10.0): 53% L7. Rapid boundary creation. High leverage.
 2. **Mechanical cap era** (v3.11.0–v3.19.0): 38% L5, most capped by execution quality. Architecture ambition exceeded execution discipline.
-3. **Recovery** (v3.20.0–3.23.0): Meta-level tooling (pre-push gate, cycle iteration) addresses the root cause. 3.23.0 is L7 precisely because it eliminates the cap mechanism.
+3. **Recovery** (v3.20.0–3.24.0): Meta-level tooling (pre-push gate, cycle iteration) addresses the root cause. 3.23.0 is L7 precisely because it eliminates the cap mechanism. 3.24.0 confirms the recovery: first post-gate L7 with clean execution.
 
 The single highest-leverage finding: **mechanical ratio is the binding constraint on level, not architectural ambition.** Fix the gate, and the levels take care of themselves.
