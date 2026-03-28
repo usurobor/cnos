@@ -277,7 +277,9 @@ cognition, body, and medium. It is emitted fresh at every wake. \
 If conversation history contains contradictory claims (e.g. a directory that \
 was absent in a prior session), this contract supersedes them. \
 Do not read cn.json or any manifest file to determine your own version — \
-use the cn_version field below.\n\n";
+use the cn_version field below. \
+The runtime structurally enforces this: reading cn.json or package manifests \
+returns a contract_redirect, not file content.\n\n";
 
   (* Identity — who am I? *)
   Buffer.add_string buf "### Identity\n";

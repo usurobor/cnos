@@ -79,7 +79,7 @@ let effects_all_ok receipts =
   List.for_all (fun (r : Cn_shell.receipt) ->
     match r.status with
     | Ok_status | Skipped -> true
-    | Denied | Error_status -> false
+    | Denied | Error_status | Contract_redirect -> false
   ) effect_receipts
 
 (** Gate a coordination op based on effect outcomes.
@@ -176,6 +176,7 @@ let receipt_result_signal (r : Cn_shell.receipt) =
   | Denied -> " [NOT_EXECUTED: op was denied before execution]"
   | Skipped -> " [NOT_EXECUTED: op was skipped]"
   | Error_status -> " [FAILED: op execution failed]"
+  | Contract_redirect -> " [REDIRECTED: this information is in your Runtime Contract]"
 
 (** Build bounded receipts summary for next-pass injection.
     Deterministic: iterates receipts in list order.
@@ -187,7 +188,7 @@ let receipts_summary ~pass_label (receipts : Cn_shell.receipt list) =
   let has_failures = List.exists (fun (r : Cn_shell.receipt) ->
     match r.status with
     | Denied | Error_status -> true
-    | Ok_status | Skipped -> false
+    | Ok_status | Skipped | Contract_redirect -> false
   ) receipts in
   if has_failures then
     Buffer.add_string buf
