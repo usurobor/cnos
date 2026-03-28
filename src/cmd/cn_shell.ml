@@ -50,6 +50,7 @@ type receipt_status =
   | Denied
   | Error_status
   | Skipped
+  | Contract_redirect
 
 type artifact = {
   path : string;
@@ -162,10 +163,11 @@ let phase_matches kind = function
 (* === Receipt helpers === *)
 
 let string_of_receipt_status = function
-  | Ok_status    -> "ok"
-  | Denied       -> "denied"
-  | Error_status -> "error"
-  | Skipped      -> "skipped"
+  | Ok_status          -> "ok"
+  | Denied             -> "denied"
+  | Error_status       -> "error"
+  | Skipped            -> "skipped"
+  | Contract_redirect  -> "contract_redirect"
 
 let make_receipt ~pass ~op_id ~kind ~status ~reason =
   { pass; op_id; kind; status; reason;

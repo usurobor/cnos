@@ -1186,3 +1186,80 @@ let%expect_test "git_status: prior observe op artifacts do not pollute status" =
     kind=git_status status=ok reason=(none) artifacts=1
     finds_src: true
     finds_state: false |}]
+
+(* === v3.25.0 #64: Self-knowledge interception === *)
+
+let%expect_test "fs_read: cn.json returns contract_redirect" =
+  with_test_hub (fun hub ->
+    let touch path content =
+      let full = Filename.concat hub path in
+      let oc = open_out full in
+      output_string oc content; close_out oc in
+    touch "cn.json" {|{"cn_version":"3.25.0"}|};
+    let op = { Cn_shell.kind = Observe Fs_read;
+               op_id = Some "obs-01";
+               fields = [("path", Cn_json.String "cn.json")] } in
+    let r = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config op in
+    show_receipt r);
+  [%expect {| kind=fs_read status=contract_redirect reason=contract_redirect: 'cn.json' contains identity/version info declared in your Runtime Contract (Identity section). Read cn_version from the Runtime Contract instead of probing the filesystem. artifacts=0 |}]
+
+let%expect_test "fs_read: package manifest returns contract_redirect" =
+  with_test_hub (fun hub ->
+    let touch path content =
+      let full = Filename.concat hub path in
+      let oc = open_out full in
+      output_string oc content; close_out oc in
+    touch "cn.package.json" {|{"name":"cnos.core"}|};
+    let op = { Cn_shell.kind = Observe Fs_read;
+               op_id = Some "obs-01";
+               fields = [("path", Cn_json.String "cn.package.json")] } in
+    let r = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config op in
+    show_receipt r);
+  [%expect {| kind=fs_read status=contract_redirect reason=contract_redirect: 'cn.package.json' is a package manifest — package info is declared in your Runtime Contract (Cognition section). Read installed_packages from the Runtime Contract instead. artifacts=0 |}]
+
+let%expect_test "fs_read: state/runtime-contract.json returns contract_redirect" =
+  with_test_hub (fun hub ->
+    let _hub = hub in
+    let op = { Cn_shell.kind = Observe Fs_read;
+               op_id = Some "obs-01";
+               fields = [("path", Cn_json.String "state/runtime-contract.json")] } in
+    let r = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config op in
+    show_receipt r);
+  [%expect {| kind=fs_read status=denied reason=path_denied artifacts=0 |}]
+
+let%expect_test "fs_read: legitimate file unaffected by interceptor" =
+  with_test_hub (fun hub ->
+    let op = { Cn_shell.kind = Observe Fs_read;
+               op_id = Some "obs-01";
+               fields = [("path", Cn_json.String "src/main.ml")] } in
+    let r = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config op in
+    show_receipt r);
+  [%expect {| kind=fs_read status=ok reason=(none) artifacts=1 |}]
+
+let%expect_test "fs_read: docs/README.md unaffected by interceptor" =
+  with_test_hub (fun hub ->
+    let op = { Cn_shell.kind = Observe Fs_read;
+               op_id = Some "obs-01";
+               fields = [("path", Cn_json.String "docs/README.md")] } in
+    let r = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config op in
+    show_receipt r);
+  [%expect {| kind=fs_read status=ok reason=(none) artifacts=1 |}]
+
+let%expect_test "fs_list: directory listing unaffected by interceptor" =
+  with_test_hub (fun hub ->
+    let op = { Cn_shell.kind = Observe Fs_list;
+               op_id = Some "obs-01";
+               fields = [("path", Cn_json.String "src")] } in
+    let r = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config op in
+    show_receipt r);
+  [%expect {| kind=fs_list status=ok reason=(none) artifacts=1 |}]
+
+let%expect_test "fs_read: nonexistent cn.json still redirected (not file_not_found)" =
+  with_test_hub (fun hub ->
+    let _hub = hub in
+    let op = { Cn_shell.kind = Observe Fs_read;
+               op_id = Some "obs-01";
+               fields = [("path", Cn_json.String "cn.json")] } in
+    let r = Cn_executor.execute_op ~hub_path:hub ~trigger_id ~config:test_config op in
+    show_receipt r);
+  [%expect {| kind=fs_read status=contract_redirect reason=contract_redirect: 'cn.json' contains identity/version info declared in your Runtime Contract (Identity section). Read cn_version from the Runtime Contract instead of probing the filesystem. artifacts=0 |}]

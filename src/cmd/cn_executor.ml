@@ -102,6 +102,48 @@ let require_field_string key op =
   | Some s -> Ok s
   | None -> Error (Printf.sprintf "missing required field '%s'" key)
 
+(* === Self-knowledge interception (v3.25.0, #64) === *)
+
+(** Paths that contain identity/version/config information already
+    declared in the Runtime Contract. Probing these is structurally
+    intercepted — the agent gets a contract_redirect, not file content.
+
+    This is NOT a security boundary (that's cn_sandbox). This is a
+    coherence boundary: the Runtime Contract is the authoritative source
+    for self-knowledge; filesystem probing for it is a contract bug. *)
+let self_knowledge_paths = [
+  "cn.json";
+  "state/runtime-contract.json";
+]
+
+(** Suffixes that identify package manifest files. *)
+let self_knowledge_suffixes = [
+  ".package.json";
+]
+
+(** Check if a normalized path targets self-knowledge.
+    Returns Some redirect_reason or None. *)
+let check_self_knowledge_path normalized_path =
+  if List.mem normalized_path self_knowledge_paths then
+    Some (Printf.sprintf
+      "contract_redirect: '%s' contains identity/version info declared \
+       in your Runtime Contract (Identity section). Read cn_version from \
+       the Runtime Contract instead of probing the filesystem."
+      normalized_path)
+  else if List.exists (fun suffix ->
+    let slen = String.length suffix in
+    let plen = String.length normalized_path in
+    plen >= slen &&
+    String.sub normalized_path (plen - slen) slen = suffix
+  ) self_knowledge_suffixes then
+    Some (Printf.sprintf
+      "contract_redirect: '%s' is a package manifest — package info is \
+       declared in your Runtime Contract (Cognition section). Read \
+       installed_packages from the Runtime Contract instead."
+      normalized_path)
+  else
+    None
+
 (* === Observe op executors === *)
 
 let execute_fs_read ~hub_path ~trigger_id ~config (op : Cn_shell.typed_op) =
@@ -119,6 +161,13 @@ let execute_fs_read ~hub_path ~trigger_id ~config (op : Cn_shell.typed_op) =
         reason = Cn_sandbox.string_of_denial_reason reason;
         start_time = start; end_time = now_iso (); artifacts = [] }
     | Ok resolved ->
+      (* v3.25.0 #64: intercept self-knowledge probes before filesystem I/O *)
+      match check_self_knowledge_path resolved with
+      | Some redirect_reason ->
+        { Cn_shell.pass = ""; op_id = op.op_id; kind = "fs_read";
+          status = Cn_shell.Contract_redirect; reason = redirect_reason;
+          start_time = start; end_time = now_iso (); artifacts = [] }
+      | None ->
       let full = Cn_ffi.Path.join hub_path resolved in
       if not (Cn_ffi.Fs.exists full) then
         { Cn_shell.pass = ""; op_id = op.op_id; kind = "fs_read";
@@ -164,6 +213,13 @@ let execute_fs_list ~hub_path ~trigger_id ~config (op : Cn_shell.typed_op) =
         reason = Cn_sandbox.string_of_denial_reason reason;
         start_time = start; end_time = now_iso (); artifacts = [] }
     | Ok resolved ->
+      (* v3.25.0 #64: intercept self-knowledge probes before filesystem I/O *)
+      match check_self_knowledge_path resolved with
+      | Some redirect_reason ->
+        { Cn_shell.pass = ""; op_id = op.op_id; kind = "fs_list";
+          status = Cn_shell.Contract_redirect; reason = redirect_reason;
+          start_time = start; end_time = now_iso (); artifacts = [] }
+      | None ->
       let full = Cn_ffi.Path.join hub_path resolved in
       if not (Cn_ffi.Fs.exists full) then
         { Cn_shell.pass = ""; op_id = op.op_id; kind = "fs_list";
