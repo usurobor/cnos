@@ -421,12 +421,36 @@ When a cycle exceeded expected effort — extra review rounds, avoidable mechani
 - avoidable tooling or environmental failure delayed the cycle
 - a skill that was loaded failed to prevent a finding it covers
 
-**Required artifact:** A `## Cycle Iteration` section in the post-release assessment containing:
+**Required artifact:** A `## Cycle Iteration` section in the post-release assessment (located in `docs/{tier}/{bundle}/{X.Y.Z}/POST-RELEASE-ASSESSMENT.md`). Must contain these fields:
 
-1. **Friction log** — what went wrong in the cycle itself (not the code, the process)
-2. **Root cause classification** — one of: design flaw, skill gap, tooling gap, environmental, or one-off
-3. **Skill impact** — which active skill, if any, should have prevented the friction. If a loaded skill failed to prevent a finding it covers, that skill must be patched as an immediate output (§10.1).
-4. **MCA** — system change shipped or proposed. "Won't repeat" without a mechanism is not an MCA.
+```markdown
+## Cycle Iteration
+
+### Triggers fired
+- [ ] review rounds > 2 (actual: N)
+- [ ] mechanical ratio > 20% (actual: N%)
+- [ ] avoidable tooling/environmental failure
+- [ ] loaded skill failed to prevent a finding
+
+### Friction log
+What went wrong in the cycle itself (process, not code).
+
+### Root cause
+One of: design flaw | skill gap | tooling gap | environmental | one-off
+
+### Skill impact
+Which active skill should have prevented the friction?
+If a loaded skill failed: name it and patch it as immediate output (§10.1).
+
+### MCA
+System change shipped or proposed. "Won't repeat" without a mechanism is not an MCA.
+
+### Cycle level
+L5 | L6 | L7 (per ENGINEERING-LEVELS.md §6 — level = lowest miss)
+Justification: [one line explaining the level]
+```
+
+The cycle level is also recorded in the CHANGELOG TSC table as a suffix: e.g. `(cycle: L6)`.
 
 **Cycle level assessment:** After the friction log and MCA, assess the executed engineering level of the cycle. This applies the level framework from `docs/gamma/ENGINEERING-LEVELS.md` to cycles (change sets), not just individual diffs. Use the §6 diagnostic questions adapted for cycle scope:
 

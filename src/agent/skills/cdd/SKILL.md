@@ -183,7 +183,7 @@ After release:
 
 - observe runtime/design alignment
 - write the post-release assessment
-- if a §9.1 trigger fired (review rounds > 2, mechanical ratio > 20%, avoidable tooling failure, loaded skill failed to prevent a finding): write a `## Cycle Iteration` section in the assessment with friction log, root cause classification, skill impact, MCA, and **cycle level** (L5/L6/L7 per ENGINEERING-LEVELS.md §6 — level = lowest miss). Patch any skill that failed to prevent a finding it covers as an immediate output. Cycle cannot close without this section if triggered. (CDD §9.1, §10.3)
+- if a §9.1 trigger fired (review rounds > 2, mechanical ratio > 20%, avoidable tooling failure, loaded skill failed to prevent a finding): write a `## Cycle Iteration` section in POST-RELEASE-ASSESSMENT.md using the §9.1 template (triggers fired, friction log, root cause, skill impact, MCA, cycle level L5/L6/L7). Also record cycle level in CHANGELOG TSC as suffix `(cycle: LN)`. Patch any skill that failed to prevent a finding it covers as immediate output. Cycle cannot close without this section if triggered. (CDD §9.1, §10.3)
 - execute immediate outputs (including skill patches from cycle iteration)
 - commit deferred outputs concretely
 
