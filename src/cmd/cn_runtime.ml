@@ -638,6 +638,13 @@ let rec finalize ~(config : Cn_config.config) ~hub_path ~name
         ~event:"finalize.n_pass_failed" ~severity:Error_ ~status:Error_status
         ~trigger_id ~reason_code:"n_pass_failed"
         ~reason:"Blocking projection — intermediate output would misrepresent state" ();
+
+      (* Unified log: error *)
+      Cn_ulog.write hub_path (Cn_ulog.make_entry
+        ~kind:Error ~severity:Error_
+        ~msg_id:trigger_id
+        ~error:(Printf.sprintf "N-pass processing failed: %s" msg) ());
+
       Error (Printf.sprintf "N-pass processing failed: %s" msg)
 
     | Ok None ->
@@ -818,6 +825,17 @@ and finalize_project ~(config : Cn_config.config) ~hub_path ~trigger_id
   update_ready_body hub_path ~fsm_state:"idle"
     ~lock_held:true ~current_cycle:None;
 
+  (* Unified log: invocation end + message sent *)
+  Cn_ulog.write hub_path (Cn_ulog.make_entry
+    ~kind:Invocation_end ~severity:Info
+    ~msg_id:trigger_id
+    ~ops:(List.length initial_coord_ops) ());
+  let response_preview = match assistant_text with
+    | s when String.length s > 0 -> Some s | _ -> None in
+  Cn_ulog.write hub_path (Cn_ulog.make_entry
+    ~kind:Message_sent ~severity:Info
+    ~msg_id:trigger_id ?response_preview ());
+
   ignore name;
   print_endline (Cn_fmt.ok
     (Printf.sprintf "Processed: %s (%d ops)" trigger_id
@@ -989,6 +1007,12 @@ let process_one ~(config : Cn_config.config) ~hub_path ~name =
               ~reason_code:"fresh_dequeue"
               ~details:["from", Cn_json.String from] ();
 
+            (* Unified log: message received *)
+            Cn_ulog.write hub_path (Cn_ulog.make_entry
+              ~kind:Message_received ~severity:Info
+              ~msg_id:trigger_id ~source:from
+              ~user_msg:inbound_message ());
+
             Cn_trace.gemit ~component:"runtime" ~layer:Body
               ~event:"queue.dequeue" ~severity:Info ~status:Ok_
               ~trigger_id ();
@@ -1032,6 +1056,11 @@ let process_one ~(config : Cn_config.config) ~hub_path ~name =
               ~trigger_id
               ~details:["model", Cn_json.String config.model] ();
 
+            (* Unified log: invocation start *)
+            Cn_ulog.write hub_path (Cn_ulog.make_entry
+              ~kind:Invocation_start ~severity:Info
+              ~msg_id:trigger_id ~pass:1 ());
+
             let llm_t0 = Unix.gettimeofday () in
             match Cn_llm.call ~api_key:config.anthropic_key
                     ~model:config.model ~max_tokens:config.max_tokens
@@ -1045,6 +1074,13 @@ let process_one ~(config : Cn_config.config) ~hub_path ~name =
                     "model", Cn_json.String config.model;
                     "latency_ms", Cn_json.Int latency_ms;
                   ] ();
+
+                (* Unified log: error *)
+                Cn_ulog.write hub_path (Cn_ulog.make_entry
+                  ~kind:Error ~severity:Error_
+                  ~msg_id:trigger_id
+                  ~error:(Printf.sprintf "LLM call failed: %s" msg) ());
+
                 Error (Printf.sprintf "LLM call failed: %s" msg)
             | Ok response ->
                 let latency_ms = int_of_float ((Unix.gettimeofday () -. llm_t0) *. 1000.0) in
