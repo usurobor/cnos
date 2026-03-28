@@ -1,6 +1,6 @@
 # Release-Level Classification
 
-**Scope**: All 40 releases in the coherence grade table (v3.3.0–3.24.0)
+**Scope**: All 60 releases in the coherence grade table (v0.1.0–3.24.0)
 **Rubric**: `docs/gamma/ENGINEERING-LEVELS.md` §8 (diff-level) + `docs/gamma/cdd/CDD.md` §9.1 (cycle-level caps)
 **Date**: 2026-03-28
 
@@ -23,6 +23,33 @@ Where mechanical ratio data is available in the coherence note, it is applied as
 ---
 
 ## Pass 1: Classification
+
+### v0.1.0–v3.2.0 (foundation and architecture explosion)
+
+| Version | C_Σ | Executed Level | Evidence |
+|---------|-----|---------------|----------|
+| v0.1.0  | C−  | **L4** | Moltbook-coupled prototype with SQLite — no stable architecture, external dependency, D+ on γ |
+| v1.0.0  | B−  | **L5** | First public template introduces hub + self-cohere concepts but C+ on β — primitives don't connect |
+| v1.1.0  | B   | **L5** | Template layout + git-CN naming + CLI added — local structure within nascent pattern |
+| v1.2.0  | B+  | **L5** | Audit + restructure, mindsets as dimensions — organizational within existing template |
+| v1.2.1  | B+  | **L5** | CLI cue + onboarding tweaks — local adjustments |
+| v1.3.0  | B+  | **L6** | CLI creates hub + symlinks, self-cohere wires — cross-surface wiring of core mechanism |
+| v1.3.1  | B+  | **L5** | Internal tweaks between tags — local maintenance |
+| v1.3.2  | B+  | **L5** | CLI preflights git+gh — local validation additions |
+| v1.4.0  | B+  | **L6** | CLI tests + input safety + docs aligned — cross-surface coherence (tests/safety/docs) |
+| v1.5.0  | B+  | **L6** | Rerunnable setup, safe attach, better preflights — failure-mode handling, operational robustness |
+| v1.6.0  | A−  | **L7** | Agent coordination: threads/, peer, peer-sync, HANDSHAKE.md — new coordination layer |
+| v1.7.0  | A   | **L7** | Actor model + inbox tool — new architectural primitive ("your repo = your mailbox") |
+| v1.8.0  | A+  | **L7** | Agent purity (agent=brain, cn=body), CN Protocol, skills system — foundational boundary |
+| v2.0.0  | A+  | **L7** | "Everything through cn" — paradigm shift enforced, cn_actions library |
+| v2.1.x  | A+  | **L6** | Actor model iterations: sync/process/queue, wake fixes — hardening existing model across surfaces |
+| v2.2.0  | A+  | **L7** | First hash consensus, bidirectional messaging, verified sync — new verification primitive |
+| v2.3.x  | A+  | **L7** | Native OCaml binary, 10-module refactor — runtime boundary change (JS→native) |
+| v2.4.0  | A+  | **L7** | Typed FSM protocol, 4 state machines enforced at compile time — correctness boundary shift to type level |
+| v3.0.0  | A+  | **L7** | Pure-pipe: LLM = string→string, cn = all effects — execution model boundary, zero runtime deps |
+| v3.2.0  | A+  | **L7** | Structured LLM schema, multi-turn messages, context packer with mindsets — new communication layer |
+
+### v3.3.0–3.24.0 (feature architecture through recovery)
 
 | Version | C_Σ | Executed Level | Evidence |
 |---------|-----|---------------|----------|
@@ -75,49 +102,63 @@ Where mechanical ratio data is available in the coherence note, it is applied as
 
 | Level | Count | Percentage |
 |-------|-------|------------|
-| L5    | 10    | 25%        |
-| L6    | 15    | 38%        |
-| L7    | 15    | 38%        |
+| L4    | 1     | 2%         |
+| L5    | 16    | 27%        |
+| L6    | 19    | 32%        |
+| L7    | 24    | 40%        |
 
 #### Shift over time
 
-Split at v3.11.0 (release 16 of 40), roughly the boundary between the architecture-building phase and the hardening/process phase:
+Four eras emerge when the full 60-release history is considered:
 
-| Period | Releases | L5 | L6 | L7 |
-|--------|----------|----|----|----|
-| Early (v3.3.0–v3.10.0)  | 15 | 1 (7%)   | 6 (40%)  | 8 (53%)  |
-| Late (v3.11.0–3.24.0)   | 25 | 9 (36%)  | 9 (36%)  | 7 (28%)  |
+| Period | Releases | L4 | L5 | L6 | L7 |
+|--------|----------|----|----|----|----|
+| Foundation (v0.1.0–v1.5.0)          | 10 | 1 (10%) | 6 (60%) | 3 (30%) | 0 (0%)  |
+| Architecture explosion (v1.6.0–v3.2.0) | 10 | 0       | 0       | 1 (10%) | 9 (90%) |
+| Feature architecture (v3.3.0–v3.10.0)  | 15 | 0       | 1 (7%)  | 6 (40%) | 8 (53%) |
+| Hardening + cap + recovery (v3.11.0–3.24.0) | 25 | 0  | 9 (36%) | 9 (36%) | 7 (28%) |
 
-The L7 rate dropped from 53% to 28%. The L5 rate rose from 7% to 36%. The L6 rate held roughly steady. The system transitioned from boundary-creation to hardening, with mechanical-ratio caps suppressing the late-period level.
+The system's history follows a clear arc: **bootstrap → explode → build → harden**.
+
+The foundation era (v0.1.0–v1.5.0) is dominated by L5 — getting basic structure working. No L7 exists because the system is still finding its shape. Then v1.6.0 triggers the architecture explosion: 9 of 10 releases are L7 as the core concepts crystallize (coordination layer → actor model → agent purity → pure-pipe → FSM protocol → native runtime → LLM schema). This 90% L7 density is the highest in the project's history and reflects the fundamental boundaries being drawn.
+
+The feature architecture era (v3.3.0–v3.10.0) continues at 53% L7 as the runtime fills out (CN Shell, packages, traceability, scheduler, N-pass). The final era drops to 28% L7 as the system matures — hardening overtakes creation, and mechanical-ratio caps suppress levels where execution quality doesn't match architectural ambition.
 
 ### 2. Grade–Level Correlation
 
-| Grade | L5 | L6 | L7 |
-|-------|----|----|-----|
-| A+    | 1 (v3.9.1) | 5 | 8 |
-| A     | 4 (v3.14.2–5, v3.16.0) | 6 | 4 (v3.14.0, v3.14.6, v3.14.7, 3.24.0) |
-| A-    | 3 (v3.15.0, v3.19.0) | 0 | 3 (v3.13.0, 3.23.0) |
-| B+    | 2 (v3.17.0, v3.18.0) | 1 (v3.20.0) | 0 |
+| Grade | L4 | L5 | L6 | L7 |
+|-------|----|----|----|----|
+| C−    | 1 (v0.1.0) | 0 | 0 | 0 |
+| B−    | 0 | 1 (v1.0.0) | 0 | 0 |
+| B     | 0 | 1 (v1.1.0) | 0 | 0 |
+| B+    | 0 | 6 | 4 (v1.3.0, v1.4.0, v1.5.0, v3.20.0) | 0 |
+| A−    | 0 | 3 (v3.15.0, v3.19.0, 3.23.0†) | 0 | 4 (v1.6.0, v3.13.0, 3.23.0) |
+| A     | 0 | 4 (v3.14.2–5, v3.16.0) | 6 | 5 (v1.7.0, v3.14.0, v3.14.6, v3.14.7, 3.24.0) |
+| A+    | 0 | 1 (v3.9.1) | 7 (v2.1.x, +6 from v3.x) | 15 |
 
 **Key findings:**
 
+- **A+ at L7 is the dominant cell** (15 releases, 25% of all). The early architecture explosion (v1.8.0–v3.2.0) drove this: when the system's boundaries were being drawn, every release was both L7 in scope and A+ in coherence.
 - **A+ at L5 exists** (v3.9.1): a perfectly executed bug fix is A+ in coherence but L5 in scope. Grade measures execution quality, not architectural ambition.
-- **A- at L7 exists** (v3.13.0, 3.23.0): a boundary-changing release can have minor coherence gaps. Level measures what moved; grade measures how cleanly.
-- **B+ never reaches L7**: when mechanical ratios are high enough to depress the grade, they also cap the cycle level. B+ is a leading indicator of L5-capped execution.
-- **Grades and levels are orthogonal axes**: grade = coherence quality (how well), level = architectural scope (what moved). A release should be assessed on both.
+- **B+ never reaches L7**: across all 60 releases, no B+-graded release achieves L7. When execution quality depresses the grade, it also caps the level. B+ is a leading indicator of L5-capped execution.
+- **L7 requires at least A−**: the minimum grade for any L7 release is A− (v1.6.0). Boundary-changing work that ships below A− doesn't earn the level.
+- **Grades and levels are orthogonal but correlated at extremes**: low grades (B+ and below) predict low levels; high grades (A+) span all levels. The middle grades (A, A−) show the most variance.
 
 ### 3. Level Transitions
 
 | Transition | Releases | Trigger |
 |------------|----------|---------|
-| **L7 plateau** | v3.3.0–v3.10.0 | Rapid architecture-building: CN Shell → CAR → packages → traceability → output plane → scheduler → cognitive substrate → N-pass. 8 of 15 releases are L7. |
+| **Bootstrap (L4→L5)** | v0.1.0–v1.0.0 | Prototype → first public template. The system goes from coupled prototype to standalone git-CN concept. |
+| **Foundation plateau (L5/L6)** | v1.0.0–v1.5.0 | Nine releases building local correctness and early cross-surface wiring. Hub, symlinks, preflights, CLI tests. No L7 — the system hasn't found its shape yet. |
+| **Architecture explosion** | v1.6.0–v3.2.0 | 9 of 10 releases are L7. Coordination layer → actor model → agent purity → pure-pipe → FSM protocol → native OCaml → LLM schema. Every release draws a fundamental boundary. The single non-L7 (v2.1.x, L6) is actor model hardening between boundary-drawing releases. |
+| **Feature architecture** | v3.3.0–v3.10.0 | 53% L7 as the runtime fills in: CN Shell → CAR → packages → traceability → output plane → scheduler → cognitive substrate → N-pass. L7 density drops from 90% to 53% — more L6 hardening interleaved. |
 | **L7 → L6 shift** | v3.11.0 | N-pass merge extends rather than creates. First non-L7 release after 3 consecutive L7s. |
 | **L7 clusters** | v3.12.0, v3.13.0, v3.14.0 | Runtime Contract → CDD pipeline → RC v2. Three L7s in 5 releases during the process formalization phase. |
 | **L5 plateau** | v3.14.2–v3.14.5 | Four consecutive L5 releases (doc reorganization). Organizationally necessary but architecturally flat. |
 | **Mechanical cap era** | v3.15.0–v3.19.0 | Five of six releases capped at L5 by process failures (red CI, high mechanical ratios). The architecture attempted was L6–L7 but execution quality forced the cap. |
 | **L7 recovery** | 3.23.0, 3.24.0 | Pre-push gate + cycle iteration framework (3.23.0), then templates as 6th content class (3.24.0). Back-to-back L7s with clean execution (1 round, 1 mechanical finding). The gate works. |
 
-The transitions tell a clear story: **build → harden → cap → recover**. The pre-push gate in 3.23.0 is the MCA for the entire mechanical-cap era. 3.24.0 is the first post-gate L7 — evidence that the recovery is real.
+The full arc: **bootstrap → find shape → explode → build → harden → cap → recover**. The architecture explosion (v1.6.0–v3.2.0) is the most L7-dense period in the project's history — 90% — because the fundamental boundaries were all being drawn for the first time. The pre-push gate in 3.23.0 is the MCA for the mechanical-cap era. 3.24.0 confirms the recovery.
 
 ### 4. Leverage Density
 
@@ -125,11 +166,13 @@ The transitions tell a clear story: **build → harden → cap → recover**. Th
 
 | Version | What moved | Why it's high-leverage |
 |---------|-----------|----------------------|
+| v1.8.0  | Agent purity (brain/body split) | Foundational boundary — every future feature resolves against this separation |
+| v3.0.0  | Pure-pipe (LLM=string→string) | Execution model — all effects governed by cn, LLM is pure; eliminates an entire class of side-effect bugs |
+| v2.4.0  | Typed FSM protocol | Compile-time enforcement of state machines; illegal transitions become type errors |
 | v3.10.0 | 2-pass → N-pass | Removes a hard ceiling; every future cognitive pass is free |
 | v3.12.0 | Runtime Contract | Replaces an overloaded block with a typed self-model; every future self-reference resolves against it |
 | v3.6.0  | Output Plane Separation | Typed rendering for all output; eliminates a class of sink-confusion bugs |
 | 3.23.0  | Pre-push gate + §9.1 | Meta-leverage: prevents the mechanical-ratio caps that suppressed 5 prior releases |
-| v3.14.7 | Review pre-flight + taxonomy | Changes review economics for every future cycle |
 
 #### Over-weighted L7 attempts
 
@@ -188,7 +231,7 @@ Given the trajectory — L7-dominant early → L5-capped late → 3.23.0 showing
 | L6    | 6           | With mechanical caps eliminated by the gate, L6 becomes the natural baseline for well-executed feature and hardening work. |
 | L5    | 2           | Maintenance, organizational, and bug-fix releases. Acceptable when scope is genuinely local. |
 
-**Distribution shift**: L5 should drop from 38% → 20%, L6 should hold at ~40% → 60%, L7 should recover from 21% → 20%. The key change is not more L7 — it's fewer involuntary L5s caused by mechanical caps. The pre-push gate is the mechanism that makes this shift possible.
+**Distribution shift**: L5 should drop from 36% → 20%, L6 should rise to ~60%, L7 should hold at ~20%. The key change is not more L7 — it's fewer involuntary L5s caused by mechanical caps. The pre-push gate is the mechanism that makes this shift possible.
 
 If the gate holds and scope discipline improves, the realistic floor is **0 involuntary L5 caps in 10 releases** — every L5 should be a deliberate choice (maintenance/org), not an execution failure.
 
@@ -196,10 +239,13 @@ If the gate holds and scope discipline improves, the realistic floor is **0 invo
 
 ## Summary
 
-The release history shows three distinct eras:
+The full 60-release history shows four distinct eras:
 
-1. **Architecture era** (v3.3.0–v3.10.0): 53% L7. Rapid boundary creation. High leverage.
-2. **Mechanical cap era** (v3.11.0–v3.19.0): 38% L5, most capped by execution quality. Architecture ambition exceeded execution discipline.
-3. **Recovery** (v3.20.0–3.24.0): Meta-level tooling (pre-push gate, cycle iteration) addresses the root cause. 3.23.0 is L7 precisely because it eliminates the cap mechanism. 3.24.0 confirms the recovery: first post-gate L7 with clean execution.
+1. **Foundation** (v0.1.0–v1.5.0): 60% L5. Getting the basics working — prototype, template, CLI, hub wiring. No L7 because the system hasn't found its shape.
+2. **Architecture explosion** (v1.6.0–v3.2.0): 90% L7. The highest-leverage period in the project's history. Every fundamental boundary drawn here: coordination, actor model, agent purity, pure-pipe, FSM protocol, native runtime, LLM schema.
+3. **Feature architecture** (v3.3.0–v3.10.0): 53% L7. The runtime fills in — CN Shell, packages, traceability, scheduler, N-pass. L7 density drops as the system matures.
+4. **Hardening + cap + recovery** (v3.11.0–3.24.0): 28% L7, 36% L5. Execution quality caps ambitious work via mechanical ratios. The pre-push gate (3.23.0) is the MCA that breaks the cap pattern. 3.24.0 confirms the recovery.
 
 The single highest-leverage finding: **mechanical ratio is the binding constraint on level, not architectural ambition.** Fix the gate, and the levels take care of themselves.
+
+The second finding, visible only with the full history: **L7 density is a natural function of system maturity.** 90% L7 during boundary creation is healthy and expected. 28% L7 during hardening is also healthy. The pathology isn't low L7 density — it's involuntary L5 caps caused by mechanical errors in ambitious cycles.
