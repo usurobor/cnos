@@ -413,13 +413,24 @@ The CHANGELOG TSC entry at release time is provisional. Assessment governs the f
 
 ### 9.1 Cycle iteration
 
-When a cycle exceeded expected effort — extra review rounds, avoidable mechanical errors, tooling failures, or environmental surprises — the assessment must include a brief process iteration:
+When a cycle exceeded expected effort — extra review rounds, avoidable mechanical errors, tooling failures, or environmental surprises — the assessment must include a cycle iteration section.
 
-- what went wrong in the cycle itself (not the code, the process)
-- root cause: design flaw, skill gap, tooling gap, or environmental
-- MCA shipped or proposed to prevent recurrence
+**Trigger:** Any of:
+- review rounds exceeded target (default: 2)
+- mechanical finding ratio exceeded 20%
+- avoidable tooling or environmental failure delayed the cycle
+- a skill that was loaded failed to prevent a finding it covers
 
-Cycle iteration is not a retrospective essay. It is a concrete answer to: "what system change makes this class of friction disappear?" If the answer is "none — it was a one-off," say so. If the cycle went cleanly, cycle iteration may be omitted.
+**Required artifact:** A `## Cycle Iteration` section in the post-release assessment containing:
+
+1. **Friction log** — what went wrong in the cycle itself (not the code, the process)
+2. **Root cause classification** — one of: design flaw, skill gap, tooling gap, environmental, or one-off
+3. **Skill impact** — which active skill, if any, should have prevented the friction. If a loaded skill failed to prevent a finding it covers, that skill must be patched as an immediate output (§10.1).
+4. **MCA** — system change shipped or proposed. "Won't repeat" without a mechanism is not an MCA.
+
+**Gate:** If the trigger fires and the cycle iteration section is absent, the cycle cannot close (§10.3).
+
+If the cycle went cleanly (no trigger fires), cycle iteration may be omitted.
 
 ---
 
@@ -434,6 +445,7 @@ These must be executed within the same cycle:
 - changelog corrections
 - missing documentation
 - skill/process micro-patches
+- skill patches identified by cycle iteration (§9.1) — if a loaded skill failed to prevent a finding it covers, patch the skill now, not later
 - issue filing required by the assessment
 - lag-table updates
 - metadata fixes
@@ -456,6 +468,7 @@ A cycle closes only when:
 
 - all immediate outputs are executed
 - all deferred outputs are captured as explicit next-cycle commitments
+- cycle iteration (§9.1) is present if any trigger fired
 
 That is the handoff from step 13 back to step 0.
 
