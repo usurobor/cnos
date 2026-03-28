@@ -196,4 +196,4 @@ let read_recent hub_path ~max_entries =
         List.rev_append tail acc
   in
   let entries = collect [] max_entries files in
-  List.sort (fun a b -> String.compare a.ts b.ts) entries
+  List.stable_sort (fun a b -> String.compare a.ts b.ts) entries
