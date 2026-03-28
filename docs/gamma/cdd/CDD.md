@@ -428,12 +428,12 @@ When a cycle exceeded expected effort — extra review rounds, avoidable mechani
 3. **Skill impact** — which active skill, if any, should have prevented the friction. If a loaded skill failed to prevent a finding it covers, that skill must be patched as an immediate output (§10.1).
 4. **MCA** — system change shipped or proposed. "Won't repeat" without a mechanism is not an MCA.
 
-**Cycle level assessment:** After the friction log and MCA, assess the executed engineering level of the cycle using the diagnostic questions from `docs/gamma/ENGINEERING-LEVELS.md` §6:
+**Cycle level assessment:** After the friction log and MCA, assess the executed engineering level of the cycle. This applies the level framework from `docs/gamma/ENGINEERING-LEVELS.md` to cycles (change sets), not just individual diffs. Use the §6 diagnostic questions adapted for cycle scope:
 
-- **L5 miss** — mechanical errors reached review (compilation, type errors, broken assertions). Cycle caps at L5.
-- **L6 miss** — cross-surface drift reached review (package sync, authority-sync, doc/code mismatch, test gaps). Cycle caps at L6.
-- **L7 miss** — friction was fixed locally but no system change prevents recurrence (no MCA shipped, no skill patched, no gate added). Cycle caps at L6.
-- **L7 achieved** — cycle shipped an MCA that eliminates or reduces a friction class for future cycles.
+- **L5: local correctness** — Was the code locally correct before review? Did it compile, pass tests, follow current patterns? If mechanical errors (compilation failures, type errors, broken assertions, missing tests) reached review, L5 was not met. Cycle caps at L5.
+- **L6: system-safe execution** — Did the change stay coherent across docs, runtime, artifacts, tests, and operator truth? Were failure modes bounded and visible? If cross-surface drift (package sync, authority-sync, doc/code mismatch, test coverage gaps) reached review, L6 was not met. Cycle caps at L6.
+- **L7: system-shaping leverage** — Did the cycle change the system boundary so the friction class gets easier or disappears? If friction was fixed locally but no system change prevents recurrence (no MCA shipped, no skill patched, no gate added), L7 was not met. Cycle caps at L6. Not every cycle needs L7 — only assess when friction occurred and a system-shaping response was available.
+- **L7 achieved** — The cycle shipped an MCA that eliminates or reduces a friction class for future cycles.
 
 The cycle level is the lowest miss. A cycle with L5 misses caps at L5 regardless of whether it also shipped an L7 MCA. Each level must be earned cleanly.
 
