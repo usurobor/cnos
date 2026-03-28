@@ -183,8 +183,8 @@ After release:
 
 - observe runtime/design alignment
 - write the post-release assessment
-- if the cycle hit avoidable friction (extra review rounds, mechanical errors, tooling failures): include cycle iteration — what went wrong in the process, root cause, MCA shipped or proposed (CDD §9.1)
-- execute immediate outputs
+- if a §9.1 trigger fired (review rounds > 2, mechanical ratio > 20%, avoidable tooling failure, loaded skill failed to prevent a finding): write a `## Cycle Iteration` section in the assessment with friction log, root cause classification, skill impact, and MCA. Patch any skill that failed to prevent a finding it covers as an immediate output. Cycle cannot close without this section if triggered. (CDD §9.1, §10.3)
+- execute immediate outputs (including skill patches from cycle iteration)
 - commit deferred outputs concretely
 
 Skill/spec patches produced as immediate outputs must pass CLP β: does this change create a mismatch with any canonical or derived surface? If the skill has a canonical spec (§5), both must be updated together.
