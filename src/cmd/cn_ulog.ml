@@ -190,10 +190,10 @@ let read_recent hub_path ~max_entries =
       let entries = read_file path in
       let n = List.length entries in
       if n <= remaining then
-        collect (List.rev_append entries acc) (remaining - n) rest
+        collect (entries :: acc) (remaining - n) rest
       else
         let tail = List.filteri (fun i _ -> i >= n - remaining) entries in
-        List.rev_append tail acc
+        tail :: acc
   in
-  let entries = collect [] max_entries files in
-  List.stable_sort (fun a b -> String.compare a.ts b.ts) entries
+  (* Chunks accumulate newest-first; List.concat reverses to chronological *)
+  List.concat (collect [] max_entries files)
