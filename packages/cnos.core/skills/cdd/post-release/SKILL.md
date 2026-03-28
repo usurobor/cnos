@@ -47,7 +47,15 @@ The assessment produces one artifact with five sections:
 - **Weakest axis:** α / β / γ
 - **Action:** none / patch skill / patch doc / automate check
 
-### 5. Next Move
+### 5. Production Verification
+
+**Scenario:** [what to test]
+**Before this release:** [what happened]
+**After this release:** [what should happen]
+**How to verify:** [concrete steps]
+**Result:** [pass / fail / deferred]
+
+### 6. Next Move
 **Next MCA:** #NN — title
 **Owner:** ...
 **Branch:** ...
@@ -159,6 +167,33 @@ This drives action, not score-keeping:
 
 If no axis scores below 3, write "no action" and move on.
 
+### Step 5.7: Production verification
+
+After release, verify the change works in production — not just that CI passes. Design a concrete test that demonstrates the new capability (or blocked failure mode) in a real environment.
+
+**The question:** What can the system do now that it couldn't before? Or: what failure is now impossible that was previously possible?
+
+Write a verification scenario:
+
+```markdown
+### Production Verification
+
+**Scenario:** [what to test]
+**Before this release:** [what happened]
+**After this release:** [what should happen]
+**How to verify:** [concrete steps]
+**Result:** [pass / fail / deferred — with evidence]
+```
+
+Rules:
+- The scenario must be executable, not hypothetical
+- "CI passes" is not production verification — it's build verification
+- If the change is structural (L7), the test should demonstrate the boundary move, not just a single path
+- If verification requires a running agent or daemon, say so — defer if the environment doesn't support it, but commit to when/how it will be verified
+- If deferred, add to the next session's checklist
+
+This is the kata: each release earns a concrete demonstration that the system changed.
+
 ### Step 6: Decide next move
 
 Based on measurement + lag + learning, state what happens next as a **concrete commitment**:
@@ -187,6 +222,7 @@ Before committing the assessment, verify mechanically:
 - [ ] §4 has all fields: PRs, review rounds, superseded PRs, finding breakdown, mechanical ratio, action
 - [ ] §4 mechanical ratio: if >20%, a process issue is **filed and referenced** (not just noted)
 - [ ] §4a CDD self-coherence: α/β/γ scored, weakest axis named, action stated (or "none" if all ≥3)
+- [ ] §5.7 has production verification scenario (or explicit deferral with commitment)
 - [ ] §5 has all 6 fields: Next MCA, Owner, Branch, **First AC**, MCI frozen?, Rationale
 - [ ] §5 Closure evidence: immediate outputs listed with links, deferred outputs with issue/owner
 - [ ] CHANGELOG TSC row added or updated to match assessment scores
