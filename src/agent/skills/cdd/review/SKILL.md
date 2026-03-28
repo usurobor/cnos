@@ -169,6 +169,9 @@ Check whether the change creates obligations on code it did not touch.
   - ❌ "fs_read is intercepted — membrane complete" (didn't check fs_list children, fs_glob, git_grep)
   - ✅ "Body goes through strip_xml + strip_frontmatter. Reply goes through is_control_plane_like only. Reply is missing strip_xml — sibling gap."
   - ✅ "Self-knowledge membrane covers fs_read and fs_list direct path. Remaining input sources: fs_list child entries, fs_glob results, git_grep content — 3 surfaces still open. Claim 'impossible by construction' is not yet earned."
+  - When the diff introduces a **new data surface** (new log stream, new file format, new query endpoint), enumerate both write paths (what emits to it) AND read paths (what consumes from it). Verify read-path semantics (ordering, filtering, truncation) match the operator-facing contract, not just that writes are correct.
+  - ❌ "All 6 emission points are correct" (didn't verify the reader returns correct chronological order across day boundaries)
+  - ✅ "6 emission points verified. Reader `read_recent` iterates files newest-first, reverses — cross-day order is wrong. Filtered path concatenates without global sort."
 
 2.2.2. **Cross-module leakage**
   - Follow what the changed code writes/produces and inspect what reads/exposes it.
@@ -358,6 +361,7 @@ Before submitting a review:
 - [ ] For restricted-domain functions: contract claims verified against actual rejection of out-of-domain inputs
 - [ ] For filters/sanitizers/validators: all input sources enumerated, full pipeline verified on each
 - [ ] For "impossible by construction" / structural closure claims: input-source enumeration at security-level rigor (§2.2.1a)
+- [ ] For new data surfaces (logs, streams, query endpoints): both write paths AND read paths verified (§2.2.1a)
 - [ ] File-move cross-refs validated by grep where applicable
 - [ ] System writes traced to system reads
 - [ ] Evidence depth matches claim strength
