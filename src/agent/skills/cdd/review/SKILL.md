@@ -293,8 +293,9 @@ The verdict is a function of the worst named incoherence.
     2. If no step covers it, add one
     3. If a step exists but is too vague, sharpen it
   - The fix is always a patch to this skill. Never "reviewer should have been more careful."
+  - After patching the skill, capture the divergence analysis in a durable adhoc thread (what happened, why, what changed, what to watch for). This converts session-local learning into cross-session continuity.
   - ❌ "I missed the stale cnos.pm reference — I'll look harder next time"
-  - ✅ "I missed it because no review-skill step says to scan the full touched module for same-kind assumptions. Added §2.2.9 (module-truth audit)."
+  - ✅ "I missed it because no review-skill step says to scan the full touched module for same-kind assumptions. Added §2.2.9 (module-truth audit). Adhoc thread: `20260328-review-divergence-pr130.md`."
 
 2.3.8. **Higher-leverage alternative check**
   - A diff may be locally correct and still miss the more coherent system move.
