@@ -164,8 +164,11 @@ Check whether the change creates obligations on code it did not touch.
 2.2.1a. **Input-source enumeration for filters/sanitizers/validators**
   - When the diff adds or modifies a function that filters, sanitizes, or validates, enumerate every input source (caller/call site) that feeds it. Verify each input gets the full pipeline.
   - This is mandatory for security-relevant paths (sanitization, auth, access control).
+  - This is also mandatory when the PR claims a failure class is "impossible by construction" or "structurally prevented" — any such claim requires exhaustive input-source enumeration at the same rigor as a security boundary. An unchecked input source contradicts the closure claim and is a D-level finding.
   - ❌ "Body goes through the stripper — looks good"
+  - ❌ "fs_read is intercepted — membrane complete" (didn't check fs_list children, fs_glob, git_grep)
   - ✅ "Body goes through strip_xml + strip_frontmatter. Reply goes through is_control_plane_like only. Reply is missing strip_xml — sibling gap."
+  - ✅ "Self-knowledge membrane covers fs_read and fs_list direct path. Remaining input sources: fs_list child entries, fs_glob results, git_grep content — 3 surfaces still open. Claim 'impossible by construction' is not yet earned."
 
 2.2.2. **Cross-module leakage**
   - Follow what the changed code writes/produces and inspect what reads/exposes it.
@@ -353,6 +356,7 @@ Before submitting a review:
 - [ ] For model-correctness changes: full touched module scanned for other assumptions of the same kind
 - [ ] For restricted-domain functions: contract claims verified against actual rejection of out-of-domain inputs
 - [ ] For filters/sanitizers/validators: all input sources enumerated, full pipeline verified on each
+- [ ] For "impossible by construction" / structural closure claims: input-source enumeration at security-level rigor (§2.2.1a)
 - [ ] File-move cross-refs validated by grep where applicable
 - [ ] System writes traced to system reads
 - [ ] Evidence depth matches claim strength
