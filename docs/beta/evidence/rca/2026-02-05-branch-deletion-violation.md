@@ -26,7 +26,7 @@ Pi deleted:
 - `sigma/tool-writing-js`
 - `sigma/tool-writing-skill`
 
-No inbound branch to cn-sigma notifying Sigma before or after.
+No inbound branch to cn-<peer> notifying Sigma before or after.
 
 ---
 

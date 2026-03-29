@@ -47,21 +47,21 @@ Every decision requires rationale.
 
 ```
 Pi → Sigma:
-1. Pi pushes sigma/topic to cn-sigma
+1. Pi pushes sigma/topic to cn-<peer>
 2. cn sync detects it
 3. cn process materializes to state/input.md
 4. Sigma handles ONE item
 
 Sigma → Pi:
 1. Sigma writes state/output.md
-2. cn sync sends to cn-pi
+2. cn sync sends to cn-<peer>
 ```
 
 ## Automation
 
 ```bash
 # cron: every 5 min
-cd cn-sigma && cn sync && cn agent
+cd cn-<peer> && cn sync && cn agent
 ```
 
 cn agent dequeues and processes when there's work.

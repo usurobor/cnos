@@ -7,8 +7,8 @@ How to diagnose issues with a CN agent deployment.
 ### Is the daemon running?
 
 ```bash
-systemctl status cn-pi          # or whatever your service name is
-journalctl -u cn-pi --since "1 hour ago" --no-pager
+systemctl status cn-<name>          # or whatever your service name is
+journalctl -u cn-<name> --since "1 hour ago" --no-pager
 ```
 
 ### What version is running?
@@ -133,7 +133,7 @@ Check the Runtime Contract for `readable_paths` and `writable_paths`. The agent 
 ### Daemon keeps restarting
 
 ```bash
-journalctl -u cn-pi --since "1 hour ago" | grep -E "Started|Stopped|Stopping"
+journalctl -u cn-<name> --since "1 hour ago" | grep -E "Started|Stopped|Stopping"
 ```
 
 If you see rapid start/stop cycles, check for:
@@ -211,10 +211,10 @@ ls threads/adhoc/
 
 ### After upgrading CN version
 
-1. Stop the daemon: `systemctl stop cn-pi`
+1. Stop the daemon: `systemctl stop cn-<name>`
 2. Replace the binary: `cp cn-new bin/cn && chmod +x bin/cn`
 3. Verify: `./bin/cn --version`
-4. Start: `systemctl start cn-pi`
+4. Start: `systemctl start cn-<name>`
 5. Check: `tail -20 logs/daemon.log`
 
 ### After updating packages (cnos.core, cnos.eng)
