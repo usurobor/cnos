@@ -114,6 +114,11 @@ let format_kind = function
   | Cn_ulog.Message_sent -> Cn_fmt.cyan "sent"
   | Cn_ulog.Error -> Cn_fmt.red "error"
 
+let is_per_pass (e : Cn_ulog.entry) =
+  List.exists (fun (k, v) ->
+    k = "scope" && v = Cn_json.String "pass"
+  ) e.details
+
 let format_entry (e : Cn_ulog.entry) =
   let time = format_time e.ts in
   let sev = format_severity e.severity in
@@ -128,14 +133,23 @@ let format_entry (e : Cn_ulog.entry) =
       Printf.sprintf "%s%s" src msg
     | Invocation_start ->
       let pass = match e.pass with Some p -> string_of_int p | None -> "1" in
-      Printf.sprintf "pass %s" pass
+      if is_per_pass e then
+        Printf.sprintf "pass %s (per-pass)" pass
+      else
+        Printf.sprintf "pass %s" pass
     | Invocation_end ->
-      let passes = match e.passes with Some p -> string_of_int p | None -> "?" in
-      let ops = match e.ops with Some o -> string_of_int o | None -> "?" in
-      let tok_in = match e.tokens_in with Some t -> string_of_int t | None -> "?" in
-      let tok_out = match e.tokens_out with Some t -> string_of_int t | None -> "?" in
-      let dur = match e.duration_ms with Some d -> string_of_int d ^ "ms" | None -> "?" in
-      Printf.sprintf "%sp %sops %s/%stok %s" passes ops tok_in tok_out dur
+      if is_per_pass e then
+        let pass = match e.pass with Some p -> string_of_int p | None -> "?" in
+        let ops = match e.ops with Some o -> string_of_int o | None -> "?" in
+        let dur = match e.duration_ms with Some d -> string_of_int d ^ "ms" | None -> "?" in
+        Printf.sprintf "pass %s %sops %s" pass ops dur
+      else
+        let passes = match e.passes with Some p -> string_of_int p | None -> "?" in
+        let ops = match e.ops with Some o -> string_of_int o | None -> "?" in
+        let tok_in = match e.tokens_in with Some t -> string_of_int t | None -> "?" in
+        let tok_out = match e.tokens_out with Some t -> string_of_int t | None -> "?" in
+        let dur = match e.duration_ms with Some d -> string_of_int d ^ "ms" | None -> "?" in
+        Printf.sprintf "%sp %sops %s/%stok %s" passes ops tok_in tok_out dur
     | Message_sent ->
       (match e.response_preview with
        | Some p -> Cn_ulog.truncate_string 60 p

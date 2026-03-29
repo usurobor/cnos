@@ -1059,3 +1059,116 @@ let%expect_test "n_pass: backward compat — max_passes=2 matches N-pass" =
     passes_used: 2
     stop_reason: no_ops
     has_final_output: true |}]
+
+(* ============================================================ *)
+(* === PER-PASS UNIFIED LOGGING (issue #135)                  === *)
+(* ============================================================ *)
+
+(* Helper: detect per-pass scope in unified log entry details *)
+let is_per_pass_scope (e : Cn_ulog.entry) =
+  List.exists (fun (k, v) ->
+    k = "scope" && v = Cn_json.String "pass"
+  ) e.details
+
+(* Invariant 1: Every pass emits exactly one invocation.start and one
+   invocation.end with scope=pass and correct pass number.
+   Surface: Cn_orchestrator.run_n_pass → Cn_ulog.write
+   Oracle: per-pass entry count = 2 * passes_used (one start + one end per pass)
+   Evidence depth: integration (end-to-end through orchestrator → unified log file) *)
+
+let%expect_test "per-pass: single pass emits invocation.start + invocation.end" =
+  with_test_hub (fun hub ->
+    let ops = [
+      make_effect ~op_id:"write-01"
+        ~fields:[("path", Cn_json.String "src/new.ml");
+                 ("content", Cn_json.String "let x = 1")] "fs_write"
+    ] in
+    let llm_call _ = Ok "---\nid: orch-test-001\n---\n\nDone." in
+    let _result = Cn_orchestrator.run_n_pass ~hub_path:hub ~trigger_id
+        ~config:auto_config ~llm_call ops in
+    let entries = Cn_ulog.read_recent hub ~max_entries:20 in
+    let pass_entries = List.filter is_per_pass_scope entries in
+    let starts = List.filter (fun (e : Cn_ulog.entry) ->
+      e.kind = Invocation_start) pass_entries in
+    let ends = List.filter (fun (e : Cn_ulog.entry) ->
+      e.kind = Invocation_end) pass_entries in
+    Printf.printf "per_pass_start_count: %d\n" (List.length starts);
+    Printf.printf "per_pass_end_count: %d\n" (List.length ends);
+    List.iter (fun (e : Cn_ulog.entry) ->
+      Printf.printf "start pass=%d\n"
+        (Option.value ~default:0 e.pass)
+    ) starts;
+    List.iter (fun (e : Cn_ulog.entry) ->
+      Printf.printf "end pass=%d ops=%d has_duration=%b\n"
+        (Option.value ~default:0 e.pass)
+        (Option.value ~default:0 e.ops)
+        (e.duration_ms <> None)
+    ) ends);
+  [%expect {|
+    per_pass_start_count: 1
+    per_pass_end_count: 1
+    start pass=1
+    end pass=1 ops=1 has_duration=true |}]
+
+let%expect_test "per-pass: multi-pass emits start/end per pass" =
+  with_test_hub (fun hub ->
+    let ops = [
+      make_observe_with ~op_id:"obs-01"
+        ~fields:[("path", Cn_json.String "src/main.ml")] "fs_read"
+    ] in
+    let pass_2_output = "---\nid: orch-test-001\n---\n\nFinal response." in
+    let llm_call _ = Ok pass_2_output in
+    let _result = Cn_orchestrator.run_n_pass ~hub_path:hub ~trigger_id
+        ~config:auto_config ~llm_call ops in
+    let entries = Cn_ulog.read_recent hub ~max_entries:20 in
+    let pass_entries = List.filter is_per_pass_scope entries in
+    let starts = List.filter (fun (e : Cn_ulog.entry) ->
+      e.kind = Invocation_start) pass_entries in
+    let ends = List.filter (fun (e : Cn_ulog.entry) ->
+      e.kind = Invocation_end) pass_entries in
+    Printf.printf "per_pass_start_count: %d\n" (List.length starts);
+    Printf.printf "per_pass_end_count: %d\n" (List.length ends);
+    List.iter (fun (e : Cn_ulog.entry) ->
+      Printf.printf "start pass=%d\n"
+        (Option.value ~default:0 e.pass)
+    ) starts;
+    List.iter (fun (e : Cn_ulog.entry) ->
+      Printf.printf "end pass=%d ops=%d has_duration=%b\n"
+        (Option.value ~default:0 e.pass)
+        (Option.value ~default:0 e.ops)
+        (e.duration_ms <> None)
+    ) ends);
+  [%expect {|
+    per_pass_start_count: 2
+    per_pass_end_count: 2
+    start pass=1
+    start pass=2
+    end pass=1 ops=1 has_duration=true
+    end pass=2 ops=0 has_duration=true |}]
+
+(* Invariant 4: All per-pass events carry msg_id (trigger_id) for correlation.
+   Negative: no per-pass entry may have msg_id = None. *)
+
+let%expect_test "per-pass: msg_id correlation on all per-pass entries" =
+  with_test_hub (fun hub ->
+    let ops = [
+      make_effect ~op_id:"write-01"
+        ~fields:[("path", Cn_json.String "src/new2.ml");
+                 ("content", Cn_json.String "let y = 2")] "fs_write"
+    ] in
+    let llm_call _ = Ok "---\nid: orch-test-001\n---\n\nDone." in
+    let _result = Cn_orchestrator.run_n_pass ~hub_path:hub ~trigger_id
+        ~config:auto_config ~llm_call ops in
+    let entries = Cn_ulog.read_recent hub ~max_entries:20 in
+    let pass_entries = List.filter is_per_pass_scope entries in
+    let all_have_msg_id = List.for_all (fun (e : Cn_ulog.entry) ->
+      e.msg_id = Some trigger_id) pass_entries in
+    let none_missing = not (List.exists (fun (e : Cn_ulog.entry) ->
+      e.msg_id = None) pass_entries) in
+    Printf.printf "all_have_msg_id: %b\n" all_have_msg_id;
+    Printf.printf "none_missing: %b\n" none_missing;
+    Printf.printf "count: %d\n" (List.length pass_entries));
+  [%expect {|
+    all_have_msg_id: true
+    none_missing: true
+    count: 2 |}]

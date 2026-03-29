@@ -406,10 +406,18 @@ let run_n_pass ~hub_path ~trigger_id ~config
 
   let rec loop ~pass_index ~current_ops ~last_parsed =
     let pass_label = pass_label_of_index pass_index in
+    let pass_num = pass_index + 1 in
 
     (* Refresh indicator before LLM call (skip first pass — already started) *)
     if pass_index > 0 then
       (match indicator with Some h -> Cn_indicator.refresh h | None -> ());
+
+    (* Per-pass unified log: invocation.start *)
+    let pass_t0 = Unix.gettimeofday () in
+    Cn_ulog.write hub_path (Cn_ulog.make_entry
+      ~kind:Invocation_start ~severity:Info
+      ~msg_id:trigger_id ~pass:pass_num
+      ~details:[("scope", Cn_json.String "pass")] ());
 
     (* Execute pass via run_pass (handles both observe-deferred
        and all-execute cases based on op classification) *)
@@ -437,6 +445,18 @@ let run_n_pass ~hub_path ~trigger_id ~config
       && (effects_deferred || pass_index > 0)
     in
 
+    (* Per-pass unified log: emit invocation.end after pass execution *)
+    let emit_pass_end () =
+      let pass_duration_ms =
+        int_of_float ((Unix.gettimeofday () -. pass_t0) *. 1000.0) in
+      Cn_ulog.write hub_path (Cn_ulog.make_entry
+        ~kind:Invocation_end ~severity:Info
+        ~msg_id:trigger_id ~pass:pass_num
+        ~ops:(List.length current_ops)
+        ~duration_ms:pass_duration_ms
+        ~details:[("scope", Cn_json.String "pass")] ())
+    in
+
     if not should_continue then begin
       (* Terminal: n_pass=off or first-pass effect-only *)
       let stop_reason = if config.n_pass = "off" then N_pass_off
@@ -449,6 +469,7 @@ let run_n_pass ~hub_path ~trigger_id ~config
           "pass_index", Cn_json.Int pass_index;
           "receipt_count", Cn_json.Int (List.length receipts);
         ] ();
+      emit_pass_end ();
       make_terminal ~pass_index ~stop_reason
         ~last_parsed ~effect_receipts:receipts
 
@@ -462,6 +483,7 @@ let run_n_pass ~hub_path ~trigger_id ~config
           "pass_index", Cn_json.Int pass_index;
           "receipt_count", Cn_json.Int (List.length receipts);
         ] ();
+      emit_pass_end ();
       make_terminal ~pass_index ~stop_reason:Max_passes_reached
         ~last_parsed ~effect_receipts:receipts
 
@@ -476,6 +498,7 @@ let run_n_pass ~hub_path ~trigger_id ~config
           "total_ops", Cn_json.Int !total_ops;
           "max_total_ops", Cn_json.Int max_total_ops;
         ] ();
+      emit_pass_end ();
       make_terminal ~pass_index ~stop_reason:Budget_exhausted
         ~last_parsed ~effect_receipts:receipts
 
@@ -491,6 +514,7 @@ let run_n_pass ~hub_path ~trigger_id ~config
           "pass_index", Cn_json.Int pass_index;
           "receipt_count", Cn_json.Int (List.length receipts);
         ] ();
+      emit_pass_end ();
 
       match call_llm_and_continue ~pass_index ~pass_label ~receipts with
       | `Error msg -> Error msg
