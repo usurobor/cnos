@@ -712,7 +712,7 @@ let rec finalize ~(config : Cn_config.config) ~hub_path ~name
         ~trigger_id ();
       finalize_project ~config ~hub_path ~trigger_id ~from ~inbound_message
         ~final_parsed ~initial_coord_ops ~name
-        ?invocation_t0 ?pass_count ()
+        ?invocation_t0 ~pass_count:result.passes_used ()
   end
 
 (** Project final output, append conversation, cleanup.

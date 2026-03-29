@@ -149,3 +149,63 @@ let%expect_test "format_entry message received" =
   [%expect {|
     has_time: true
     has_msg_id: true |}]
+
+(* === Per-pass formatting (issue #135) === *)
+
+(* Invariant 3: Cross-surface equivalence — writer and reader agree.
+   Per-pass events (with scope=pass) format differently from summary events.
+   Surface: Cn_logs.format_entry
+   Oracle: per-pass start contains "(per-pass)", per-pass end shows pass number *)
+
+let%expect_test "format_entry per-pass invocation.start shows (per-pass)" =
+  let entry = { (Cn_ulog.make_entry
+    ~kind:Invocation_start ~severity:Info
+    ~msg_id:"tg-200" ~pass:2
+    ~details:[("scope", Cn_json.String "pass")] ())
+    with ts = "2026-03-28T14:30:00.000Z" } in
+  let s = Cn_logs.format_entry entry in
+  let has_per_pass =
+    let rec check i = if i + 10 > String.length s then false
+      else if String.sub s i 10 = "(per-pass)" then true else check (i+1)
+    in check 0 in
+  Printf.printf "has_per_pass: %b\n" has_per_pass;
+  [%expect {| has_per_pass: true |}]
+
+let%expect_test "format_entry per-pass invocation.end shows pass detail" =
+  let entry = { (Cn_ulog.make_entry
+    ~kind:Invocation_end ~severity:Info
+    ~msg_id:"tg-200" ~pass:2 ~ops:3 ~duration_ms:1500
+    ~details:[("scope", Cn_json.String "pass")] ())
+    with ts = "2026-03-28T14:30:00.000Z" } in
+  let s = Cn_logs.format_entry entry in
+  let has_pass_detail =
+    let rec check i = if i + 6 > String.length s then false
+      else if String.sub s i 6 = "pass 2" then true else check (i+1)
+    in check 0 in
+  Printf.printf "has_pass_detail: %b\n" has_pass_detail;
+  [%expect {| has_pass_detail: true |}]
+
+(* Invariant 2: Summary backward compat — summary events retain existing shape.
+   Negative: summary events must NOT show "(per-pass)". *)
+
+let%expect_test "format_entry summary invocation.end unchanged" =
+  let entry = { (Cn_ulog.make_entry
+    ~kind:Invocation_end ~severity:Info
+    ~msg_id:"tg-200" ~passes:3 ~ops:5
+    ~tokens_in:28000 ~tokens_out:304
+    ~duration_ms:7500 ())
+    with ts = "2026-03-28T14:30:00.000Z" } in
+  let s = Cn_logs.format_entry entry in
+  let has_summary =
+    let rec check i = if i + 2 > String.length s then false
+      else if String.sub s i 2 = "3p" then true else check (i+1)
+    in check 0 in
+  let has_per_pass =
+    let rec check i = if i + 10 > String.length s then false
+      else if String.sub s i 10 = "(per-pass)" then true else check (i+1)
+    in check 0 in
+  Printf.printf "has_summary_format: %b\n" has_summary;
+  Printf.printf "has_per_pass_label: %b\n" has_per_pass;
+  [%expect {|
+    has_summary_format: true
+    has_per_pass_label: false |}]
