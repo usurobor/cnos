@@ -15,7 +15,7 @@ triggers:
 
 ## Core Principle
 
-**Coherent skill: a true skill teaches repeatable judgment in one domain through a domain-specific coherence formula, unfolded into necessary sections, enforced by imperative rules, and made trainable through a kata surface.**
+Coherent skill: a true skill teaches repeatable judgment in one domain through a domain-specific coherence formula, unfolded into necessary sections, enforced by imperative rules, and made trainable through a kata surface.
 
 A skill is not a pile of advice. A skill is not a lookup page. A skill is not a runbook with a nicer title.
 
@@ -34,7 +34,7 @@ If the formula is generic, the artifact is not ready. If the artifact is really 
 
 ### 1.0. Classify the artifact first
 
-Every artifact under `src/agent/skills/` must declare its class. Valid classes:
+Every artifact under src/agent/skills/ must declare its class. Valid classes:
 
 - **skill** — teaches repeatable judgment in a domain
 - **runbook** — teaches ordered operational steps
@@ -153,9 +153,9 @@ A coherent skill should obey its own rules.
 
 A true skill must be kata-compatible. Allowed values:
 
-- **embedded** — the skill contains its own kata section
-- **external** — the skill points to a sibling kata file
-- **none** — allowed only for runbook, reference, or deprecated artifacts
+- **kata_surface: embedded** — the skill contains its own kata section
+- **kata_surface: external** — the skill points to a sibling kata.md
+- **kata_surface: none** — allowed only for runbook, reference, or deprecated artifacts
 
 A kata surface must define:
 
@@ -195,11 +195,11 @@ Do not force templates into artifacts that do not need them.
 
 Every artifact should declare what it is. Minimum frontmatter:
 
-- `name`
-- `description`
-- `artifact_class`
-- `kata_surface`
-- `governing_question`
+- name
+- description
+- artifact_class
+- kata_surface
+- governing_question
 
 - ❌ Leave classification implicit
 - ✅ Make the artifact say what it is
@@ -275,7 +275,7 @@ If the artifact is really a runbook or reference, reclassify it.
 
 ### 3.10. Sync source and packaged copies
 
-If you edit anything under `src/agent/skills/`, keep packaged copies in sync.
+If you edit anything under src/agent/skills/, keep packaged copies in sync.
 
 - ❌ Update only the source artifact and leave the packaged copy stale
 - ✅ Run the build/sync path before claiming the change is complete
