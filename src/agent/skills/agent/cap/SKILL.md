@@ -1,112 +1,238 @@
+---
+name: cap
+description: The Coherent Agent Principle — understand the situation, identify the governing incoherence, execute the smallest response that closes it.
+artifact_class: skill
+kata_surface: embedded
+governing_question: How does an agent detect, analyze, and close incoherence?
+triggers:
+  - ambiguous situation requiring analysis before action
+  - choosing between MCA and MCI
+  - detecting whether a gap is governing or symptomatic
+  - any moment where "what do I do next" is not obvious
+---
+
 # CAP
 
 The Coherent Agent Principle — how agents maintain coherence.
 
 ## Core Principle
 
-**A coherent agent minimizes incoherence by acting (MCA) or learning (MCI).**
+A coherent agent first understands the situation, then identifies the governing incoherence, then executes the smallest response that closes it.
 
 Derived from Friston's Free Energy Principle: any self-organizing system at equilibrium with its environment must minimize free energy. For agents, free energy is incoherence — the gap between model and reality.
 
 Two mechanisms to close the gap:
+
 1. **MCA** — act on the world to change reality
 2. **MCI** — update your model to match reality
 
-This is the dual engine of coherence.
+The upstream move that makes MCA/MCI effective is UIE: Understand, Identify, Execute.
 
-## 1. The Gap
+## Algorithm
 
-Incoherence is the distance between model and reality.
-
-1.1. **Detect the gap**
-  - Your model predicts X, reality shows Y
-  - ❌ Ignore the mismatch → ✅ Name it explicitly
-
-1.2. **Measure the gap**
-  - How far is model from reality?
-  - ❌ "Something feels off" → ✅ "Model says A, evidence shows B"
-
-1.3. **The gap demands response**
-  - Incoherence is unstable — it resolves one way or another
-  - ❌ Let it drift → ✅ Close it deliberately
-
-## 2. Two Paths
-
-Act or learn. MCA or MCI.
-
-2.1. **MCA — change reality**
-  - Your model is right, reality is wrong
-  - Act to make reality match your model
-  - ❌ "The code should work" (do nothing) → ✅ Fix the bug (change reality)
-
-2.2. **MCI — change your model**
-  - Reality is right, your model is wrong
-  - Learn to make your model match reality
-  - ❌ "This shouldn't happen" (deny) → ✅ Update your understanding (learn)
-
-2.3. **Choose the right path**
-  - Can you change reality? → MCA
-  - Must you accept reality? → MCI
-  - ❌ Try to change the unchangeable → ✅ Learn from it
-  - ❌ Accept what should be changed → ✅ Act on it
-
-## 3. Priority
-
-Prefer action over insight.
-
-3.1. **MCA before MCI**
-  - If you can act, act
-  - Insights are what remain after acting
-  - ❌ "I learned I should fix bugs" → ✅ Fix the bug
-
-3.2. **MCI when MCA is blocked**
-  - When you can't act, learn
-  - Extract the insight for next time
-  - ❌ Repeat the same mistake → ✅ Capture the lesson
-
-3.3. **Both may apply**
-  - Act now (MCA), then capture the insight (MCI)
-  - ❌ Only fix, never learn → ✅ Fix and document why
-
-## 4. The Loop
-
-Coherence is continuous.
-
-4.1. **Sense → Compare → Act/Learn → Repeat**
-  - Coherence is not a state, it's a process
-  - ❌ "Now I'm coherent" (static) → ✅ Continuous adjustment
-
-4.2. **Each action creates new data**
-  - MCA changes reality, which updates sensory input
-  - New input may reveal new gaps
-  - ❌ One fix, done forever → ✅ Iterate
-
-4.3. **Each insight sharpens the model**
-  - MCI updates your model, which changes predictions
-  - Better predictions reveal subtler gaps
-  - ❌ Learn once, stop → ✅ Keep refining
+1. Understand — read the situation before forming a response.
+2. Identify — name the governing incoherence, reject symptoms.
+3. Execute — close the gap through MCA, MCI, or delegation.
 
 ---
 
-## Relationship to FEP
+## 1. Understand
 
-| Free Energy Principle | Coherent Agent Principle |
-|-----------------------|--------------------------|
-| Minimize free energy | Minimize incoherence |
-| Act on the world | MCA |
-| Update internal states | MCI |
-| Surprise | Gap between model and reality |
-| Self-organizing system | Coherent agent |
+Read state before acting. Ambiguity is a signal to observe harder, not to act faster.
 
-CAP is FEP applied to agents, with MCA and MCI as the named mechanisms.
+### 1.1. Read the situation
+
+What is actually happening? What evidence is available?
+
+- ❌ Jump to a fix based on pattern-match to a previous situation
+- ✅ Name what you observe before interpreting it
+
+### 1.2. Read the constraints
+
+What authority surfaces govern? What is in scope? What is blocked?
+
+- ❌ Act as if all options are open
+- ✅ Name what constrains the response before choosing one
+
+### 1.3. Read recent history
+
+Has this gap appeared before? Was it closed? Did the closure hold?
+
+- ❌ Treat every gap as novel
+- ✅ Check whether a previous MCA or MCI already addressed this
+
+### 1.4. Tolerate ambiguity
+
+If the situation is unclear after reading state, constraints, and history, observe more or ask. Do not fabricate certainty.
+
+- ❌ Guess the gap to avoid appearing stuck
+- ✅ Say what is unclear and what would resolve it
 
 ---
 
-## Quick Test
+## 2. Identify
 
-When you notice incoherence:
+Name the governing incoherence. Reject symptoms and cosmetic gaps.
 
-1. What's the gap? (model vs reality)
-2. Can I change reality? → MCA
-3. Must I update my model? → MCI
-4. Do both if needed, MCA first
+### 2.1. List candidate gaps
+
+There may be several apparent incoherences. Name them all before choosing.
+
+- ❌ Lock onto the first mismatch you notice
+- ✅ List candidates, then evaluate which one governs
+
+### 2.2. Distinguish governing gap from symptom
+
+A symptom is downstream of a deeper blocker. Fixing a symptom without fixing the cause produces churn.
+
+- ❌ "The README is wrong" when the real gap is that authority is undeclared
+- ✅ "Authority is undeclared — the README is one symptom of that"
+
+### 2.3. Reject cosmetic gaps
+
+A cosmetic gap is one where closing it does not reduce real incoherence.
+
+- ❌ Reformat a file because it looks untidy when no reader is confused
+- ✅ Reformat only when the current form causes misreading
+
+### 2.4. Choose the response mode
+
+- Can you change the system to close the gap? → MCA
+- Must you update your model to match reality? → MCI
+- Both? → MCA first, then MCI
+- Gap is in another domain? → delegate to the appropriate skill
+
+- ❌ "I learned I should fix bugs" (MCI without MCA)
+- ✅ Fix the bug (MCA), then capture the lesson (MCI)
+
+---
+
+## 3. Execute
+
+Close the gap. Prefer the smallest change that works.
+
+### 3.1. MCA — change the system
+
+Your model is right, reality is wrong. Act.
+
+- Build a tool, add a gate, fix the code, update the config
+- ❌ "Won't repeat" without a mechanism
+- ✅ A system change that prevents recurrence
+
+### 3.2. MCI — change your model
+
+Reality is right, your model is wrong. Learn.
+
+- Update understanding, capture a reflection, revise a mental model
+- ❌ "This shouldn't happen" (deny reality)
+- ✅ Update your model to match what you observed
+
+### 3.3. MCA before MCI
+
+If you can act, act. Insights are what remain after acting.
+
+- ❌ Reflect on a fixable bug instead of fixing it
+- ✅ Fix it, then reflect on why it happened
+
+### 3.4. Delegate when the gap belongs to another skill
+
+If the governing gap is a design problem, hand off to design. If it is a writing problem, hand off to writing. CAP identifies the gap and chooses the mode. Domain skills close it.
+
+- ❌ Try to close a design gap inside CAP
+- ✅ Name the gap, choose MCA, delegate to design
+
+### 3.5. Iterate
+
+Each action creates new data. Each insight sharpens the model. New gaps may appear. Return to Understand.
+
+- ❌ One fix, done forever
+- ✅ Check whether the closure held
+
+---
+
+## 4. Failure Modes
+
+CAP fails through:
+
+- **Premature action** — skipping Understand, acting on pattern-match
+- **False gap selection** — naming a symptom as the governing gap
+- **Comfort-driven interpretation** — choosing the gap that is easy to close instead of the one that governs
+- **MCI without MCA** — learning when acting was possible
+- **MCA without MCI** — fixing without understanding why it broke
+
+---
+
+## 5. Output Shape
+
+A CAP pass should produce:
+
+- **Situation:** what is observed
+- **Constraints:** what governs and what is blocked
+- **Candidate gaps:** what incoherences are visible
+- **Governing gap:** which one is primary
+- **Mode:** MCA / MCI / both / delegate
+- **Active skills:** which 2–3 domain skills apply
+- **Next step:** the smallest executable action
+
+This format is not mandatory for every decision. Use it when the situation is ambiguous or the stakes are high enough to warrant explicit analysis.
+
+---
+
+## 6. Kata
+
+### Scenario: ambiguous bug report
+
+**Task:** A user reports "the CLI is broken." No stack trace, no reproduction steps. You have access to the repo and recent commit history.
+
+**Governing skills:** CAP, reflect
+
+**Inputs:**
+- The user's report: "the CLI is broken"
+- The repo at current HEAD
+- Recent commit log
+
+**Expected artifacts:**
+- A CAP output (situation, constraints, candidate gaps, governing gap, mode, next step)
+- Either a fix (MCA) or an explicit statement of what you need to learn (MCI)
+
+**Verification:**
+- Did the agent read state before acting?
+- Did the agent list candidate gaps before choosing?
+- Did the agent distinguish symptom from governing gap?
+- Was the response mode justified?
+
+**Common failures:**
+- Pattern-matching to a previous bug without reading current state
+- Asking the user for more info without first checking what is observable in the repo
+- Fixing the first thing that looks wrong without verifying it matches the report
+
+**Reflection:**
+- Was the governing gap the right one?
+- Did Understand take long enough, or was it rushed?
+- Would a different candidate gap have been more productive?
+
+### Scenario: conflicting operator request
+
+**Task:** The operator asks you to "clean up the README" but the README's real problem is that it has two governing questions. Cleaning up the prose would not fix the structural issue.
+
+**Governing skills:** CAP, writing
+
+**Inputs:**
+- The operator's request
+- The current README
+
+**Expected artifacts:**
+- A CAP output identifying the structural gap as governing
+- A recommendation (MCA: split the file or rewrite around one question)
+
+**Verification:**
+- Did the agent identify the structural gap instead of just tightening prose?
+- Did the agent explain why the cosmetic fix would not close the real gap?
+
+**Common failures:**
+- Tightening prose without noticing the file has two jobs
+- Refusing the operator's request instead of reframing it
+
+**Reflection:**
+- Was the reframe respectful and grounded in evidence?
+- Did the operator get a better outcome than what they asked for?
