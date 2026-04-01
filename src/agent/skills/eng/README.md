@@ -232,12 +232,22 @@ Review, ship, and post-release are **lifecycle skills** — they govern later CD
 |------------|---------------|----------------------|-------|
 | Local bugfix | L5 | domain skill + testing | e.g. ocaml + testing |
 | Cross-module feature | L6 | domain skill + design + testing | Add review as lifecycle, not generation constraint |
-| Runtime / platform change | L6–L7 | design + architecture-evolution + testing | Add performance-reliability if load/failure matters |
-| Architecture move | L7 | architecture-evolution + process-economics + testing | The L7 lane |
-| Tool / CLI | L5–L6 | tool-writing + ux-cli + testing | |
+| Runtime / platform change | L6–L7 | design + testing + one of (performance-reliability, architecture-evolution) | Choose architecture-evolution if the boundary may move; choose performance-reliability if operational behavior is the main risk |
+| Tool / CLI work | L5–L6 | tool-writing or ux-cli + testing + design | Use design when the operator surface changes structure |
+| System-shaping / boundary change | L7 | architecture-evolution + process-economics + one of (testing, performance-reliability, domain skill) | Choose the third skill by the dominant risk |
 | Docs / skills | L5–L6 | documenting + writing | Add skill/ meta-skill when authoring skills |
 
 These are defaults, not mandates. Override when the specific change warrants it.
+
+### Rule
+
+Do not say only "L7 eng skills." Say:
+- the work shape,
+- the level,
+- and the active skills.
+
+- ❌ "Load L7 eng skills"
+- ✅ "System-shaping, L7: architecture-evolution + process-economics + testing"
 
 ---
 
