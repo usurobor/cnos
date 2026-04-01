@@ -95,7 +95,19 @@ A cosmetic gap is one where closing it does not reduce real incoherence.
 - ❌ Reformat a file because it looks untidy when no reader is confused
 - ✅ Reformat only when the current form causes misreading
 
-### 2.4. Choose the response mode
+### 2.4. No governing gap yet
+
+If no governing gap can be named with enough evidence:
+
+- do not force MCA or MCI
+- gather more evidence
+- ask the operator if the ambiguity is blocking
+- defer action explicitly if needed
+
+- ❌ "Unclear, but I'll just fix the most visible symptom"
+- ✅ "Two candidate gaps remain; not enough evidence yet; next step is X"
+
+### 2.5. Choose the response mode
 
 - Can you change the system to close the gap? → MCA
 - Must you update your model to match reality? → MCI
@@ -150,7 +162,20 @@ Each action creates new data. Each insight sharpens the model. New gaps may appe
 
 ---
 
-## 4. Failure Modes
+## 4. Boundary to Adjacent Skills
+
+CAP chooses the response path. Adjacent skills do the domain work:
+
+- **reflect** — interprets what happened after the fact
+- **coherent** — verifies that outputs align with sources
+- **CLP** — refines artifacts before publishing
+- **design / review / writing / configure-agent** — domain skills CAP may delegate into
+
+CAP does not replace these. It decides which one to invoke and why.
+
+---
+
+## 5. Failure Modes
 
 CAP fails through:
 
@@ -162,7 +187,7 @@ CAP fails through:
 
 ---
 
-## 5. Output Shape
+## 6. Output Shape
 
 A CAP pass should produce:
 
@@ -174,11 +199,17 @@ A CAP pass should produce:
 - **Active skills:** which 2–3 domain skills apply
 - **Next step:** the smallest executable action
 
+When no governing gap can be identified yet:
+
+- **Need more evidence:** what is missing
+- **Blocking ambiguity:** what would resolve it
+- **Next step:** observe / ask / wait
+
 This format is not mandatory for every decision. Use it when the situation is ambiguous or the stakes are high enough to warrant explicit analysis.
 
 ---
 
-## 6. Kata
+## 7. Kata
 
 ### Scenario: ambiguous bug report
 
