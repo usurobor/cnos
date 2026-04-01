@@ -262,6 +262,7 @@ List every file that needs to change, grouped by action.
 **Version:** X.Y.Z
 **Mode:** MCA / MCI
 **Active Skills:** [2–3 governing skills for this change]
+**Engineering Level:** L5 / L6 / L7 *(optional — if used, must be paired with active skills)*
 
 ## Problem
 [Named incoherence with evidence]
