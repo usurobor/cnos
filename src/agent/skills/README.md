@@ -96,7 +96,7 @@ Older artifacts may still reflect the previous corpus model. That older model in
 The current standard is the meta-skill in:
 
 ```text
-src/agent/skills/eng/skill/SKILL.md
+src/agent/skills/skill/SKILL.md
 ```
 
 When rewriting an artifact:
@@ -147,7 +147,7 @@ Adjust artifact_class and kata_surface to match reality.
 
 **Step 4** — follow the right standard
 
-- skill → follow eng/skill/SKILL.md
+- skill → follow skill/SKILL.md
 - runbook → ordered steps, explicit preconditions, verification
 - reference → declarative lookup structure
 - deprecated → state replacement and status clearly
@@ -174,7 +174,7 @@ The corpus is in transition. The highest-value work is:
 The canonical skill standard is:
 
 ```text
-src/agent/skills/eng/skill/SKILL.md
+src/agent/skills/skill/SKILL.md
 ```
 
 If this README and the meta-skill disagree, the meta-skill governs.
