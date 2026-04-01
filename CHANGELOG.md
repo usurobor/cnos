@@ -24,6 +24,7 @@ See [RELEASE-LEVEL-CLASSIFICATION.md](docs/gamma/essays/RELEASE-LEVEL-CLASSIFICA
 
 | Version | C_Σ | α | β | γ | Level | Coherence note |
 |---------|-----|---|---|---|-------|----------------|
+| 3.27.0 | A- | A | A- | B+ | L6 | CDD traceability + skill-loading bridge: artifact manifest (§5.3), execution trace (§5.4), review enforcement (§2.0.8), release trace update, post-release closeout (§6). Active-skill matrix by work shape × level in eng/README. CDD §2.4 binds level labels to concrete skills. Writing skill rewrite. CAP skill v2 (UIE-based). Meta-skill rewrite (artifact classification, kata surface). 18 commits, 5 skill rewrites, 2 new CDD sections. Process: 3 direct-to-main commits retro-closed via #137; §3.7 added as preventive rule. |
 | 3.26.1 | A | A | A | A | L5 | Docs: OPERATOR.md (day-2 operations manual), post-release assessment v3.26.0, CLI/troubleshooting updated for cn logs, hub name sanitization across 19 files (strip deployment-specific agent names from public docs). |
 | 3.26.0 | A- | A | A- | B+ | L7 | Unified log stream + cn logs CLI (#74 Phase 1): `cn_ulog.ml` append-only JSONL writer (schema cn.ulog.v1, 5 event kinds), `cn_logs.ml` CLI with --since/--msg/--errors/--json/--kind filters, correlation via msg_id across all entries. Runtime emits at 9 points (message lifecycle + silent drops + poll errors). Chunk-accumulation read path preserves chronological order across day boundaries. 21 tests (13 ulog + 8 logs). 6 review rounds across 2 reviewers — multi-day ordering bug (independent) and silent message drops (Σ) both found and fixed. §2.2.1a extended: new data surfaces require write AND read path verification. |
 | 3.25.0 | A | A | A | A- | L7 | Structural self-knowledge interception (#64): `Contract_redirect` as first-class receipt status, `check_self_knowledge_path` interceptor in executor (after sandbox, before I/O), membrane covers all 5 observe surfaces — fs_read (redirect), fs_list child filtering, fs_glob result filtering, git_grep/git_observe exclusions. RC authority declaration references structural enforcement. 10 expect tests. 2 review rounds, 3 D-level membrane holes found R1 (fs_list children, fs_glob, git_grep), all closed R2. Last P0 (#64) closed. |
@@ -87,6 +88,38 @@ See [RELEASE-LEVEL-CLASSIFICATION.md](docs/gamma/essays/RELEASE-LEVEL-CLASSIFICA
 | v1.1.0 | B | B+ | B | B | L5 | Template layout; git-CN naming; CLI added. |
 | v1.0.0 | B− | B− | C+ | B− | L5 | First public template; git-CN hub + self-cohere. |
 | v0.1.0 | C− | C | C− | D+ | L4 | Moltbook-coupled prototype with SQLite. |
+
+---
+
+## 3.27.0 (2026-04-01)
+
+**CDD traceability + skill-loading bridge**
+
+### Added
+- CDD §5.3 artifact manifest: step-to-evidence binding for all 13 lifecycle steps
+- CDD §5.4 CDD Trace: lightweight execution trace format for primary branch artifacts
+- CDD §3.7: no direct-to-main without retro-closure (refs canonical §12)
+- Review §2.0.8: CDD execution trace verification
+- Release §2.9: CDD Trace update row after release
+- Post-release §6: CDD Closeout block for steps 11–13
+- eng/README: default active-skill matrix by work shape × engineering level
+- Design template: optional Engineering Level field + CDD Trace section
+
+### Changed
+- CDD §2.4: active skills selected by work shape → level → dominant risk; level labels require concrete skill names
+- Release §2.4: CHANGELOG bound to canonical ledger format; writing skill required for release notes
+- Writing skill: full rewrite — governing question, stable facts, revision pass, word-level test
+- CAP skill: v2 rewrite — UIE-based, frontmatter, failure modes, kata surface
+- Meta-skill (skill/): rewrite — artifact classification, domain formula, self-demonstration
+- Skills README: normalized to match meta-skill contract
+
+### Fixed
+- Process debt: 3 direct-to-main commits retro-closed (#137)
+
+### Assessment
+- α: A — five skill surfaces now carry the same trace model
+- β: A- — CDD ↔ design ↔ review ↔ release ↔ post-release all cross-reference; some older doc refs (§5 numbering in assessment examples) may drift
+- γ: B+ — three commits landed direct-to-main before §3.7 existed; retro-closed via #137 but the gate was skipped
 
 ---
 
