@@ -66,7 +66,7 @@ Bob → Alice:
 3. cn process materializes to Alice's state/input.md
 ```
 
-No agent pushes to another agent's repo. Delivery is pull-only. If your reply isn't reaching a peer, the problem is on the peer's fetch side — not your push side.
+No agent pushes to another agent's repo. Ever. The branch prefix names the recipient; the repo it's pushed to is always your own. Delivery is pull-only. If your reply isn't reaching a peer, the problem is on the peer's fetch side — not your push side.
 
 - ❌ Push a branch to the peer's repo directly
 - ✅ Push a `peer/topic` branch to your own repo; peer's `cn sync` fetches it
