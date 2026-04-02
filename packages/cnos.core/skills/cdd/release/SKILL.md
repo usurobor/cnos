@@ -69,37 +69,62 @@ Failure mode: version drift — tag says X, binary says Y, agent reports Z. Or: 
   - ✅ Honest TSC grades — not everything is A+
   - If release notes or CHANGELOG wording are being authored, load the writing skill and record it in the CDD Trace.
 
-2.5. **Tag and push**
+2.5. **Release notes — RELEASE.md**
+  - Write `RELEASE.md` at repo root before tagging. This is the GitHub release body.
+  - Format matches the CHANGELOG detailed section: summary line, then Added / Changed / Fixed / Removed sections with issue links.
+  - The release CI workflow uses `RELEASE.md` as the release body if present; otherwise it auto-generates (which produces only PR titles — not acceptable).
+  - `RELEASE.md` is committed in the release commit and consumed by CI. It stays in the repo until the next release overwrites it.
+  - ❌ Let CI auto-generate release notes (just PR titles, no detail)
+  - ❌ Manually create the GitHub release after CI (race condition with workflow)
+  - ✅ Write `RELEASE.md` → commit in release commit → CI uses it as release body
+
+  ```markdown
+  # RELEASE.md format
+
+  ## Fixed / Added / Changed / Removed
+
+  - **Short description** (#issue): what changed and why it matters. Link to PR if different from issue.
+
+  ## Validation
+
+  - Deployed to [target], validated [specific check].
+
+  ## Known Issues
+
+  - #N — description (if any found during validation)
+  ```
+
+2.6. **Tag and push**
   - **Tag naming convention:** use bare version numbers without `v` prefix: `3.15.1`, not `v3.15.1`. This matches VERSION file content, branch naming (`claude/3.15.0-22-...`), and snapshot directory names (`docs/gamma/cdd/3.15.0/`). Consistency across all version surfaces.
-  - Commit: `git commit -m "release: X.Y.Z — summary"`
+  - Commit: `git commit -m "release: X.Y.Z — summary"` (includes VERSION, manifests, CHANGELOG, RELEASE.md)
   - Tag: `git tag X.Y.Z` (lightweight tag, bare version)
   - Push: `git push origin main && git push origin X.Y.Z`
-  - GitHub release: `gh release create X.Y.Z --title "X.Y.Z — summary" --notes "..."`
   - ❌ Push commit without tag (release CI doesn't trigger)
   - ❌ Mix `v` prefix and bare versions across tags (`v3.14.6` then `3.14.7`)
-  - ✅ Commit, tag (bare), push in sequence; verify release CI starts
+  - ❌ Tag without RELEASE.md (CI auto-generates sparse notes)
+  - ✅ Commit (with RELEASE.md), tag (bare), push in sequence; verify release CI starts
 
-2.6. **Wait for release CI**
+2.7. **Wait for release CI**
   - Release workflow builds binaries (linux-x64, macos-x64, macos-arm64)
   - Wait for completion before deploying
   - ❌ Deploy while CI still running (stale binary from previous release)
   - ✅ `gh run watch <id> --exit-status` then verify assets attached
 
-2.7. **Deploy to target hosts**
+2.8. **Deploy to target hosts**
   - Stop daemon, download binary, replace, start daemon
   - `cn deps restore` to sync cognitive substrate
   - Validate: `cn --version`, test an op that exercises the fix
   - ❌ Replace binary while daemon running (`Text file busy`)
   - ✅ `systemctl stop → cp → chmod → systemctl start → cn --version`
 
-2.8. **Validate**
+2.9. **Validate**
   - Version matches everywhere: binary, cn.json, tag
   - The specific fix or feature works end-to-end
   - Check telemetry for errors on first cycle
   - ❌ "It deployed" (no functional validation)
   - ✅ Trace telemetry, confirm receipts/artifacts exist, agent responds correctly
 
-2.9. **CDD Trace update**
+2.10. **CDD Trace update**
   - Update the primary branch artifact's CDD Trace with the release row:
     - artifact: tag / CHANGELOG / release artifact
     - skills loaded: release, plus writing if used
@@ -142,7 +167,13 @@ Failure mode: version drift — tag says X, binary says Y, agent reports Z. Or: 
   - ❌ v3.9.1, v3.9.1-fix, v3.9.1-fix2
   - ✅ One tag, amended until CI green
 
-3.7. **TSC scoring in CHANGELOG**
+3.7. **RELEASE.md must exist before tag**
+  - The release commit must include `RELEASE.md` at repo root
+  - If `RELEASE.md` is missing, the tag must not be pushed (CI will auto-generate sparse notes)
+  - ❌ Tag without RELEASE.md ("I'll update the release body manually later")
+  - ✅ Write RELEASE.md → include in release commit → tag → push
+
+3.8. **TSC scoring in CHANGELOG**
   - Rate α (pattern), β (relation), γ (process) for each release
   - Honest grades — not everything is A+
   - ❌ Every release is A+ (grade inflation, no signal)
