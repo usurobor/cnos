@@ -24,6 +24,7 @@ See [RELEASE-LEVEL-CLASSIFICATION.md](docs/gamma/essays/RELEASE-LEVEL-CLASSIFICA
 
 | Version | C_Σ | α | β | γ | Level | Coherence note |
 |---------|-----|---|---|---|-------|----------------|
+| 3.27.1 | A | A | A | A | L5 | Remove cron installation management (#138): `update_cron` and `cn-cron` deleted, docs rewritten (AUTOMATION.md daemon-first, README systemd prerequisite, CLI.md cron label removed). Oneshot mode preserved. CDD traceability normalization: lifecycle step numbers (0–13) replace §2.x in PR template and review skill (#143). 2 PRs, 1 review round on #139 (scope narrowing). |
 | 3.27.0 | A- | A | A- | B+ | L6 | CDD traceability + skill-loading bridge: artifact manifest (§5.3), execution trace (§5.4), review enforcement (§2.0.8), release trace update, post-release closeout (§6). Active-skill matrix by work shape × level in eng/README. CDD §2.4 binds level labels to concrete skills. Writing skill rewrite. CAP skill v2 (UIE-based). Meta-skill rewrite (artifact classification, kata surface). 18 commits, 5 skill rewrites, 2 new CDD sections. Process: 3 direct-to-main commits retro-closed via #137; §3.7 added as preventive rule. |
 | 3.26.1 | A | A | A | A | L5 | Docs: OPERATOR.md (day-2 operations manual), post-release assessment v3.26.0, CLI/troubleshooting updated for cn logs, hub name sanitization across 19 files (strip deployment-specific agent names from public docs). |
 | 3.26.0 | A- | A | A- | B+ | L7 | Unified log stream + cn logs CLI (#74 Phase 1): `cn_ulog.ml` append-only JSONL writer (schema cn.ulog.v1, 5 event kinds), `cn_logs.ml` CLI with --since/--msg/--errors/--json/--kind filters, correlation via msg_id across all entries. Runtime emits at 9 points (message lifecycle + silent drops + poll errors). Chunk-accumulation read path preserves chronological order across day boundaries. 21 tests (13 ulog + 8 logs). 6 review rounds across 2 reviewers — multi-day ordering bug (independent) and silent message drops (Σ) both found and fixed. §2.2.1a extended: new data surfaces require write AND read path verification. |
@@ -88,6 +89,29 @@ See [RELEASE-LEVEL-CLASSIFICATION.md](docs/gamma/essays/RELEASE-LEVEL-CLASSIFICA
 | v1.1.0 | B | B+ | B | B | L5 | Template layout; git-CN naming; CLI added. |
 | v1.0.0 | B− | B− | C+ | B− | L5 | First public template; git-CN hub + self-cohere. |
 | v0.1.0 | C− | C | C− | D+ | L4 | Moltbook-coupled prototype with SQLite. |
+
+---
+
+## 3.27.1 (2026-04-02)
+
+**Remove cron installation management + CDD trace normalization**
+
+### Removed
+- `update_cron` function from `cn_system.ml` — no longer reinstalls OS crontabs on `cn update` (#138)
+- `cn-cron` shell script (`src/cli/cn-cron`) (#138)
+- Cron installation guidance from AUTOMATION.md, README prerequisites, CLI.md (#138)
+
+### Changed
+- AUTOMATION.md rewritten: daemon-first setup, oneshot as secondary manual/scripted mode (#138)
+- README prerequisites: `systemd (recommended)` replaces `System cron or systemd` (#138)
+- CLI.md: `(cron mode)` label removed from `cn agent` (#138)
+- PR template headings: `§2.3`/`§2.4` → `step 4`/`step 5` (#143)
+- Review skill §2.0.8: `step §2.4` → `step 5` (#143)
+
+### Known debt
+- `Agent.mode.Cron` and `run_cron` naming — could be renamed to `Oneshot`/`run_oneshot`
+- `CN_CRON_PERIOD_MIN` env var still read in `cn_agent.ml` (dead code)
+- Deprecated `run_inbound`, `wake_agent` functions still exist in `cn_agent.ml`
 
 ---
 
