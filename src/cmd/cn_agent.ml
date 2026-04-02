@@ -472,7 +472,21 @@ let auto_update_enabled () =
       | Some "0" -> false
       | _ -> true
 
-let bin_path = "/usr/local/bin/cn"
+(* Resolve the actual binary path at startup.
+   1. /proc/self/exe (Linux) — canonical, resolves symlinks
+   2. Sys.executable_name — may be relative or symlinked
+   3. Fallback: /usr/local/bin/cn *)
+let bin_path =
+  let try_readlink path =
+    match Cn_ffi.Child_process.exec (Printf.sprintf "readlink -f '%s' 2>/dev/null" path) with
+    | Some s -> let s = String.trim s in if s <> "" then Some s else None
+    | None -> None in
+  match try_readlink "/proc/self/exe" with
+  | Some p -> p
+  | None ->
+    match try_readlink Sys.executable_name with
+    | Some p -> p
+    | None -> "/usr/local/bin/cn"
 let repo = "usurobor/cnos"
 let update_cooldown_sec = 3600.0  (* 1 hour between update checks *)
 
