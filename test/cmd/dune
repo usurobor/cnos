@@ -177,6 +177,14 @@
  (inline_tests)
  (preprocess (pps ppx_expect)))
 
+; cn_selfpath tests (ppx_expect) — hardcoded path removal (#146)
+(library
+ (name cn_selfpath_test)
+ (modules cn_selfpath_test)
+ (libraries cn_cmd cn_ffi cn_lib unix)
+ (inline_tests)
+ (preprocess (pps ppx_expect)))
+
 ; cn_mail tests (ppx_expect) — orphan rejection loop fix (#144)
 (library
  (name cn_mail_test)

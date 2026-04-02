@@ -1219,9 +1219,9 @@ let%expect_test "maintenance: drift degradation propagates to overall status" =
 (* === Cn_agent: version drift detection (#110) === *)
 
 let%expect_test "version drift: binary not found returns error" =
-  (* In test environment, /usr/local/bin/cn typically doesn't exist.
-     This validates the error path of check_binary_version_drift. *)
-  if not (Sys.file_exists "/usr/local/bin/cn") then begin
+  (* In test environment, the resolved bin_path typically doesn't exist
+     at a release binary path. Validates the error path of check_binary_version_drift. *)
+  if not (Sys.file_exists Cn_agent.bin_path) then begin
     (match Cn_agent.check_binary_version_drift () with
      | Error reason -> Printf.printf "error_contains_not_found=%b\n"
          (let has_sub s sub =
