@@ -302,26 +302,28 @@ The canonical artifact order is:
 
 CDD is artifact-driven. For substantial changes, each lifecycle step must leave one inspectable evidence surface.
 
-| Step | Name | Required evidence | Owner |
-|------|------|-------------------|-------|
-| 0 | Observe | CDD Trace row recording inputs read and selected signal | primary branch artifact |
-| 1 | Select | CDD Trace row naming selected gap | primary branch artifact |
-| 2 | Branch | valid branch name | branch + CDD Trace row |
-| 3 | Bootstrap | version directory + manifest README + declared stubs | branch diff |
-| 4 | Gap | named incoherence / coherence contract | primary branch artifact |
-| 5 | Mode | mode + active skills (+ bundle/level if used) | primary branch artifact |
-| 6a | Design | design artifact or explicit "not required" note by change class | primary branch artifact |
-| 6b | Plan | plan artifact when cycle-sized, otherwise explicit "not required" note | primary branch artifact or linked plan |
-| 6c | Tests | test files or explicit reason no tests apply | diff / primary branch artifact |
-| 6d | Code | implementation diff or explicit "docs/process only" note | diff / primary branch artifact |
-| 6e | Docs | changed canonical docs / specs / READMEs as required | diff |
-| 7 | Self-coherence | SELF-COHERENCE.md | version directory |
-| 8 | Review | review artifact / PR review / review comment link | review surface |
-| 9 | Gate | gate result / release-readiness evidence | release surface or review surface |
-| 10 | Release | CHANGELOG row, tag, release note / release artifact | release surface |
-| 11 | Observe | post-release observation result | post-release assessment |
-| 12 | Assess | POST-RELEASE-ASSESSMENT.md | version directory |
-| 13 | Close | immediate outputs executed + deferred outputs committed | post-release assessment |
+| Step | Name | Required evidence | Format spec | Owner |
+|------|------|-------------------|-------------|-------|
+| 0 | Observe | CDD Trace row recording inputs read and selected signal | §5.4 | primary branch artifact |
+| 1 | Select | CDD Trace row naming selected gap | §5.4 | primary branch artifact |
+| 2 | Branch | valid branch name | — | branch + CDD Trace row |
+| 3 | Bootstrap | version directory + manifest README + declared stubs | §5.1 | branch diff |
+| 4 | Gap | named incoherence / coherence contract | `.github/PULL_REQUEST_TEMPLATE.md` §Gap or design/SKILL.md §3.1 | primary branch artifact |
+| 5 | Mode | mode + active skills (+ bundle/level if used) | `.github/PULL_REQUEST_TEMPLATE.md` §Mode or design/SKILL.md §3.1 | primary branch artifact |
+| 6a | Design | design artifact or explicit "not required" note by change class | design/SKILL.md §3.1 | primary branch artifact |
+| 6b | Plan | plan artifact when cycle-sized, otherwise explicit "not required" note | — (judgment artifact, no fixed template) | primary branch artifact or linked plan |
+| 6c | Tests | test files or explicit reason no tests apply | — (diff) | diff / primary branch artifact |
+| 6d | Code | implementation diff or explicit "docs/process only" note | — (diff) | diff / primary branch artifact |
+| 6e | Docs | changed canonical docs / specs / READMEs as required | — (diff) | diff |
+| 7 | Self-coherence | SELF-COHERENCE.md | post-release/SKILL.md §CDD self-coherence | version directory |
+| 8 | Review | review artifact / PR review / review comment link | review/SKILL.md output format | review surface |
+| 9 | Gate | gate result / release-readiness evidence | release/SKILL.md §2.1 readiness | release surface or review surface |
+| 10 | Release | CHANGELOG row, tag, release note / release artifact | CHANGELOG.md ledger format + release/SKILL.md | release surface |
+| 11 | Observe | post-release observation result | post-release/SKILL.md | post-release assessment |
+| 12 | Assess | POST-RELEASE-ASSESSMENT.md | post-release/SKILL.md output template | version directory |
+| 13 | Close | immediate outputs executed + deferred outputs committed | post-release/SKILL.md §6 CDD Closeout | post-release assessment |
+
+The primary branch artifact is the PR body (`.github/PULL_REQUEST_TEMPLATE.md`) for L5/L6 changes, or the design artifact (design/SKILL.md §3.1) for larger changes. When the PR body is the primary branch artifact, it must follow the PR template.
 
 Rules:
 - "Not required" is valid only when stated explicitly.
