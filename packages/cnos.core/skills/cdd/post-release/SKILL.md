@@ -59,9 +59,9 @@ The assessment produces one artifact with five sections:
 
 | Step | Artifact | Skills loaded | Decision |
 |------|----------|--------------|----------|
-| §2.9 | observation surface | post-release | runtime/design alignment result |
-| §2.10 | POST-RELEASE-ASSESSMENT.md | post-release | assessment completed |
-| §2.11 | immediate fixes / next MCA issue | post-release (+ others if used) | cycle closed / deferred outputs committed |
+| 11 | observation surface | post-release | runtime/design alignment result |
+| 12 | POST-RELEASE-ASSESSMENT.md | post-release | assessment completed |
+| 13 | immediate fixes / next MCA issue | post-release (+ others if used) | cycle closed / deferred outputs committed |
 
 ### 7. Next Move
 **Next MCA:** #NN — title

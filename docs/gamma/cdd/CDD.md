@@ -340,16 +340,18 @@ The primary branch artifact is the artifact that owns the named incoherence, mod
 
 Required format:
 
+Step numbers in the trace use the lifecycle numbers from §5.3 (0–13), not document section numbers.
+
 ```markdown
 ## CDD Trace
 | Step | Artifact | Skills loaded | Decision |
 |------|----------|--------------|----------|
-| §2.0 | — | — | Observation inputs read; selected signal |
-| §2.1 | — | — | Selected gap |
-| §2.4 | primary artifact | skill1, skill2 | Work shape, level (if used), mode, active skills |
-| §2.5 | design / plan / tests / docs | — | Artifact progress or explicit "not required" |
-| §2.6 | review surface | review (+ others if loaded) | CLP review result |
-| §2.8 | release surface | release, writing (if used) | Tag / changelog / release decision |
+| 0 | — | — | Observation inputs read; selected signal |
+| 1 | — | — | Selected gap |
+| 5 | primary artifact | skill1, skill2 | Work shape, level (if used), mode, active skills |
+| 6a–e | design / plan / tests / docs | — | Artifact progress or explicit "not required" |
+| 8 | review surface | review (+ others if loaded) | CLP review result |
+| 10 | release surface | release, writing (if used) | Tag / changelog / release decision |
 ```
 
 Rules:
