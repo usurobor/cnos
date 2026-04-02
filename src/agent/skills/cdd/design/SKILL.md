@@ -306,10 +306,10 @@ List every file that needs to change, grouped by action.
 ## CDD Trace
 | Step | Artifact | Skills loaded | Decision |
 |------|----------|--------------|----------|
-| §2.0 | — | — | [observation inputs and selected signal] |
-| §2.1 | — | — | [selected gap] |
-| §2.4 | this artifact | [active skills] | [work shape, level if used, mode] |
-| §2.5 | [artifact name] | — | [design/plan/tests/docs progress] |
+| 0 | — | — | [observation inputs and selected signal] |
+| 1 | — | — | [selected gap] |
+| 5 | this artifact | [active skills] | [work shape, level if used, mode] |
+| 6a–e | [artifact name] | — | [design/plan/tests/docs progress] |
 ```
 
 ---
