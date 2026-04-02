@@ -152,7 +152,7 @@ This step closes the loop from CDD §9 (Assessment). The review quality section 
 
 ### Step 5.6: CDD self-coherence
 
-Did this cycle itself follow CDD coherently? Score each axis 1–4:
+Did this cycle itself follow CDD coherently? Score each axis 1–4. The branch-level SELF-COHERENCE.md uses the template at `docs/gamma/cdd/SELF-COHERENCE-TEMPLATE.md`; this assessment-level check uses the same triadic axes:
 
 - **CDD α (artifact integrity):** required artifacts present? Bootstrap/frozen snapshot complete? Self-coherence present?
 - **CDD β (surface agreement):** canonical doc, executable skill, PR artifacts, changelog, and assessment agree? Authority conflicts or stale references?
