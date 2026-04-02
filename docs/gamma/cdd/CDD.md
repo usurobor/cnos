@@ -334,28 +334,29 @@ Rules:
 
 ### 5.4 CDD Trace
 
-Every substantial cycle must carry a lightweight execution trace. For steps 0–10, the trace lives in the primary branch artifact. For steps 11–13, closure lives in the post-release assessment.
+Every substantial cycle must carry a lightweight execution trace. Use lifecycle step numbers, not section numbers. For steps 0–10, the trace lives in the primary branch artifact. For steps 11–13, closure lives in the post-release assessment.
 
 The primary branch artifact is the artifact that owns the named incoherence, mode, active skills, and acceptance criteria. In most cycles this is the design artifact. For governance/process work it may be the governing doc being changed. For smaller substantial changes it may be the PR body when no separate design doc is required.
 
 Required format:
 
-Step numbers in the trace use the lifecycle numbers from §5.3 (0–13), not document section numbers.
-
 ```markdown
 ## CDD Trace
 | Step | Artifact | Skills loaded | Decision |
-|------|----------|--------------|----------|
-| 0 | — | — | Observation inputs read; selected signal |
-| 1 | — | — | Selected gap |
-| 5 | primary artifact | skill1, skill2 | Work shape, level (if used), mode, active skills |
-| 6a–e | design / plan / tests / docs | — | Artifact progress or explicit "not required" |
-| 8 | review surface | review (+ others if loaded) | CLP review result |
-| 10 | release surface | release, writing (if used) | Tag / changelog / release decision |
+|------|----------|---------------|----------|
+| 0 Observe | — | — | Observation inputs read; selected signal |
+| 1 Select | — | — | Selected gap |
+| 4 Gap | primary artifact | — | Named incoherence / coherence contract |
+| 5 Mode | primary artifact | skill1, skill2 | Work shape, level (if used), mode, active skills |
+| 6 Artifacts | design / plan / tests / docs | — | Artifact progress or explicit "not required" |
+| 8 Review | review surface | review (+ others if loaded) | CLP review result |
+| 9 Gate | review or release surface | release (+ writing if loaded) | Release-readiness decision |
+| 10 Release | release surface | release (+ writing if loaded) | Tag / changelog / release decision |
 ```
 
 Rules:
 - One row per completed lifecycle step.
+- Step column carries both the number and the name for readability.
 - "Skills loaded" is required when skills shaped generation or lifecycle execution.
 - If a lifecycle skill is used later (review, release, writing, post-release), record it when it becomes active.
 - Missing rows mean the step is not yet evidenced.
