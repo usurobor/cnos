@@ -1,10 +1,10 @@
 {
   "schema": "cn.package.v1",
   "name": "cnos.eng",
-  "version": "3.29.0",
+  "version": "3.29.1",
   "kind": "package",
   "engines": {
-    "cnos": "3.29.0"
+    "cnos": "3.29.1"
   },
   "sources": {
     "skills": [

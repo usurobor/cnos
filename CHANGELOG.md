@@ -24,6 +24,7 @@ See [RELEASE-LEVEL-CLASSIFICATION.md](docs/gamma/essays/RELEASE-LEVEL-CLASSIFICA
 
 | Version | C_Σ | α | β | γ | Level | Coherence note |
 |---------|-----|---|---|---|-------|----------------|
+| 3.29.1 | A | A | A | A | L6 | Patch: `resolve_bin_path` uses `Unix.readlink` directly instead of spawning shell child (#148). Fixes false version drift + daemon crash loop on Pi. Release skill updated: §2.5 RELEASE.md format, §3.7 mechanical gate. |
 | 3.29.0 | A | A | A | A | L6 | Remove hardcoded paths (#146): `resolve_bin_path` derives binary location at runtime (`$CN_BIN` → `/proc/self/exe` → `readlink Sys.executable_name` → fallback), `resolve_repo` derives GitHub repo from build-time `cn.json` extraction (`$CN_REPO` override). `cn_repo_info.ml` dune-generated module. `cn_deps.ml` default source derived from `Cn_lib.cnos_repo`. 7 ppx_expect tests. 2 review rounds, 5 findings R1 (1B/4C), all addressed R2. Build fails if `cn.json` lacks GitHub URL (no silent fallback). |
 | 3.28.0 | A | A | A | A- | L6 | Orphan rejection loop fix (#144): deterministic rejection filenames (`rejection_filename` keyed on peer+branch replaces timestamped `make_thread_filename`), `is_already_rejected` dedup across outbox+sent, `get_branch_author` removed (fetched peer identity authoritative), self-send guard in `send_thread`, `from:` field in rejection envelope. 9 ppx_expect tests. Inbox skill v3: meta-skill alignment (artifact_class, kata_surface, governing_question), Define/Unfold/Rules/Verify structure, two embedded katas, pull-only transport model documented with contrastive examples. 1 review round, 1 D-level finding (stale clone wording), fixed same session. |
 | 3.27.1 | A | A | A | A | L5 | Remove cron installation management (#138): `update_cron` and `cn-cron` deleted, docs rewritten (AUTOMATION.md daemon-first, README systemd prerequisite, CLI.md cron label removed). Oneshot mode preserved. CDD traceability normalization: lifecycle step numbers (0–13) replace §2.x in PR template and review skill (#143). 2 PRs, 1 review round on #139 (scope narrowing). |
@@ -93,6 +94,18 @@ See [RELEASE-LEVEL-CLASSIFICATION.md](docs/gamma/essays/RELEASE-LEVEL-CLASSIFICA
 | v0.1.0 | C− | C | C− | D+ | L4 | Moltbook-coupled prototype with SQLite. |
 
 ---
+
+## 3.29.1 (2026-04-02)
+
+**Fix daemon crash loop from false version drift**
+
+### Fixed
+
+- **`resolve_bin_path` uses `Unix.readlink` directly (#148):** Spawning `readlink -f /proc/self/exe` via `Child_process.exec` ran in a bash child whose `/proc/self/exe` was `/usr/bin/bash`. This caused `check_binary_version_drift` to run `bash --version`, detect false drift ("GNU" ≠ "3.29.0"), and trigger a failing re-exec loop every maintenance cycle. Now uses `Unix.readlink "/proc/self/exe"` in-process.
+
+### Changed
+
+- **Release skill §2.5:** Added RELEASE.md step with format template. CI uses `RELEASE.md` as GitHub release body. §3.7 mechanical gate: no tag without RELEASE.md.
 
 ## 3.29.0 (2026-04-02)
 
