@@ -315,7 +315,7 @@ CDD is artifact-driven. For substantial changes, each lifecycle step must leave 
 | 6c | Tests | build | test files or explicit reason none apply | — (diff) | diff / primary branch artifact | agent | always | testing |
 | 6d | Code | build | implementation diff or "docs/process only" | — (diff) | diff / primary branch artifact | agent | always | active generation skills |
 | 6e | Docs | build | changed canonical docs / specs / READMEs | — (diff) | diff | agent | when docs affected | writing |
-| 7 | Self-coherence | build | SELF-COHERENCE.md | post-release/SKILL.md §CDD self-coherence | version directory | agent | substantial only | cdd |
+| 7 | Self-coherence | build | SELF-COHERENCE.md | `docs/gamma/cdd/SELF-COHERENCE-TEMPLATE.md` | version directory | agent | substantial only | cdd |
 | 8 | Review | review | review artifact / PR review / comment link | review/SKILL.md output format | review surface | reviewer | always | review |
 | 9 | Gate | release | gate result / release-readiness evidence | release/SKILL.md §2.1 | release or review surface | mechanical + reviewer | always | release |
 | 10 | Release | release | CHANGELOG row, tag, release note | CHANGELOG.md ledger + release/SKILL.md | release surface | agent + mechanical | always | release, writing |
