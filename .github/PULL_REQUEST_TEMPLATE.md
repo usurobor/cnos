@@ -1,16 +1,15 @@
 ## CDD Trace
 
-Step numbers use lifecycle numbers from CDD §5.3 (0–13).
-
 | Step | Artifact | Skills loaded | Decision |
-|------|----------|--------------|----------|
-| 0 | — | — | |
-| 1 | — | — | |
-| 5 | — | | |
-| 6a–e | | | |
-| 8 | PR #this | | Pending |
-| 10 | — | — | Pending |
-| 11–13 | — | — | Pending |
+|------|----------|---------------|----------|
+| 0 Observe | — | — | |
+| 1 Select | — | — | |
+| 4 Gap | — | — | |
+| 5 Mode | — | | |
+| 6 Artifacts | | | |
+| 8 Review | PR #this | | Pending |
+| 9 Gate | — | — | Pending |
+| 10 Release | — | — | Pending |
 
 ## Gap (§2.3)
 
