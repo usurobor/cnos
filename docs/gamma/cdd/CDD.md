@@ -300,30 +300,32 @@ The canonical artifact order is:
 
 ### 5.3 Artifact manifest
 
-CDD is artifact-driven. For substantial changes, each lifecycle step must leave one inspectable evidence surface.
+CDD is artifact-driven. For substantial changes, each lifecycle step must leave one inspectable evidence surface. This table is the master reference for all step attributes.
 
-| Step | Name | Required evidence | Format spec | Owner |
-|------|------|-------------------|-------------|-------|
-| 0 | Observe | CDD Trace row recording inputs read and selected signal | §5.4 | primary branch artifact |
-| 1 | Select | CDD Trace row naming selected gap | §5.4 | primary branch artifact |
-| 2 | Branch | valid branch name | — | branch + CDD Trace row |
-| 3 | Bootstrap | version directory + manifest README + declared stubs | §5.1 | branch diff |
-| 4 | Gap | named incoherence / coherence contract | `.github/PULL_REQUEST_TEMPLATE.md` §Gap or design/SKILL.md §3.1 | primary branch artifact |
-| 5 | Mode | mode + active skills (+ bundle/level if used) | `.github/PULL_REQUEST_TEMPLATE.md` §Mode or design/SKILL.md §3.1 | primary branch artifact |
-| 6a | Design | design artifact or explicit "not required" note by change class | design/SKILL.md §3.1 | primary branch artifact |
-| 6b | Plan | plan artifact when cycle-sized, otherwise explicit "not required" note | — (judgment artifact, no fixed template) | primary branch artifact or linked plan |
-| 6c | Tests | test files or explicit reason no tests apply | — (diff) | diff / primary branch artifact |
-| 6d | Code | implementation diff or explicit "docs/process only" note | — (diff) | diff / primary branch artifact |
-| 6e | Docs | changed canonical docs / specs / READMEs as required | — (diff) | diff |
-| 7 | Self-coherence | SELF-COHERENCE.md | post-release/SKILL.md §CDD self-coherence | version directory |
-| 8 | Review | review artifact / PR review / review comment link | review/SKILL.md output format | review surface |
-| 9 | Gate | gate result / release-readiness evidence | release/SKILL.md §2.1 readiness | release surface or review surface |
-| 10 | Release | CHANGELOG row, tag, release note / release artifact | CHANGELOG.md ledger format + release/SKILL.md | release surface |
-| 11 | Observe | post-release observation result | post-release/SKILL.md | post-release assessment |
-| 12 | Assess | POST-RELEASE-ASSESSMENT.md | post-release/SKILL.md output template | version directory |
-| 13 | Close | immediate outputs executed + deferred outputs committed | post-release/SKILL.md §6 CDD Closeout | post-release assessment |
+| Step | Name | Phase | Evidence | Format spec | Owner | Producer | Required | Skill |
+|------|------|-------|----------|-------------|-------|----------|----------|-------|
+| 0 | Observe | observe | CDD Trace row: inputs read, selected signal | §5.4 | primary branch artifact | agent | always | cdd |
+| 1 | Select | observe | CDD Trace row: selected gap | §5.4 | primary branch artifact | agent | always | cdd |
+| 2 | Branch | build | valid branch name | — | branch + CDD Trace row | mechanical | always | cdd |
+| 3 | Bootstrap | build | version directory + manifest README + declared stubs | §5.1 | branch diff | mechanical | substantial only | cdd |
+| 4 | Gap | build | named incoherence / coherence contract | PR template §Gap or design/SKILL.md §3.1 | primary branch artifact | agent | always | cdd |
+| 5 | Mode | build | mode + active skills (+ bundle/level if used) | PR template §Mode or design/SKILL.md §3.1 | primary branch artifact | agent | always | cdd, eng/README |
+| 6a | Design | build | design artifact or explicit "not required" | design/SKILL.md §3.1 | primary branch artifact | agent | substantial only | design |
+| 6b | Plan | build | plan artifact or explicit "not required" | — (judgment, no fixed template) | primary branch artifact or linked plan | agent | L7 / cycle-sized | design |
+| 6c | Tests | build | test files or explicit reason none apply | — (diff) | diff / primary branch artifact | agent | always | testing |
+| 6d | Code | build | implementation diff or "docs/process only" | — (diff) | diff / primary branch artifact | agent | always | active generation skills |
+| 6e | Docs | build | changed canonical docs / specs / READMEs | — (diff) | diff | agent | when docs affected | writing |
+| 7 | Self-coherence | build | SELF-COHERENCE.md | post-release/SKILL.md §CDD self-coherence | version directory | agent | substantial only | cdd |
+| 8 | Review | review | review artifact / PR review / comment link | review/SKILL.md output format | review surface | reviewer | always | review |
+| 9 | Gate | release | gate result / release-readiness evidence | release/SKILL.md §2.1 | release or review surface | mechanical + reviewer | always | release |
+| 10 | Release | release | CHANGELOG row, tag, release note | CHANGELOG.md ledger + release/SKILL.md | release surface | agent + mechanical | always | release, writing |
+| 11 | Observe | close | post-release observation result | post-release/SKILL.md | post-release assessment | agent | always | post-release |
+| 12 | Assess | close | POST-RELEASE-ASSESSMENT.md | post-release/SKILL.md output template | version directory | agent | always | post-release |
+| 13 | Close | close | immediate outputs executed + deferred committed | post-release/SKILL.md §6 CDD Closeout | post-release assessment | agent | always | post-release |
 
-The primary branch artifact is the PR body (`.github/PULL_REQUEST_TEMPLATE.md`) for L5/L6 changes, or the design artifact (design/SKILL.md §3.1) for larger changes. When the PR body is the primary branch artifact, it must follow the PR template.
+**Primary branch artifact:** the PR body (`.github/PULL_REQUEST_TEMPLATE.md`) for L5/L6 changes, or the design artifact (design/SKILL.md §3.1) for larger changes.
+
+**Producer key:** *agent* = judgment required, *mechanical* = automatable by cnos (#94), *reviewer* = produced by the review process.
 
 Rules:
 - "Not required" is valid only when stated explicitly.
