@@ -723,6 +723,7 @@ Runtime:
 
 let version = Cn_version.version
 let cnos_commit = Cn_build_info.cnos_commit
+let cnos_repo = Cn_repo_info.repo
 
 (* === Version Comparison (pure, semantic) === *)
 

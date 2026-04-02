@@ -472,8 +472,21 @@ let auto_update_enabled () =
       | Some "0" -> false
       | _ -> true
 
-let bin_path = "/usr/local/bin/cn"
-let repo = "usurobor/cnos"
+let resolve_bin_path () =
+  match Sys.getenv_opt "CN_BIN" with
+  | Some p when String.length p > 0 -> p
+  | _ ->
+    match Cn_ffi.Child_process.exec "readlink -f /proc/self/exe 2>/dev/null" with
+    | Some p when String.length (String.trim p) > 0 -> String.trim p
+    | _ -> Sys.executable_name
+
+let resolve_repo () =
+  match Sys.getenv_opt "CN_REPO" with
+  | Some r when String.length r > 0 -> r
+  | _ -> Cn_lib.cnos_repo
+
+let bin_path = resolve_bin_path ()
+let repo = resolve_repo ()
 let update_cooldown_sec = 3600.0  (* 1 hour between update checks *)
 
 (* Update info returned from check, passed to do_update — avoids mutable ref *)
