@@ -120,7 +120,7 @@ type packet = {
 
 type envelope = {
   schema        : string;           (* "cn.packet.v1" *)
-  msg_id        : string;           (* globally unique: "<id>@<sender>" *)
+  msg_id        : string;           (* globally unique: "{id}@{sender}", e.g. "01JZ7K@sigma" *)
   sender        : string;
   recipient     : string;
   created_at    : string;           (* ISO 8601 *)
@@ -137,7 +137,6 @@ type envelope = {
 type protocol_meta = {
   transport_kind : string;          (* "git" today; extensible *)
   packet_version : int;             (* 1 *)
-  secure_mode    : bool;            (* if true, signature required *)
 }
 
 type payload = {
@@ -158,7 +157,7 @@ type transport_proof =
   | Other_proof of yojson
 
 type git_proof = {
-  refname          : string;        (* refs/cn/msg/<sender>/<msg_id> *)
+  refname          : string;        (* refs/cn/msg/{sender}/{msg_id} *)
   commit_oid       : string;
   tree_oid         : string;
   payload_blob_oid : string;
@@ -199,7 +198,7 @@ The packet tree shape is fixed.
 packet/
   envelope.json
   message.md
-  signature.ed25519   (* required in secure mode; optional only in insecure/dev mode *)
+  signature.ed25519   (* required when receiver policy enforces signatures; recommended always *)
 ```
 
 #### Allowed file set
@@ -227,7 +226,7 @@ Git remains the default transport adapter.
 **Canonical Git ref namespace:**
 
 ```
-refs/cn/msg/<sender>/<msg_id>
+refs/cn/msg/{sender}/{msg_id}
 ```
 
 Only refs under `refs/cn/msg/` enter the inbox packet pipeline.
@@ -279,15 +278,14 @@ But the canonical packet validation remains the same: envelope → payload hash 
   "created_at": "2026-04-02T12:34:56Z",
   "content_type": "text/markdown",
   "payload_path": "packet/message.md",
-  "payload_sha256": "<sha256>",
+  "payload_sha256": "e3b0c44298fc...",
   "payload_bytes": 123,
   "topic": "axiom-says-hi",
   "thread": "heartbeat",
   "reply_to": null,
   "protocol": {
     "transport_kind": "git",
-    "packet_version": 1,
-    "secure_mode": true
+    "packet_version": 1
   }
 }
 ```
@@ -309,25 +307,51 @@ This removes duplicate transport authority surfaces.
 
 ### 5. Signature Model
 
-#### Secure mode (default for adversarial safety)
+#### Receiver-local policy decides signature requirements
 
-In secure mode:
+Whether signatures are required is determined by **local receiver policy**, not by the packet's declared fields. The sender does not control whether the receiver enforces signatures.
+
+Receiver policy is configured per-peer (or globally) via:
+
+- **Peer trust configuration** in the local peer registry (e.g. `peers.md` or a structured `peers.json`)
+- **Transport policy** (e.g. all Git-transport packets from unknown peers require signatures)
+- **Runtime default** (`secure` or `insecure`; `secure` is the recommended default)
+
+The envelope does **not** contain a `secure_mode` field. A sender cannot opt out of signature verification.
+
+#### Secure mode (receiver default)
+
+When the receiver's policy requires signatures for a given peer/transport:
 
 - `packet/signature.ed25519` is **required**
 - the receiver must verify it before materialization
 
-The signature covers the canonical bytes of `envelope.json`. Since the envelope binds sender, recipient, payload hash, payload bytes, and protocol mode, the signature transitively authenticates the message payload.
+#### Canonical serialization for signing
+
+The signature covers the canonical bytes of `envelope.json`. Since the envelope binds sender, recipient, payload hash, payload bytes, and protocol version, the signature transitively authenticates the message payload.
+
+**Implementation requirement:** Phase 1 must define a single canonical envelope serialization for signing and verification. Options include deterministic JSON serialization (sorted keys, no optional whitespace, UTF-8 NFC normalization) or a separate binary canonical form. Without this, different implementations may sign different byte sequences for the same logical envelope, causing spurious verification failures.
+
+#### Trusted key source
+
+The receiver verifies signatures against public keys from its **local trusted peer registry**. This is a local-only trust store — not inferred from packet contents.
+
+The trusted peer registry must provide:
+
+- sender identity → public key mapping
+- key rotation support (multiple valid keys per peer during transition)
+- explicit "unknown peer" handling (reject or quarantine)
 
 #### Insecure / dev mode
 
-In insecure/dev mode:
+When the receiver's policy does not require signatures:
 
 - unsigned packets may be accepted
 - but this mode must be explicit and non-default
 
 #### Rule
 
-If secure mode is on and signature verification fails:
+If the receiver's policy requires a signature and verification fails:
 
 - reject
 - quarantine
@@ -336,7 +360,7 @@ If secure mode is on and signature verification fails:
 
 #### Why
 
-Checksums/hashes prove integrity. Signatures prove authenticity. For adversarial transports, integrity alone is not enough.
+Checksums/hashes prove integrity. Signatures prove authenticity. For adversarial transports, integrity alone is not enough. And the signature requirement must be receiver-controlled — a sender must not be able to downgrade the receiver's security posture.
 
 ---
 
@@ -344,7 +368,7 @@ Checksums/hashes prove integrity. Signatures prove authenticity. For adversarial
 
 #### Global message identity
 
-`msg_id` must be globally unique: `<monotonic-id-or-uuid>@<sender>`
+`msg_id` must be globally unique: `{id}@{sender}` (e.g. `01JZ7K@sigma`)
 
 #### Inbound index
 
@@ -417,18 +441,18 @@ Resolve `packet/message.md` from the validated packet. Reject if:
 - byte count mismatch
 - SHA-256 mismatch
 
-#### Step 7 — Validate signature
+#### Step 7 — Validate signature (per receiver policy)
 
-In secure mode:
+If the receiver's local policy requires a signature for this peer/transport:
 
-- require signature
-- verify against sender public key
+- require `packet/signature.ed25519`
+- verify against sender's public key from the local trusted peer registry
 
 Reject if:
 
-- missing
-- invalid
-- signer unknown
+- signature required but missing
+- signature present but invalid
+- signer not in trusted peer registry
 
 #### Step 8 — Dedup / equivocation check
 
@@ -479,9 +503,9 @@ There is:
 1. Write `packet/envelope.json`
 2. Write `packet/message.md`
 3. Compute `payload_sha256` and `payload_bytes`
-4. Sign the envelope in secure mode
+4. Sign the envelope (recommended; receiver policy determines enforcement)
 5. Create a root commit containing only the packet tree
-6. Push to `refs/cn/msg/<sender>/<msg_id>`
+6. Push to `refs/cn/msg/{sender}/{msg_id}`
 
 #### Future transport send flow
 
@@ -634,12 +658,12 @@ Before packet protocol fully lands:
 - dedup/equivocation index
 - materialize exact payload only
 
-### Phase 2 — Secure mode by default
+### Phase 2 — Signature enforcement by default
 
-- required signatures
-- trusted peer public keys
+- receiver policy defaults to requiring signatures
+- trusted peer registry with public keys
 - operator-visible signature failures
-- insecure/dev mode explicitly separate
+- insecure/dev mode explicitly separate and non-default
 
 ### Phase 3 — Additional transport adapters
 
@@ -658,7 +682,7 @@ Before packet protocol fully lands:
 
 ### Phase 1
 
-- [ ] `send_thread` produces canonical packet commits under `refs/cn/msg/<sender>/<msg_id>`
+- [ ] `send_thread` produces canonical packet commits under `refs/cn/msg/{sender}/{msg_id}`
 - [ ] `envelope.json` contains all required fields
 - [ ] Validation rejects invalid tree shape, wrong recipient, and payload hash/length mismatch
 - [ ] Dedup ignores same-id same-hash duplicates
@@ -669,9 +693,11 @@ Before packet protocol fully lands:
 
 ### Phase 2
 
-- [ ] In secure mode, unsigned packets are rejected
+- [ ] Receiver policy defaults to requiring signatures for all peers
+- [ ] Unsigned packets are rejected when receiver policy requires signatures
 - [ ] Invalid signatures are rejected
-- [ ] Sender public key verification is enforced
+- [ ] Sender public key verification uses the local trusted peer registry
+- [ ] Insecure/dev mode requires explicit opt-in
 
 ### Transport compatibility
 
