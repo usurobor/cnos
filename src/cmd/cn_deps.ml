@@ -18,7 +18,7 @@
 (* === Constants === *)
 
 (** Default git source for first-party packages. *)
-let default_first_party_source = "https://github.com/usurobor/cnos.git"
+let default_first_party_source = Printf.sprintf "https://github.com/%s.git" Cn_lib.cnos_repo
 
 (** Subdirectory prefix for packages within the cnos repo. *)
 let packages_subdir = "packages"

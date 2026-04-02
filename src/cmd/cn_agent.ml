@@ -472,22 +472,27 @@ let auto_update_enabled () =
       | Some "0" -> false
       | _ -> true
 
-(* Resolve the actual binary path at startup.
-   1. /proc/self/exe (Linux) — canonical, resolves symlinks
-   2. Sys.executable_name — may be relative or symlinked
-   3. Fallback: /usr/local/bin/cn *)
-let bin_path =
-  let try_readlink path =
-    match Cn_ffi.Child_process.exec (Printf.sprintf "readlink -f '%s' 2>/dev/null" path) with
-    | Some s -> let s = String.trim s in if s <> "" then Some s else None
-    | None -> None in
-  match try_readlink "/proc/self/exe" with
-  | Some p -> p
-  | None ->
-    match try_readlink Sys.executable_name with
-    | Some p -> p
-    | None -> "/usr/local/bin/cn"
-let repo = "usurobor/cnos"
+let resolve_bin_path () =
+  match Sys.getenv_opt "CN_BIN" with
+  | Some p when String.length p > 0 -> p
+  | _ ->
+    (* Linux: /proc/self/exe is canonical *)
+    match Cn_ffi.Child_process.exec "readlink -f /proc/self/exe 2>/dev/null" with
+    | Some p when String.length (String.trim p) > 0 -> String.trim p
+    | _ ->
+      (* macOS / fallback: resolve symlinks on Sys.executable_name *)
+      match Cn_ffi.Child_process.exec
+              (Printf.sprintf "readlink -f '%s' 2>/dev/null" Sys.executable_name) with
+      | Some p when String.length (String.trim p) > 0 -> String.trim p
+      | _ -> Sys.executable_name
+
+let resolve_repo () =
+  match Sys.getenv_opt "CN_REPO" with
+  | Some r when String.length r > 0 -> r
+  | _ -> Cn_lib.cnos_repo
+
+let bin_path = resolve_bin_path ()
+let repo = resolve_repo ()
 let update_cooldown_sec = 3600.0  (* 1 hour between update checks *)
 
 (* Update info returned from check, passed to do_update — avoids mutable ref *)

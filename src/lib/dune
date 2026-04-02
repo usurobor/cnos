@@ -2,7 +2,7 @@
 (library
  (name cn_lib)
  (wrapped false)
- (modules cn_lib cn_json cn_sha256 cn_build_info cn_version)
+ (modules cn_lib cn_json cn_sha256 cn_build_info cn_version cn_repo_info)
  (libraries inbox_lib))
 
 (rule
@@ -14,3 +14,8 @@
  (target cn_version.ml)
  (deps ../../VERSION)
  (action (bash "echo 'let version = \"'$(cat ../../VERSION | tr -d '\\n')'\"' > %{target}")))
+
+(rule
+ (target cn_repo_info.ml)
+ (deps ../../cn.json)
+ (action (bash "repo=$(sed -n 's|.*github.com/\\([^\"]*\\)\".*|\\1|p' ../../cn.json | head -1 | sed 's/\\.git$//'); if [ -z \"$repo\" ]; then echo 'Error: no GitHub repo URL found in cn.json' >&2; exit 1; fi; echo \"let repo = \\\"${repo}\\\"\" > %{target}")))
