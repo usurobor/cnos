@@ -311,7 +311,7 @@ CDD is artifact-driven. For substantial changes, each lifecycle step must leave 
 | 4 | Gap | build | named incoherence / coherence contract | PR template §Gap or design/SKILL.md §3.1 | primary branch artifact | agent | always | cdd |
 | 5 | Mode | build | mode + active skills (+ bundle/level if used) | PR template §Mode or design/SKILL.md §3.1 | primary branch artifact | agent | always | cdd, eng/README |
 | 6a | Design | build | design artifact or explicit "not required" | design/SKILL.md §3.1 | primary branch artifact | agent | substantial only | design |
-| 6b | Plan | build | plan artifact or explicit "not required" | — (judgment, no fixed template) | primary branch artifact or linked plan | agent | L7 / cycle-sized | design |
+| 6b | Plan | build | plan artifact or explicit "not required" | `docs/gamma/cdd/PLAN-TEMPLATE.md` | primary branch artifact or linked plan | agent | L7 / cycle-sized | design |
 | 6c | Tests | build | test files or explicit reason none apply | — (diff) | diff / primary branch artifact | agent | always | testing |
 | 6d | Code | build | implementation diff or "docs/process only" | — (diff) | diff / primary branch artifact | agent | always | active generation skills |
 | 6e | Docs | build | changed canonical docs / specs / READMEs | — (diff) | diff | agent | when docs affected | writing |
