@@ -21,7 +21,9 @@ let queue_depth hub_path =
       Cn_ffi.Fs.readdir dir
       |> List.filter Cn_hub.is_md_file
       |> List.length
-    with _ -> 0
+    with exn ->
+      Printf.eprintf "cn: warning: cannot count queue in %s: %s\n" dir (Printexc.to_string exn);
+      0
 
 let queue_add hub_path id from content =
   let dir = queue_dir hub_path in
@@ -441,7 +443,7 @@ let resolve_bin_path () =
   | _ ->
     (* Linux: /proc/self/exe — read directly, no child process.
        Spawning a shell to readlink /proc/self/exe returns the shell's exe, not ours. *)
-    let proc_self = try Some (Unix.readlink "/proc/self/exe") with _ -> None in
+    let proc_self = try Some (Unix.readlink "/proc/self/exe") with Unix.Unix_error _ -> None in
     match proc_self with
     | Some p when String.length p > 0 -> p
     | _ ->
