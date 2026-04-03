@@ -1,133 +1,16 @@
 (** cn_mail.ml — Inbox/outbox mail transport
 
-    Branch operations, orphan detection, materialization,
-    inbox check/process/flush, outbox check/flush/send.
-    The largest domain module — mail transport is cohesive. *)
+    Packet-based materialization (#150), inbox check/process/flush,
+    outbox check/flush/send. *)
 
 open Cn_lib
 
-(* === Branch Operations === *)
-
-let delete_remote_branch hub_path ~my_name branch =
-  (* Hard rule: only delete branches you own (your prefix) *)
-  let prefix = my_name ^ "/" in
-  let owns_branch = String.length branch > String.length prefix &&
-    String.sub branch 0 (String.length prefix) = prefix in
-  if not owns_branch then begin
-    print_endline (Cn_fmt.fail (Printf.sprintf "BLOCKED: refusing to delete %s (not owned by %s)" branch my_name));
-    Cn_hub.log_action hub_path "branch.delete.blocked" (Printf.sprintf "%s owner_check_failed" branch);
-    false
-  end
-  else if Cn_fmt.would (Printf.sprintf "delete remote branch %s" branch) then true
-  else begin
-    let cmd = Printf.sprintf "git push origin --delete %s 2>/dev/null" (Filename.quote branch) in
-    match Cn_ffi.Child_process.exec_in ~cwd:hub_path cmd with
-    | Some _ ->
-        Cn_hub.log_action hub_path "branch.delete" branch;
-        print_endline (Cn_fmt.dim (Printf.sprintf "  Deleted remote: %s" branch));
-        true
-    | None -> false
-  end
-
-(* === Orphan Branch Detection === *)
-
-let is_orphan_branch hub_path branch =
-  let b = Filename.quote branch in
-  let cmd = Printf.sprintf "git merge-base main origin/%s 2>/dev/null || git merge-base master origin/%s 2>/dev/null" b b in
-  match Cn_ffi.Child_process.exec_in ~cwd:hub_path cmd with
-  | Some _ -> false
-  | None -> true
-
-(* Deterministic rejection filename — same (peer, branch) always maps to same file.
-   This prevents the amplification loop where timestamped filenames caused
-   unbounded rejection messages for the same orphan branch. (#144) *)
-let rejection_filename peer_name branch =
-  let slug = Cn_hub.slugify branch in
-  Printf.sprintf "rejected-%s-%s.md" peer_name slug
-
-let is_already_rejected hub_path peer_name branch =
-  let filename = rejection_filename peer_name branch in
-  let outbox_dir = Cn_hub.threads_mail_outbox hub_path in
-  let sent_dir = Cn_hub.threads_mail_sent hub_path in
-  Cn_ffi.Fs.exists (Cn_ffi.Path.join outbox_dir filename)
-  || (Cn_ffi.Fs.exists sent_dir
-      && Cn_ffi.Fs.exists (Cn_ffi.Path.join sent_dir filename))
-
-let reject_orphan_branch hub_path peer_name branch =
-  (* Use fetched peer identity (peer_name) as authoritative sender.
-     git log author is informational only — not used for routing. (#144) *)
-  if is_already_rejected hub_path peer_name branch then begin
-    print_endline (Cn_fmt.dim (Printf.sprintf "  Already rejected: %s (from %s)" branch peer_name));
-    Cn_hub.log_action hub_path "inbox.reject.dedup"
-      (Printf.sprintf "branch:%s peer:%s reason:already_rejected" branch peer_name)
-  end
-  else if !(Cn_fmt.dry_run_mode) then begin
-    print_endline (Cn_fmt.dim (Printf.sprintf "Would: reject orphan %s (from %s)" branch peer_name));
-    print_endline (Cn_fmt.dim (Printf.sprintf "Would: send rejection notice to %s" peer_name))
-  end else begin
-    let ts = Cn_fmt.now_iso () in
-    let filename = rejection_filename peer_name branch in
-
-    let content = Printf.sprintf
-      "---\nto: %s\nfrom: %s\ncreated: %s\nsubject: Branch rejected (orphan)\n---\n\n\
-       Branch `%s` rejected and deleted.\n\n\
-       **Reason:** No merge base with main.\n\n\
-       This branch was pushed directly or from the wrong repository. \
-       Branches must share a merge base with main to be accepted.\n\n\
-       **Fix:**\n\
-       1. Delete the orphan branch: `git branch -D %s`\n\
-       2. Push `%s/{topic}` to your own hub repo so the recipient can fetch it\n"
-      peer_name (derive_name hub_path) ts branch branch peer_name in
-
-    let outbox_dir = Cn_hub.threads_mail_outbox hub_path in
-    Cn_ffi.Fs.ensure_dir outbox_dir;
-    Cn_ffi.Fs.write (Cn_ffi.Path.join outbox_dir filename) content;
-
-    Cn_hub.log_action hub_path "inbox.reject"
-      (Printf.sprintf "branch:%s peer:%s reason:orphan" branch peer_name);
-    print_endline (Cn_fmt.fail (Printf.sprintf "Rejected orphan: %s (from %s)" branch peer_name))
-  end
-
-(* === Rejection Terminal Cleanup === *)
-
-let parse_rejected_branch content =
-  match String.split_on_char '`' content with
-  | _ :: branch :: _ :: _ when String.length branch > 0
-      && String.length content >= 8
-      && String.sub content 0 8 = "Branch `" ->
-      Some branch
-  | _ -> None
-
-let cleanup_rejected_branch hub_path branch =
-  let cmd = Printf.sprintf "git branch -D %s 2>/dev/null" (Filename.quote branch) in
-  match Cn_ffi.Child_process.exec_in ~cwd:hub_path cmd with
-  | Some _ ->
-      Cn_hub.log_action hub_path "rejection.cleanup" (Printf.sprintf "deleted local branch %s" branch);
-      print_endline (Cn_fmt.dim (Printf.sprintf "  Cleaned up rejected branch: %s" branch));
-      true
-  | None -> false
-
-let process_rejection_cleanup hub_path content =
-  match parse_rejected_branch content with
-  | Some branch ->
-      let _ = cleanup_rejected_branch hub_path branch in
-      ()
-  | None -> ()
-
 (* === Inbox Operations === *)
 
-type branch_info = { peer: string; branch: string }
-
-let get_inbound_branches clone_path my_name =
-  Printf.sprintf "git branch -r | grep 'origin/%s/' | sed 's/.*origin\\///'" (Filename.quote my_name)
-  |> Cn_ffi.Child_process.exec_in ~cwd:clone_path
-  |> Option.map Cn_hub.split_lines
-  |> Option.value ~default:[]
-
-let inbox_check hub_path name =
+let inbox_check hub_path _name =
   let peers = Cn_hub.load_peers hub_path in
 
-  print_endline (Cn_fmt.info (Printf.sprintf "Checking inbox for %s..." name));
+  print_endline (Cn_fmt.info "Checking inbox for packet refs...");
 
   let total = peers |> List.fold_left (fun acc peer ->
     match peer.kind, peer.clone with
@@ -141,164 +24,22 @@ let inbox_check hub_path name =
           acc
         end else begin
           let _ = Cn_ffi.Child_process.exec_in ~cwd:clone_path "git fetch origin --prune" in
-          let branches = get_inbound_branches clone_path name in
-          (match branches with
+          let _ = Cn_ffi.Child_process.exec_in ~cwd:clone_path
+            (Printf.sprintf "git fetch origin '+refs/cn/msg/%s/*:refs/remotes/origin/cn/msg/%s/*' 2>/dev/null"
+              peer.name peer.name) in
+          let refs = Cn_packet.list_packet_refs ~cwd:clone_path ~sender:peer.name in
+          (match refs with
            | [] -> print_endline (Cn_fmt.dim (Printf.sprintf "  %s: no inbound" peer.name))
-           | bs ->
-               print_endline (Cn_fmt.warn (Printf.sprintf "From %s: %d inbound" peer.name (List.length bs)));
-               bs |> List.iter (fun b -> print_endline (Printf.sprintf "  ← %s" b)));
-          acc + List.length branches
+           | rs ->
+               print_endline (Cn_fmt.warn (Printf.sprintf "From %s: %d inbound packet(s)" peer.name (List.length rs)));
+               rs |> List.iter (fun r -> print_endline (Printf.sprintf "  ← %s" r)));
+          acc + List.length refs
         end
   ) 0 in
 
   if total = 0 then print_endline (Cn_fmt.ok "Inbox clear")
 
-let materialize_branch ~clone_path ~hub_path ~inbox_dir ~peer_name ~branch =
-  (* Receiver FSM: Fetched → classify → materialize or skip → clean *)
-  let fsm_state = ref Cn_protocol.R_Fetched in
-  let advance event =
-    match Cn_protocol.receiver_transition !fsm_state event with
-    | Ok s -> fsm_state := s; true
-    | Error e ->
-        print_endline (Cn_fmt.fail (Printf.sprintf "Receiver FSM: %s" e)); false
-  in
-
-  (* Classify: orphan, duplicate, or new *)
-  if is_orphan_branch clone_path branch then begin
-    let _ = advance Cn_protocol.RE_IsOrphan in
-    reject_orphan_branch hub_path peer_name branch;
-    (* Don't delete sender's branch — only sender deletes their own branches *)
-    []
-  end
-  else begin
-    let branch_slug = match branch |> String.split_on_char '/' |> List.rev with
-      | x :: _ -> x
-      | [] -> branch in
-    let already_exists =
-      Cn_ffi.Fs.readdir inbox_dir
-      |> List.exists (fun f -> String.length f > 16 && ends_with ~suffix:(Printf.sprintf "%s-%s.md" peer_name branch_slug) f) in
-    let archived_dir = Cn_ffi.Path.join inbox_dir "_archived" in
-    let already_archived = Cn_ffi.Fs.exists archived_dir &&
-      Cn_ffi.Fs.readdir archived_dir
-      |> List.exists (fun f -> String.length f > 16 && ends_with ~suffix:(Printf.sprintf "%s-%s.md" peer_name branch_slug) f) in
-
-    if already_exists || already_archived then begin
-      let _ = advance Cn_protocol.RE_IsDuplicate in
-      (* Don't delete sender's branch — only sender deletes their own branches *)
-      print_endline (Cn_fmt.dim (Printf.sprintf "  Skipping duplicate: %s" branch));
-      []
-    end
-    else if !(Cn_fmt.dry_run_mode) then begin
-      print_endline (Cn_fmt.dim (Printf.sprintf "Would: materialize %s → %s-%s" branch peer_name branch_slug));
-      print_endline (Cn_fmt.dim (Printf.sprintf "Would: delete remote branch %s" branch));
-      [Cn_hub.make_thread_filename (Printf.sprintf "%s-%s" peer_name branch_slug)]
-    end
-    else begin
-      let _ = advance Cn_protocol.RE_IsNew in
-
-      (* Phase 0 fix (#150): pull clone main before diffing to prevent stale merge base.
-         Without this, git diff main...origin/<branch> returns noise files when the
-         clone's main diverges from the peer's main. *)
-      let _ = Cn_ffi.Child_process.exec_in ~cwd:clone_path
-        "git checkout main 2>/dev/null && git pull origin main --ff-only 2>/dev/null; git checkout - 2>/dev/null" in
-
-      let bq = Filename.quote branch in
-      (* Phase 0 fix (#150): use explicit merge-base to isolate branch-introduced files.
-         Falls back to main...branch only if merge-base computation fails. *)
-      let merge_base_cmd = Printf.sprintf "git merge-base main origin/%s 2>/dev/null" bq in
-      let diff_cmd = match Cn_ffi.Child_process.exec_in ~cwd:clone_path merge_base_cmd with
-        | Some base ->
-            let base_sha = String.trim base in
-            Printf.sprintf "git diff %s origin/%s --name-only" (Filename.quote base_sha) bq
-        | None ->
-            Printf.sprintf "git diff main...origin/%s --name-only 2>/dev/null || git diff master...origin/%s --name-only" bq bq
-      in
-      let files = Cn_ffi.Child_process.exec_in ~cwd:clone_path diff_cmd
-        |> Option.map Cn_hub.split_lines
-        |> Option.value ~default:[]
-        |> List.filter (fun f ->
-             String.length f > 11 &&
-             String.sub f 0 11 = "threads/in/" &&
-             Cn_hub.is_md_file f) in
-
-      (* Phase 0 fix (#150): fail closed on ambiguous candidates.
-         0 files = nothing to materialize (empty branch or wrong path).
-         >1 files = ambiguous; refuse to guess which is the message.
-         Exactly 1 file = unambiguous, proceed. *)
-      match files with
-      | [] ->
-          Cn_trace.gemit ~component:"mail" ~layer:Body
-            ~event:"inbox.reject" ~severity:Warn ~status:Degraded
-            ~reason_code:"zero_candidates"
-            ~details:[
-              "branch", Cn_json.String branch;
-              "peer", Cn_json.String peer_name;
-            ] ();
-          print_endline (Cn_fmt.fail (Printf.sprintf "Rejected %s: no message file in branch (zero candidates)" branch));
-          Cn_hub.log_action hub_path "inbox.reject"
-            (Printf.sprintf "branch:%s peer:%s reason:zero_candidates" branch peer_name);
-          let _ = advance Cn_protocol.RE_WriteFail in
-          []
-      | _ :: _ :: _ ->
-          Cn_trace.gemit ~component:"mail" ~layer:Body
-            ~event:"inbox.reject" ~severity:Warn ~status:Degraded
-            ~reason_code:"multiple_candidates"
-            ~details:[
-              "branch", Cn_json.String branch;
-              "peer", Cn_json.String peer_name;
-              "count", Cn_json.Int (List.length files);
-              "files", Cn_json.String (String.concat ", " files);
-            ] ();
-          print_endline (Cn_fmt.fail (Printf.sprintf "Rejected %s: ambiguous (%d message files, expected 1)" branch (List.length files)));
-          Cn_hub.log_action hub_path "inbox.reject"
-            (Printf.sprintf "branch:%s peer:%s reason:multiple_candidates count:%d" branch peer_name (List.length files));
-          let _ = advance Cn_protocol.RE_WriteFail in
-          []
-      | [file] ->
-          (* Exactly one candidate — safe to materialize *)
-          let trigger =
-            Cn_ffi.Child_process.exec_in ~cwd:clone_path (Printf.sprintf "git rev-parse origin/%s" (Filename.quote branch))
-            |> Option.map String.trim
-            |> Option.value ~default:"unknown" in
-
-          let inbox_file = Cn_hub.make_thread_filename (Printf.sprintf "%s-%s" peer_name branch_slug) in
-          let inbox_path = Cn_ffi.Path.join inbox_dir inbox_file in
-
-          let show_cmd = Printf.sprintf "git show %s" (Filename.quote (Printf.sprintf "origin/%s:%s" branch file)) in
-          (match Cn_ffi.Child_process.exec_in ~cwd:clone_path show_cmd with
-          | None ->
-              Cn_trace.gemit ~component:"mail" ~layer:Body
-                ~event:"inbox.reject" ~severity:Warn ~status:Degraded
-                ~reason_code:"content_read_failed"
-                ~details:[
-                  "branch", Cn_json.String branch;
-                  "peer", Cn_json.String peer_name;
-                  "file", Cn_json.String file;
-                ] ();
-              print_endline (Cn_fmt.fail (Printf.sprintf "Rejected %s: could not read message content" branch));
-              let _ = advance Cn_protocol.RE_WriteFail in
-              []
-          | Some content ->
-              let meta = [("state", "received"); ("from", peer_name); ("branch", branch);
-                          ("trigger", trigger); ("file", file); ("received", Cn_fmt.now_iso ())] in
-              Cn_ffi.Fs.write inbox_path (update_frontmatter content meta);
-              Cn_hub.log_action hub_path "inbox.materialize" (Printf.sprintf "%s trigger:%s" inbox_file trigger);
-              Cn_trace.gemit ~component:"mail" ~layer:Body
-                ~event:"inbox.materialized" ~severity:Info ~status:Ok_
-                ~details:[
-                  "branch", Cn_json.String branch;
-                  "peer", Cn_json.String peer_name;
-                  "file", Cn_json.String file;
-                  "inbox_file", Cn_json.String inbox_file;
-                  "trigger", Cn_json.String trigger;
-                ] ();
-              process_rejection_cleanup hub_path content;
-              let _ = advance Cn_protocol.RE_WriteOk in
-              [inbox_file])
-    end
-  end
-
-(* Phase 1 (#150): materialize validated packet refs.
+(* #150: materialize validated packet refs.
    Packet refs live under refs/cn/msg/{sender}/{msg_id}. Each ref points to
    a root commit with packet/envelope.json + packet/message.md. Validation
    pipeline runs all checks before any inbox write. *)
@@ -421,18 +162,14 @@ let inbox_process hub_path =
             (Printf.sprintf "git fetch origin '+refs/cn/msg/%s/*:refs/remotes/origin/cn/msg/%s/*' 2>/dev/null"
               peer.name peer.name) in
 
-          (* Phase 1: process packet refs first *)
+          (* Process packet refs — the only materialization path (#150).
+             Legacy diff-based branches are no longer processed. *)
           let packet_refs = Cn_packet.list_packet_refs ~cwd:clone_path ~sender:peer.name in
           let packet_files = packet_refs |> List.filter_map (fun ref_name ->
             materialize_packet ~clone_path ~hub_path ~inbox_dir
               ~local_name:my_name ~peer_name:peer.name ref_name) in
 
-          (* Legacy path: process old-style branches *)
-          let branches = get_inbound_branches clone_path my_name in
-          let branch_files = branches |> List.concat_map (fun branch ->
-            materialize_branch ~clone_path ~hub_path ~inbox_dir ~peer_name:peer.name ~branch) in
-
-          acc @ packet_files @ branch_files
+          acc @ packet_files
         end
   ) [] in
 
