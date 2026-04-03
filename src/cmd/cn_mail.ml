@@ -367,7 +367,15 @@ let materialize_packet ~clone_path ~hub_path ~inbox_dir ~local_name ~peer_name r
                                           dedup_payload_sha = payload_sha; dedup_status = Equivocation } in
                   Cn_packet.save_dedup_index index_path (entry :: index);
                   None
-              | Cn_packet.Accepted | Cn_packet.Rejected_dedup ->
+              | Cn_packet.Rejected_dedup ->
+                  Cn_trace.gemit ~component:"mail" ~layer:Body
+                    ~event:"packet.rejected" ~severity:Warn ~status:Degraded
+                    ~reason_code:"rejected_dedup"
+                    ~details:["msg_id", Cn_json.String env.Cn_packet.msg_id;
+                               "peer", Cn_json.String peer_name] ();
+                  print_endline (Cn_fmt.fail (Printf.sprintf "Packet rejected (dedup): %s" env.Cn_packet.msg_id));
+                  None
+              | Cn_packet.Accepted ->
                   (* Materialize exact validated payload bytes *)
                   let topic_slug = Cn_hub.slugify env.Cn_packet.pkt_topic in
                   let inbox_file = Cn_hub.make_thread_filename (Printf.sprintf "%s-%s" peer_name topic_slug) in

@@ -244,12 +244,12 @@ let load_dedup_index path =
     let content = Cn_ffi.Fs.read path in
     match Cn_json.parse content with
     | Error _ -> []
-    | Ok (Cn_json.List entries) -> List.filter_map parse_dedup_entry entries
+    | Ok (Cn_json.Array entries) -> List.filter_map parse_dedup_entry entries
     | Ok _ -> []
 
 (** Save dedup index to disk *)
 let save_dedup_index path entries =
-  let json = Cn_json.List (List.map dedup_entry_to_json entries) in
+  let json = Cn_json.Array (List.map dedup_entry_to_json entries) in
   Cn_ffi.Fs.write path (Cn_json.to_string json)
 
 (** Check dedup: returns Accepted, Duplicate, or Equivocation *)
@@ -283,8 +283,10 @@ let parse_packet_ref refname =
 
 (** List packet refs for a sender from a remote *)
 let list_packet_refs ~cwd ~sender =
+  (* sender is a peer name (alphanumeric + hyphen), safe to interpolate directly.
+     Filename.quote would add shell quotes inside the already-quoted path. *)
   let cmd = Printf.sprintf "git for-each-ref --format='%%(refname)' 'refs/remotes/origin/cn/msg/%s/' 2>/dev/null"
-    (Filename.quote sender) in
+    sender in
   match Cn_ffi.Child_process.exec_in ~cwd cmd with
   | None -> []
   | Some output ->
@@ -347,33 +349,41 @@ let create_git_packet ~cwd ~sender ~recipient ~topic ~content ~msg_id ~created_a
   | Some env_oid, Some pay_oid ->
       let env_oid = String.trim env_oid in
       let pay_oid = String.trim pay_oid in
-      (* Build tree: packet/envelope.json + packet/message.md *)
-      let tree_content = Printf.sprintf
-        "100644 blob %s\tpacket/envelope.json\n100644 blob %s\tpacket/message.md"
+      (* Build nested tree: first create packet/ subtree, then root tree.
+         git mktree rejects slashed paths — must use nested subtrees. *)
+      let subtree_input = Printf.sprintf "100644 blob %s\tenvelope.json\n100644 blob %s\tmessage.md"
         env_oid pay_oid in
-      let tree_cmd = Printf.sprintf "echo %s | git mktree"
-        (Filename.quote tree_content) in
-      (match Cn_ffi.Child_process.exec_in ~cwd tree_cmd with
-       | Some tree_oid ->
-           let tree_oid = String.trim tree_oid in
-           (* Create root commit (no parents) *)
-           let commit_cmd = Printf.sprintf
-             "git commit-tree %s -m %s"
-             (Filename.quote tree_oid)
-             (Filename.quote (Printf.sprintf "packet: %s → %s [%s]" sender recipient topic)) in
-           (match Cn_ffi.Child_process.exec_in ~cwd commit_cmd with
-            | Some commit_oid ->
-                let commit_oid = String.trim commit_oid in
-                (* Update ref *)
-                let ref_cmd = Printf.sprintf "git update-ref %s %s"
-                  (Filename.quote refname) (Filename.quote commit_oid) in
-                (match Cn_ffi.Child_process.exec_in ~cwd ref_cmd with
-                 | Some _ -> Ok (env, refname)
+      let subtree_cmd = Printf.sprintf "printf '%%s' %s | git mktree"
+        (Filename.quote subtree_input) in
+      (match Cn_ffi.Child_process.exec_in ~cwd subtree_cmd with
+       | Some subtree_oid ->
+           let subtree_oid = String.trim subtree_oid in
+           (* Root tree contains packet/ as a subtree entry *)
+           let root_input = Printf.sprintf "040000 tree %s\tpacket" subtree_oid in
+           let root_cmd = Printf.sprintf "printf '%%s' %s | git mktree"
+             (Filename.quote root_input) in
+           (match Cn_ffi.Child_process.exec_in ~cwd root_cmd with
+            | None -> Error { reason_code = "fetch_failed"; reason = "failed to create root tree" }
+            | Some tree_oid ->
+                let tree_oid = String.trim tree_oid in
+                (* Create root commit (no parents) *)
+                let commit_cmd = Printf.sprintf
+                  "git commit-tree %s -m %s"
+                  (Filename.quote tree_oid)
+                  (Filename.quote (Printf.sprintf "packet: %s → %s [%s]" sender recipient topic)) in
+                (match Cn_ffi.Child_process.exec_in ~cwd commit_cmd with
+                 | Some commit_oid ->
+                     let commit_oid = String.trim commit_oid in
+                     (* Update ref *)
+                     let ref_cmd = Printf.sprintf "git update-ref %s %s"
+                       (Filename.quote refname) (Filename.quote commit_oid) in
+                     (match Cn_ffi.Child_process.exec_in ~cwd ref_cmd with
+                      | Some _ -> Ok (env, refname)
+                      | None -> Error { reason_code = "fetch_failed";
+                                        reason = "failed to update ref" })
                  | None -> Error { reason_code = "fetch_failed";
-                                   reason = "failed to update ref" })
-            | None -> Error { reason_code = "fetch_failed";
-                              reason = "failed to create commit" })
+                                   reason = "failed to create commit" }))
        | None -> Error { reason_code = "fetch_failed";
-                         reason = "failed to create tree" })
+                         reason = "failed to create subtree" })
   | _ -> Error { reason_code = "fetch_failed";
                  reason = "failed to hash packet objects" }
