@@ -172,8 +172,7 @@ let%expect_test "payload_sha256: different content = different hash" =
   Printf.printf "len1=%d len2=%d\n" (String.length env1.payload_sha256) (String.length env2.payload_sha256);
   [%expect {|
     different=true
-    len1=64
-    len2=64
+    len1=64 len2=64
   |}]
 
 let%expect_test "payload_sha256: same content = same hash (deterministic)" =
