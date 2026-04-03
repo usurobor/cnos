@@ -170,7 +170,11 @@ let rec collect_files_sorted root dir =
        |> List.concat_map (fun entry ->
          collect_files_sorted root
            (if dir = "." then entry else dir ^ "/" ^ entry))
-     with Sys_error _ | Unix.Unix_error _ -> [])
+     with
+     | Sys_error msg ->
+       Printf.eprintf "cn: warning: cannot read directory %s: %s\n" full msg; []
+     | Unix.Unix_error (e, _, _) ->
+       Printf.eprintf "cn: warning: cannot read directory %s: %s\n" full (Unix.error_message e); [])
   else [dir]
 
 let compute_integrity dir =
