@@ -71,7 +71,7 @@ Configure sigma's peers:
   $ cd cn-sigma
   $ cat > state/peers.md << 'EOF'
   > # Peers
-  >
+  > 
   > ```yaml
   > - name: pi
   >   clone: ../pi-clone
@@ -89,7 +89,7 @@ Verify packet ref exists on pi-origin before sync:
 Run sync -- should materialize the message:
 
   $ $CN sync 2>&1 | grep -E "(Materialized|packet)" | sed 's/[0-9]\{8\}-[0-9]\{6\}/TIMESTAMP/g'
-  \xe2\x9c\x93 Materialized: TIMESTAMP-pi-hello-from-pi.md (esc)
+  ✓ Materialized: TIMESTAMP-pi-hello-from-pi.md
 
 Verify message was materialized in inbox:
 

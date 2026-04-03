@@ -45,7 +45,7 @@ Configure hub:
   $ echo '{"name":"sigma","version":"1.0.0"}' > .cn/config.json
   $ cat > state/peers.md << 'EOF'
   > # Peers
-  >
+  > 
   > ```yaml
   > - name: pi
   >   clone: ../peer-clone
@@ -65,9 +65,9 @@ Test 1: Normal send — push succeeds and is verified:
   > Test message
   > EOF
 
-  $ $CN sync 2>&1 | grep -E "(Sent|Flushing|flush)"
+  $ $CN sync 2>&1 | grep -E "(Sent|Flushing|flush)" | sed 's/ \[.*\]//'
   Flushing 1 thread(s)...
-  ✓ Sent to pi: test-msg.md * (glob)
+  ✓ Sent to pi: test-msg.md
   ✓ Outbox flush complete
 
 Verify packet ref exists on origin:

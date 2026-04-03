@@ -25,7 +25,7 @@ Create sender hub (cn-sigma):
   $ echo '{"name":"sigma","version":"1.0.0"}' > .cn/config.json
   $ cat > state/peers.md << 'EOF'
   > # Peers
-  >
+  > 
   > ```yaml
   > - name: pi
   >   clone: ../pi-clone
@@ -70,9 +70,9 @@ Create outbox message in sigma:
 
 Run sync to send:
 
-  $ $CN sync 2>&1 | grep -E "(Sent|Flushing)"
+  $ $CN sync 2>&1 | grep -E "(Sent|Flushing)" | sed 's/ \[.*\]//'
   Flushing 1 thread(s)...
-  ✓ Sent to pi: hello.md * (glob)
+  ✓ Sent to pi: hello.md
 
 Verify: packet ref pushed to MY origin (sigma-origin), not pi's:
 

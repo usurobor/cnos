@@ -26,7 +26,7 @@ Create my hub (cn-sigma -> name derives to "sigma"):
   $ mkdir -p state threads/mail/inbox
   $ cat > state/peers.md << 'EOF'
   > # Peers
-  >
+  > 
   > ```yaml
   > - name: pi
   >   clone: ../peer-clone
