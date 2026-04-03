@@ -1,10 +1,10 @@
 Send Protocol Test
 ==================
 
-Verifies: send pushes to MY origin (push-to-self), not peer's clone.
+Verifies: send pushes packet ref to MY origin (push-to-self), not peer's clone.
 
-Protocol: sender creates <recipient>/* branch in OWN repo.
-Peer fetches sender's repo to see branches addressed to them.
+Protocol: sender creates refs/cn/msg/{sender}/{msg_id} in OWN repo.
+Peer fetches sender's repo to see packet refs addressed to them.
 
 Setup:
 
@@ -70,17 +70,17 @@ Create outbox message in sigma:
 
 Run sync to send:
 
-  $ $CN sync 2>&1 | grep -E "(Sent|Flushing)"
+  $ $CN sync 2>&1 | grep -E "(Sent|Flushing)" | sed 's/ \[.*\]//'
   Flushing 1 thread(s)...
   ✓ Sent to pi: hello.md
 
-Verify: branch pushed to MY origin (sigma-origin), not pi's:
+Verify: packet ref pushed to MY origin (sigma-origin), not pi's:
 
-  $ git -C ../sigma-origin branch | grep "pi/"
-    pi/hello
+  $ git -C ../sigma-origin for-each-ref --format='%(refname)' refs/cn/msg/ | grep -c "sigma"
+  1
 
-  $ git -C ../pi-origin branch | grep "sigma/"
-  [1]
+  $ git -C ../pi-origin for-each-ref --format='%(refname)' refs/cn/msg/ | wc -l | tr -d ' '
+  0
 
-The branch pi/hello should be in sigma-origin (my repo).
-No sigma/* branch should be in pi-origin (peer's repo).
+The packet ref should be in sigma-origin (my repo).
+No packet ref should be in pi-origin (peer's repo).

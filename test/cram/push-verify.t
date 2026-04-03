@@ -65,14 +65,14 @@ Test 1: Normal send — push succeeds and is verified:
   > Test message
   > EOF
 
-  $ $CN sync 2>&1 | grep -E "(Sent|Flushing|flush)"
+  $ $CN sync 2>&1 | grep -E "(Sent|Flushing|flush)" | sed 's/ \[.*\]//'
   Flushing 1 thread(s)...
   ✓ Sent to pi: test-msg.md
   ✓ Outbox flush complete
 
-Verify branch exists on origin:
+Verify packet ref exists on origin:
 
-  $ git ls-remote ../hub-origin refs/heads/pi/test-msg 2>/dev/null | grep -c "pi/test-msg"
+  $ git ls-remote ../hub-origin 'refs/cn/msg/hub/*' 2>/dev/null | grep -c "cn/msg"
   1
 
 Verify message moved to sent:
