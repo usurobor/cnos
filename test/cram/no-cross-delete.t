@@ -87,7 +87,7 @@ Verify packet ref exists on pi-origin before sync:
 
 Run sync -- should materialize the message:
 
-  $ $CN sync 2>&1 | grep -E "(Materialized|packet)" | sed 's/[0-9]\{8\}-[0-9]\{6\}/TIMESTAMP/g'
+  $ $CN sync 2>&1 | grep "Materialized" | sed 's/[0-9]\{8\}-[0-9]\{6\}/TIMESTAMP/g'
   ✓ Materialized: TIMESTAMP-pi-hello-from-pi.md
 
 Verify message was materialized in inbox:
