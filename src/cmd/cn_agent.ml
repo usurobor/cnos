@@ -558,9 +558,36 @@ let check_for_update hub_path =
           Update_skip
   end
 
+(* Read entire file as a string for hashing. *)
+let read_file_contents path =
+  let ic = open_in_bin path in
+  let n = in_channel_length ic in
+  let buf = Bytes.create n in
+  really_input ic buf 0 n;
+  close_in ic;
+  Bytes.to_string buf
+
+(* Verify SHA-256 checksum of a downloaded binary against checksums.txt.
+   Returns: `Valid — checksum matches
+          | `No_checksums — checksums.txt unavailable (pre-v3.33.0 release)
+          | `Mismatch — checksum does not match (corrupted or tampered) *)
+let verify_checksum ~tag ~binary ~path =
+  let url = Printf.sprintf
+    "https://github.com/%s/releases/download/%s/checksums.txt" repo tag in
+  let cmd = Printf.sprintf "curl -fsSL '%s' 2>/dev/null" url in
+  match Cn_ffi.Child_process.exec cmd with
+  | None | Some "" -> `No_checksums
+  | Some checksums_body ->
+      let file_contents = read_file_contents path in
+      match Cn_sha256.verify_file_checksum ~checksums_body ~binary ~file_contents with
+      | `No_checksum -> `No_checksums
+      | `Valid -> `Valid
+      | `Mismatch -> `Mismatch
+
 (* Perform update — downloads pre-built binary from GitHub Releases.
-   Workflow: detect platform → download → validate → atomic replace.
-   #37: handles both version bumps and same-version patches. *)
+   Workflow: detect platform → download → checksum → validate → atomic replace.
+   #37: handles both version bumps and same-version patches.
+   #161: SHA-256 verification before replacing binary. *)
 let do_update info =
   match info with
   | Update_skip -> Cn_protocol.Update_skip
@@ -582,20 +609,29 @@ let do_update info =
               if Sys.file_exists new_path then Sys.remove new_path;
               Cn_protocol.Update_fail
           | Some _ ->
-              (* Validate binary before replacing: must respond to --version *)
-              let verify_cmd = Printf.sprintf "'%s' --version 2>/dev/null" new_path in
-              match Cn_ffi.Child_process.exec verify_cmd with
-              | None ->
+              (* #161: Verify SHA-256 checksum before trusting the binary *)
+              match verify_checksum ~tag ~binary ~path:new_path with
+              | `Mismatch ->
+                  Printf.eprintf "[update] SHA-256 checksum mismatch for %s — rejecting\n%!" binary;
                   Sys.remove new_path;
                   Cn_protocol.Update_fail
-              | Some _ ->
-                  (* Verified — atomic replace *)
-                  let mv_cmd = Printf.sprintf "mv '%s' '%s'" new_path bin_path in
-                  match Cn_ffi.Child_process.exec mv_cmd with
-                  | Some _ -> Cn_protocol.Update_complete
+              | `Valid | `No_checksums as checksum_result ->
+                  if checksum_result = `No_checksums then
+                    Printf.eprintf "[update] No checksums available for %s — falling back to --version check\n%!" tag;
+                  (* Validate binary: must respond to --version *)
+                  let verify_cmd = Printf.sprintf "'%s' --version 2>/dev/null" new_path in
+                  match Cn_ffi.Child_process.exec verify_cmd with
                   | None ->
-                      if Sys.file_exists new_path then Sys.remove new_path;
+                      Sys.remove new_path;
                       Cn_protocol.Update_fail
+                  | Some _ ->
+                      (* Verified — atomic replace *)
+                      let mv_cmd = Printf.sprintf "mv '%s' '%s'" new_path bin_path in
+                      match Cn_ffi.Child_process.exec mv_cmd with
+                      | Some _ -> Cn_protocol.Update_complete
+                      | None ->
+                          if Sys.file_exists new_path then Sys.remove new_path;
+                          Cn_protocol.Update_fail
 
 (* Re-exec: replace this process with the updated binary.
    Uses absolute bin_path, not PATH lookup, to ensure we run the just-updated binary.

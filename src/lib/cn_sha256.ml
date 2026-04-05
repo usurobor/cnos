@@ -144,3 +144,30 @@ let hash s =
 
 (** Hash with "sha256:" prefix for receipt format. *)
 let hash_prefixed s = "sha256:" ^ hash s
+
+(** Look up expected SHA-256 hash for a binary in checksums.txt content.
+    Format per line: "<64-char hex>  <filename>" or "<64-char hex> <filename>".
+    Returns None if the binary is not found. *)
+let lookup_checksum ~body ~binary =
+  let lines = String.split_on_char '\n' body in
+  List.fold_left (fun acc line ->
+    match acc with
+    | Some _ -> acc
+    | None ->
+        let trimmed = String.trim line in
+        if String.length trimmed > 64 then
+          let hash_part = String.sub trimmed 0 64 in
+          let rest = String.trim (String.sub trimmed 64
+                       (String.length trimmed - 64)) in
+          if rest = binary then Some hash_part else None
+        else None
+  ) None lines
+
+(** Verify a file's SHA-256 against an expected hash from checksums.txt.
+    Returns: `Valid | `Mismatch | `No_checksum (binary not listed). *)
+let verify_file_checksum ~checksums_body ~binary ~file_contents =
+  match lookup_checksum ~body:checksums_body ~binary with
+  | None -> `No_checksum
+  | Some expected ->
+      let actual = hash file_contents in
+      if actual = expected then `Valid else `Mismatch
