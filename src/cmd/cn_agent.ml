@@ -558,14 +558,17 @@ let check_for_update hub_path =
           Update_skip
   end
 
-(* Read entire file as a string for hashing. *)
+(* Read entire file as a string for hashing.
+   Returns None on I/O failure (file removed between download and read). *)
 let read_file_contents path =
-  let ic = open_in_bin path in
-  let n = in_channel_length ic in
-  let buf = Bytes.create n in
-  really_input ic buf 0 n;
-  close_in ic;
-  Bytes.to_string buf
+  try
+    let ic = open_in_bin path in
+    let n = in_channel_length ic in
+    let buf = Bytes.create n in
+    really_input ic buf 0 n;
+    close_in ic;
+    Some (Bytes.to_string buf)
+  with Sys_error _ -> None
 
 (* Verify SHA-256 checksum of a downloaded binary against checksums.txt.
    Returns: `Valid — checksum matches
@@ -578,11 +581,13 @@ let verify_checksum ~tag ~binary ~path =
   match Cn_ffi.Child_process.exec cmd with
   | None | Some "" -> `No_checksums
   | Some checksums_body ->
-      let file_contents = read_file_contents path in
-      match Cn_sha256.verify_file_checksum ~checksums_body ~binary ~file_contents with
-      | `No_checksum -> `No_checksums
-      | `Valid -> `Valid
-      | `Mismatch -> `Mismatch
+      match read_file_contents path with
+      | None -> `No_checksums  (* file vanished between download and read *)
+      | Some file_contents ->
+          match Cn_sha256.verify_file_checksum ~checksums_body ~binary ~file_contents with
+          | `No_checksum -> `No_checksums
+          | `Valid -> `Valid
+          | `Mismatch -> `Mismatch
 
 (* Perform update — downloads pre-built binary from GitHub Releases.
    Workflow: detect platform → download → checksum → validate → atomic replace.

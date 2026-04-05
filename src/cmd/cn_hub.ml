@@ -31,11 +31,7 @@ let rec find_hub_path dir =
     Returns a placement record with hub_root and workspace_root. *)
 let rec discover dir =
   match dir with
-  | "/" ->
-      (* No placement manifest found anywhere — try legacy discovery *)
-      (match find_hub_path dir with
-       | Some hub_path -> Some (Cn_placement.standalone hub_path)
-       | None -> None)
+  | "/" -> None  (* walked to root without finding hub or placement manifest *)
   | _ ->
       match Cn_placement.find_placement dir with
       | Some placement -> Some placement
