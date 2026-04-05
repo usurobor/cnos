@@ -72,6 +72,18 @@ jobs:
         with:
           path: artifacts
 
+      - name: Generate checksums
+        run: |
+          cd artifacts
+          for dir in cn-*; do
+            [ -d "$dir" ] || continue
+            for bin in "$dir"/cn-*; do
+              [ -f "$bin" ] || continue
+              sha256sum "$bin" | sed "s|$dir/||" >> checksums.txt
+            done
+          done
+          cat checksums.txt
+
       - name: Check for release notes
         id: notes
         run: |
@@ -85,12 +97,16 @@ jobs:
         if: steps.notes.outputs.exists == 'true'
         uses: softprops/action-gh-release@v1
         with:
-          files: artifacts/*/cn-*
+          files: |
+            artifacts/*/cn-*
+            artifacts/checksums.txt
           body_path: RELEASE.md
 
       - name: Create release (auto-generated)
         if: steps.notes.outputs.exists != 'true'
         uses: softprops/action-gh-release@v1
         with:
-          files: artifacts/*/cn-*
+          files: |
+            artifacts/*/cn-*
+            artifacts/checksums.txt
           generate_release_notes: true

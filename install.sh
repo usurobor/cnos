@@ -91,10 +91,11 @@ esac
 TARGET="${PLATFORM}-${ARCH}"
 ok "Detected platform: ${TARGET}"
 
-# --- Fetch latest release ---
-LATEST=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
-  | grep '"tag_name"' \
-  | sed -E 's/.*"([^"]+)".*/\1/') || true
+# --- Fetch latest release (via redirect, no JSON parsing) ---
+LATEST=$(curl -fsSI "https://github.com/${REPO}/releases/latest" \
+  | grep -i '^location:' \
+  | sed -E 's|.*/tag/([^ ]+).*|\1|' \
+  | tr -d '\r') || true
 
 if [ -z "$LATEST" ]; then
   fail "Cannot continue — could not determine latest release" \
@@ -167,6 +168,41 @@ fi
 
 SIZE_MB=$((FILE_SIZE / 1048576))
 ok "Downloaded ${ARTIFACT} (${SIZE_MB} MB)"
+
+# --- Checksum verification ---
+CHECKSUM_URL="https://github.com/${REPO}/releases/download/${LATEST}/checksums.txt"
+CHECKSUMS="$(curl -fsSL "$CHECKSUM_URL" 2>/dev/null)" || true
+
+if [ -n "$CHECKSUMS" ]; then
+  EXPECTED=$(printf '%s\n' "$CHECKSUMS" | grep "${ARTIFACT}$" | awk '{print $1}')
+  if [ -n "$EXPECTED" ]; then
+    if command -v sha256sum >/dev/null 2>&1; then
+      ACTUAL=$(sha256sum "$TMPFILE" | awk '{print $1}')
+    elif command -v shasum >/dev/null 2>&1; then
+      ACTUAL=$(shasum -a 256 "$TMPFILE" | awk '{print $1}')
+    else
+      warn "Cannot verify checksum — neither sha256sum nor shasum found"
+      ACTUAL=""
+    fi
+
+    if [ -n "$ACTUAL" ]; then
+      if [ "$ACTUAL" != "$EXPECTED" ]; then
+        fail "Cannot continue — checksum mismatch (download may be corrupted)" \
+          "" \
+          "Expected: $EXPECTED" \
+          "Actual:   $ACTUAL" \
+          "" \
+          "Fix by retrying:" \
+          "  curl -fsSL https://raw.githubusercontent.com/${REPO}/main/install.sh | sh"
+      fi
+      ok "Checksum verified (SHA-256)"
+    fi
+  else
+    warn "No checksum found for ${ARTIFACT} — skipping verification"
+  fi
+else
+  warn "Could not download checksums — skipping verification"
+fi
 
 # --- Atomic install ---
 chmod +x "$TMPFILE"
