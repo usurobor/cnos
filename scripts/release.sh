@@ -1,94 +1,99 @@
 #!/usr/bin/env bash
-# release.sh — Automate the CDD release pipeline.
+# release.sh — Single-command release pipeline for cnos.
 #
-# Usage: scripts/release.sh <version> <summary>
-# Example: scripts/release.sh 3.20.1 "bugfix: restore path edge case"
+# Usage: scripts/release.sh <version>
+# Example: scripts/release.sh 3.34.0
 #
-# Steps (per release skill §2):
-#   1. Bump VERSION
-#   2. Stamp all manifests
-#   3. Check version consistency
-#   4. Commit
-#   5. Tag (bare version, no v prefix)
-#   6. Push main + tag
-#   7. Create GitHub release
+# Steps:
+#   1. Preflight (clean tree, on main, up to date)
+#   2. Bump VERSION
+#   3. Stamp manifests (cn.json, packages)
+#   4. Check consistency
+#   5. Commit + push
+#   6. Tag (v-prefixed) + push tag
 #
-# Abort on any failure. Human confirms before push.
+# Release workflow triggers on the tag push.
+# CHANGELOG.md and RELEASE.md must be updated before running this.
 
 set -euo pipefail
 
-if [ $# -lt 2 ]; then
-  echo "Usage: $0 <version> <summary>"
-  echo "Example: $0 3.20.1 'bugfix: restore path edge case'"
+if [ $# -lt 1 ]; then
+  echo "Usage: $0 <version>"
+  echo "Example: $0 3.34.0"
   exit 1
 fi
 
 VERSION="$1"
-shift
-SUMMARY="$*"
-
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 
-# Preflight
+# --- Preflight ---
+
 if [ -n "$(git status --porcelain)" ]; then
   echo "ERROR: working tree not clean. Commit or stash first."
   exit 1
 fi
 
-if ! git diff --quiet origin/main..HEAD 2>/dev/null; then
-  echo "WARNING: local main is ahead of origin. Push first or continue?"
-  read -r -p "Continue? [y/N] " confirm
+BRANCH=$(git branch --show-current)
+if [ "$BRANCH" != "main" ]; then
+  echo "ERROR: must be on main (currently on $BRANCH)."
+  exit 1
+fi
+
+git fetch origin main --quiet
+LOCAL=$(git rev-parse HEAD)
+REMOTE=$(git rev-parse origin/main)
+if [ "$LOCAL" != "$REMOTE" ]; then
+  echo "ERROR: local main ($LOCAL) differs from origin/main ($REMOTE)."
+  echo "Pull or push first."
+  exit 1
+fi
+
+# RELEASE.md and CHANGELOG.md should already reference this version
+if ! grep -q "$VERSION" RELEASE.md 2>/dev/null; then
+  echo "WARNING: RELEASE.md does not mention $VERSION"
+  read -r -p "Continue without release notes? [y/N] " confirm
   [ "$confirm" = "y" ] || exit 1
 fi
 
-echo "=== Release $VERSION — $SUMMARY ==="
-echo
+TAG="v$VERSION"
+if git tag -l "$TAG" | grep -q "$TAG"; then
+  echo "ERROR: tag $TAG already exists."
+  exit 1
+fi
 
-# 1. Bump VERSION
+echo "=== Release $TAG ==="
+echo ""
+
+# --- Bump + stamp + check ---
+
 echo "$VERSION" > VERSION
 echo "✓ VERSION → $VERSION"
 
-# 2. Stamp manifests
 bash scripts/stamp-versions.sh
-echo
-
-# 3. Check consistency
+echo ""
 bash scripts/check-version-consistency.sh
-echo
+echo ""
 
-# 4. Stage and show
+# --- Stage and confirm ---
+
 git add -A
 echo "--- Staged changes ---"
 git diff --cached --stat
-echo
+echo ""
 
-# 5. Confirm before commit
-read -r -p "Commit, tag, push, and release? [y/N] " confirm
+read -r -p "Commit, tag $TAG, and push? [y/N] " confirm
 if [ "$confirm" != "y" ]; then
   echo "Aborted. Changes staged but not committed."
   exit 1
 fi
 
-# 6. Commit
-git commit -m "release: $VERSION — $SUMMARY"
+# --- Commit + tag + push ---
 
-# 7. Tag (bare, no v prefix)
-git tag "$VERSION"
-
-# 8. Push
+git commit -m "release: $TAG"
+git tag "$TAG"
 git push origin main
-git push origin "$VERSION"
+git push origin "$TAG"
 
-# 9. GitHub release
-gh release create "$VERSION" \
-  --repo "$(gh repo view --json nameWithOwner -q .nameWithOwner)" \
-  --title "$VERSION — $SUMMARY" \
-  --notes "Release $VERSION — $SUMMARY
-
-See CHANGELOG.md for details."
-
-echo
-echo "✓ Released $VERSION"
-echo "  Tag: $VERSION"
-echo "  URL: $(gh release view "$VERSION" --json url -q .url)"
+echo ""
+echo "✓ Released $TAG. Workflow will build and publish."

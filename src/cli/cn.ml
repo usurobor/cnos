@@ -50,9 +50,6 @@ let () =
       (match Cn_hub.find_hub_path (Cn_ffi.Process.cwd ()) with
        | Some hub_path -> Cn_system.run_update_in_hub hub_path
        | None -> Cn_system.run_update None)
-  | Some (Release v) ->
-      let hub_path_opt = Cn_hub.find_hub_path (Cn_ffi.Process.cwd ()) in
-      Cn_system.run_release hub_path_opt v
   | Some (Init name) -> Cn_system.run_init name
   | Some (Build Cn_lib.Build.Packages) -> Cn_build.run_build ()
   | Some (Build Cn_lib.Build.Check) -> Cn_build.run_check ()
@@ -128,4 +125,4 @@ let () =
                 "deps update: re-resolve not yet implemented (v3.4.1)")
           | Deps Deps.Vendor -> Cn_deps.run_vendor ~hub_path
           | Logs (Logs.Show args) -> Cn_logs.run_logs hub_path args
-          | Help | Version | Init _ | Update | Release _ | Build _ -> ()
+          | Help | Version | Init _ | Update | Build _ -> ()

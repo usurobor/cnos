@@ -224,7 +224,6 @@ type command =
   | Save of string option
   | Agent of Agent.mode  (* replaces Inbound — Step 10 *)
   | Update
-  | Release of string option  (* Tag + GH release; optional version override *)
   | Adhoc of string  (* Create adhoc thread *)
   | Daily            (* Create/open daily reflection *)
   | Weekly           (* Create/open weekly reflection *)
@@ -282,7 +281,6 @@ let string_of_command = function
   | Agent Agent.Daemon -> "agent --daemon"
   | Agent Agent.Stdio -> "agent --stdio"
   | Update -> "update"
-  | Release _ -> "release"
   | Adhoc t -> "adhoc " ^ t
   | Daily -> "daily"
   | Weekly -> "weekly"
@@ -450,8 +448,7 @@ let rec parse_command = function
   | ["push"] -> Some Push
   | "save" :: rest -> Some (Save (join_rest rest))
   | ["update"] -> Some Update
-  | ["release"] -> Some (Release None)
-  | ["release"; v] -> Some (Release (Some v))
+  (* release removed — use scripts/release.sh *)
   | ["setup"] -> Some Setup
   | "adhoc" :: rest -> join_rest rest |> Option.map (fun t -> Adhoc t)
   | ["daily"] -> Some Daily
@@ -700,7 +697,6 @@ Commands:
   peer                Manage peers
   doctor              Health check
   update              Update cn to latest version
-  release [version]   Tag + create GitHub release (default: current version)
 
 Aliases:
   i = inbox, o = outbox, s = status, d = doctor, l = logs

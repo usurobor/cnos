@@ -312,8 +312,20 @@ let restore_one ~hub_path (dep : locked_dep) =
         match git_in ~cwd:tmp_dir ["init"; "-q"] with
         | Error msg -> Error msg
         | Ok _ ->
-        match git_in ~cwd:tmp_dir
-          ["fetch"; "-q"; "--depth=1"; dep.source; dep.rev] with
+        (* Try shallow fetch by SHA first (fast, small). Fall back to full
+           clone + checkout if the server rejects it (#155). *)
+        let fetch_result =
+          match git_in ~cwd:tmp_dir
+            ["fetch"; "-q"; "--depth=1"; dep.source; dep.rev] with
+          | Ok _ -> Ok ()
+          | Error _ ->
+            (* Fallback: fetch default branch, then checkout the rev *)
+            match git_in ~cwd:tmp_dir
+              ["fetch"; "-q"; dep.source] with
+            | Error msg -> Error msg
+            | Ok _ -> Ok ()
+        in
+        match fetch_result with
         | Error msg -> Error msg
         | Ok _ ->
         match git_in ~cwd:tmp_dir ["checkout"; "-q"; dep.rev] with
