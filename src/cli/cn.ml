@@ -50,9 +50,10 @@ let () =
       (match Cn_hub.find_hub_path (Cn_ffi.Process.cwd ()) with
        | Some hub_path -> Cn_system.run_update_in_hub hub_path
        | None -> Cn_system.run_update None)
-  | Some (Release v) ->
-      let hub_path_opt = Cn_hub.find_hub_path (Cn_ffi.Process.cwd ()) in
-      Cn_system.run_release hub_path_opt v
+  | Some (Release _) ->
+      print_endline "cn release has been removed. Use: scripts/release.sh <version>";
+      print_endline "See OPERATOR.md for release workflow.";
+      exit 1
   | Some (Init name) -> Cn_system.run_init name
   | Some (Build Cn_lib.Build.Packages) -> Cn_build.run_build ()
   | Some (Build Cn_lib.Build.Check) -> Cn_build.run_check ()

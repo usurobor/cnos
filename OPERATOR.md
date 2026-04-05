@@ -155,7 +155,37 @@ See [HANDSHAKE.md](docs/beta/guides/HANDSHAKE.md) for establishing peer-to-peer 
 
 ---
 
-## 4. Troubleshooting
+## 4. Releasing
+
+One command:
+
+```bash
+scripts/release.sh 3.34.0
+```
+
+What it does:
+1. **Preflight** — clean tree, on main, synced with origin, tag doesn't exist
+2. **Bump** — writes VERSION file
+3. **Stamp** — propagates version to cn.json, package manifests
+4. **Check** — verifies all version sources agree
+5. **Confirm** — shows staged diff, asks before committing
+6. **Ship** — commit, tag `v3.34.0`, push main + tag
+
+The release workflow (`.github/workflows/release.yml`) triggers on the tag push and handles everything else: builds 4 platform binaries, generates `checksums.txt`, creates the GitHub release with RELEASE.md notes.
+
+### Before releasing
+
+- Update RELEASE.md with release notes for this version
+- Update CHANGELOG.md with the version row
+- Merge all PRs for this release to main
+
+### Version source of truth
+
+`VERSION` file → `scripts/stamp-versions.sh` derives cn.json + package manifests → `scripts/check-version-consistency.sh` validates. One source, everything else derived.
+
+---
+
+## 5. Troubleshooting
 
 Start with `cn logs --errors`. Every failure path emits to the unified log.
 
@@ -173,7 +203,7 @@ See [TROUBLESHOOTING.md](docs/beta/guides/TROUBLESHOOTING.md) for detailed diagn
 
 ---
 
-## Quick Reference
+## 6. Quick Reference
 
 | Task | Command |
 |------|---------|
