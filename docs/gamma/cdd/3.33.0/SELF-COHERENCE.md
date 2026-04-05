@@ -59,7 +59,9 @@ Shell script -- no type system. Structural clarity assessed instead:
 
 2. **Does the cnos installer match the tsc pattern structurally?** Yes. Same section order, same function signatures, same error format. Only differences are binary name, repo, platform matrix, and build-from-source instructions.
 
-3. **Are there any silent failure paths?** No. Every error calls `fail()` which exits with code 1. The `|| true` after release fetch is deliberate -- the empty-check on $LATEST catches the failure and calls fail(). The `2>/dev/null` on mv is deliberate -- the mv failure is caught and reported with actionable fix.
+3. **Is the atomicity claim true?** Yes. The temp file is created inside `${BIN_DIR}` via `mktemp "${BIN_DIR}/.cn.XXXXXX"`, guaranteeing same-filesystem `mv` which is atomic on POSIX. Writability of `${BIN_DIR}` is probed at mktemp time -- failure produces an actionable error before any download begins.
+
+4. **Are there any silent failure paths?** No. Every error calls `fail()` which exits with code 1. The `|| true` after release fetch is deliberate -- the empty-check on $LATEST catches the failure and calls fail(). The `2>/dev/null` on mv is deliberate -- the mv failure is caught and reported with actionable fix.
 
 ### Exit Criteria
 

@@ -49,3 +49,17 @@ atomic install -> verify.
 2. Verify all 8 ACs are met by code inspection
 3. Write SELF-COHERENCE.md
 4. Commit, push, create PR
+
+### CDD Trace
+
+| Step | Artifact | Decision |
+|------|----------|----------|
+| 0 Observe | CHANGELOG TSC, lag table, issue #158 | Gap: installer is bootstrap hack, not product surface |
+| 1 Select | #158 | MCA: targeted rewrite of install.sh |
+| 2 Design | README.md (this file) | Port tsc v0.3.0 pattern, preserve cnos 4-platform matrix |
+| 3 Contract | ACs 1-8 from issue | All 8 map to specific code sections |
+| 4 Plan | Plan section above | Single-file rewrite, no dependencies |
+| 5 Code | install.sh | Rewritten: 155 lines replacing 80 |
+| 6 Self-coherence | SELF-COHERENCE.md | Alpha A, Beta A, Gamma -- |
+| 7 Review | PR #159 | Pending |
+| 8 Gate | CI green | Pending |

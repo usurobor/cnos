@@ -109,11 +109,30 @@ fi
 
 ok "Latest release: ${LATEST}"
 
-# --- Download to temp file ---
+# --- Probe BIN_DIR writability (early fail with actionable error) ---
+if [ ! -d "$BIN_DIR" ]; then
+  mkdir -p "$BIN_DIR" 2>/dev/null || \
+    fail "Cannot continue — ${BIN_DIR} does not exist and cannot be created" \
+      "" \
+      "Fix by running with elevated permissions:" \
+      "  curl -fsSL https://raw.githubusercontent.com/${REPO}/main/install.sh | sudo sh" \
+      "" \
+      "Or override the install directory:" \
+      "  BIN_DIR=\$HOME/.local/bin curl -fsSL https://raw.githubusercontent.com/${REPO}/main/install.sh | sh"
+fi
+
+# --- Download to temp file (same filesystem as BIN_DIR for atomic mv) ---
 ARTIFACT="${BINARY_NAME}-${TARGET}"
 URL="https://github.com/${REPO}/releases/download/${LATEST}/${ARTIFACT}"
 
-TMPFILE="$(mktemp)" || fail "Cannot continue — mktemp failed"
+TMPFILE="$(mktemp "${BIN_DIR}/.cn.XXXXXX" 2>/dev/null)" || \
+  fail "Cannot continue — cannot create temp file in ${BIN_DIR}" \
+    "" \
+    "Fix by running with elevated permissions:" \
+    "  curl -fsSL https://raw.githubusercontent.com/${REPO}/main/install.sh | sudo sh" \
+    "" \
+    "Or override the install directory:" \
+    "  BIN_DIR=\$HOME/.local/bin curl -fsSL https://raw.githubusercontent.com/${REPO}/main/install.sh | sh"
 
 if ! curl -fsSL -o "$TMPFILE" "$URL"; then
   fail "Cannot download binary — HTTP request failed" \
@@ -146,7 +165,7 @@ if [ "$FILE_SIZE" -lt "$MIN_SIZE" ]; then
     "  curl -fsSL https://raw.githubusercontent.com/${REPO}/main/install.sh | sh"
 fi
 
-SIZE_MB=$(echo "scale=1; $FILE_SIZE / 1048576" | bc 2>/dev/null || echo "?")
+SIZE_MB=$((FILE_SIZE / 1048576))
 ok "Downloaded ${ARTIFACT} (${SIZE_MB} MB)"
 
 # --- Atomic install ---
