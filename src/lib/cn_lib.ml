@@ -700,7 +700,7 @@ Commands:
   peer                Manage peers
   doctor              Health check
   update              Update cn to latest version
-  release [version]   Tag + create GitHub release (default: current version)
+  release             (removed — use scripts/release.sh <version>)
 
 Aliases:
   i = inbox, o = outbox, s = status, d = doctor, l = logs
