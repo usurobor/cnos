@@ -1,12 +1,18 @@
 (** cn_hub.ml — Hub discovery, path constants, and shared utilities
 
     Hub detection, path helpers, peer loading, timestamped naming.
-    Shared infrastructure used by all domain modules. *)
+    Shared infrastructure used by all domain modules.
+
+    #156: Discovery now checks for .cn/placement.json first, enabling
+    attached hubs with distinct hub_root and workspace_root. *)
 
 open Cn_lib
 
 (* === Hub Detection === *)
 
+(** Legacy single-root discovery. Walks up from dir looking for
+    .cn/config.{yaml,json} or state/peers.md. Returns the directory
+    containing hub markers. *)
 let rec find_hub_path dir =
   match dir with
   | "/" -> None
@@ -17,6 +23,31 @@ let rec find_hub_path dir =
       match has_yaml || has_json || has_peers with
       | true -> Some dir
       | false -> find_hub_path (Cn_ffi.Path.dirname dir)
+
+(** Placement-aware discovery (#156). Walks up from dir:
+    1. Check for .cn/placement.json — if found, parse and return explicit roots
+    2. Fall back to legacy single-root discovery (standalone mode)
+
+    Returns a placement record with hub_root and workspace_root. *)
+let rec discover dir =
+  match dir with
+  | "/" ->
+      (* No placement manifest found anywhere — try legacy discovery *)
+      (match find_hub_path dir with
+       | Some hub_path -> Some (Cn_placement.standalone hub_path)
+       | None -> None)
+  | _ ->
+      match Cn_placement.find_placement dir with
+      | Some placement -> Some placement
+      | None ->
+          (* No placement manifest at this level — check for legacy hub markers *)
+          let has_yaml = Cn_ffi.Fs.exists (Cn_ffi.Path.join dir ".cn/config.yaml") in
+          let has_json = Cn_ffi.Fs.exists (Cn_ffi.Path.join dir ".cn/config.json") in
+          let has_peers = Cn_ffi.Fs.exists (Cn_ffi.Path.join dir "state/peers.md") in
+          if has_yaml || has_json || has_peers then
+            Some (Cn_placement.standalone dir)
+          else
+            discover (Cn_ffi.Path.dirname dir)
 
 (* === Logging === *)
 
