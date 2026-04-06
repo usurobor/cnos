@@ -668,11 +668,19 @@ Commands:
   # Dependencies
   deps [list]         List installed packages
   deps restore        Install from lockfile (deterministic)
+                      Tries shallow fetch by SHA first; falls back to a full
+                      fetch + checkout when the server rejects shallow-by-SHA
+                      (sandboxes, mirrors). Already-installed packages are
+                      skipped after integrity verification.
   deps doctor         Verify installed assets match lockfile
+                      Manually vendored packages with a valid cn.package.json
+                      are recognized as installed.
   deps add <pkg>      Add dependency to .cn/deps.json
   deps remove <pkg>   Remove dependency
   deps update [pkg]   Update lockfile (re-resolve within ranges)
   deps vendor         Commit vendor tree for airgapped use
+                      Offline-first: skips fetch entirely when every locked
+                      package is already present under .cn/vendor/packages/.
 
   # Build
   build               Assemble packages/ from src/agent/ sources

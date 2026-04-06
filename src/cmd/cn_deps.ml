@@ -396,6 +396,20 @@ let list_installed ~hub_path =
     - lockfile packages are all installed on disk
     - installed package metadata (cn.package.json) is valid
     - integrity hashes match (when set) *)
+(** Check whether a vendored package directory contains a valid package
+    (cn.package.json present and parseable with a name field). Used by
+    `cn deps vendor` for offline-first short-circuit (#155 AC2) and by
+    doctor to recognize manually vendored packages (#155 AC3). *)
+let is_valid_vendored_package pkg_dir =
+  if not (Cn_ffi.Fs.exists pkg_dir) then false
+  else
+    let meta = Cn_ffi.Path.join pkg_dir "cn.package.json" in
+    if not (Cn_ffi.Fs.exists meta) then false
+    else
+      match Cn_json.parse (Cn_ffi.Fs.read meta) with
+      | Ok json -> Cn_json.get_string "name" json <> None
+      | Error _ -> false
+
 let doctor ~hub_path =
   let issues = ref [] in
   let add msg = issues := msg :: !issues in
@@ -484,10 +498,17 @@ let doctor ~hub_path =
                   (String.length dir_name - i - 1) in
                 let in_lock = lock.packages |> List.exists (fun (ld : locked_dep) ->
                   ld.name = name && ld.version = version) in
-                if not in_lock then
-                  add (Printf.sprintf
-                    "Package %s@%s installed but not in lockfile (stale install?)"
-                    name version)
+                if not in_lock then begin
+                  (* #155 AC3: a directory with valid cn.package.json is a
+                     manually vendored package — recognize it instead of
+                     flagging as stale. Only treat as stale if the metadata
+                     is missing or unparseable. *)
+                  let pkg_dir = Cn_ffi.Path.join pkg_root dir_name in
+                  if not (is_valid_vendored_package pkg_dir) then
+                    add (Printf.sprintf
+                      "Package %s@%s installed but not in lockfile (stale install?)"
+                      name version)
+                end
               | None -> ())
           with Sys_error _ | Unix.Unix_error _ -> ()
         end
@@ -617,12 +638,30 @@ let run_remove ~hub_path pkg_name =
       end
 
 let run_vendor ~hub_path =
-  (* Ensure vendor exists first *)
-  (match restore ~hub_path with
-   | Ok () -> ()
-   | Error msg ->
-       print_endline (Cn_fmt.fail msg);
-       Cn_ffi.Process.exit 1);
+  (* Offline-first (#155 AC2): if every lockfile package already exists in
+     .cn/vendor/packages/<name>@<version>/ with a valid cn.package.json,
+     skip the fetch entirely. Lets airgapped operators run `cn deps vendor`
+     after manually populating the vendor tree. *)
+  let pkg_root = Cn_assets.vendor_packages_path hub_path in
+  let all_present =
+    match read_lockfile ~hub_path with
+    | None -> false
+    | Some lock when lock.packages = [] -> false
+    | Some lock ->
+      lock.packages |> List.for_all (fun (dep : locked_dep) ->
+        let pkg_dir = Cn_ffi.Path.join pkg_root
+          (Printf.sprintf "%s@%s" dep.name dep.version) in
+        is_valid_vendored_package pkg_dir)
+  in
+  if all_present then
+    print_endline (Cn_fmt.dim
+      "Vendor tree already populated — skipping fetch (offline-first)")
+  else
+    (match restore ~hub_path with
+     | Ok () -> ()
+     | Error msg ->
+         print_endline (Cn_fmt.fail msg);
+         Cn_ffi.Process.exit 1);
   (* Remove .cn/vendor from .gitignore if present *)
   let gitignore = Cn_ffi.Path.join hub_path ".gitignore" in
   if Cn_ffi.Fs.exists gitignore then begin
