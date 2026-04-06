@@ -47,15 +47,15 @@ let () =
   | Some Help -> print_endline help_text
   | Some Version -> Printf.printf "cn %s (%s)\n" version cnos_commit
   | Some Update ->
-      (match Cn_hub.find_hub_path (Cn_ffi.Process.cwd ()) with
-       | Some hub_path -> Cn_system.run_update_in_hub hub_path
+      (match Cn_hub.discover (Cn_ffi.Process.cwd ()) with
+       | Some p -> Cn_system.run_update_in_hub p.Cn_placement.hub_root
        | None -> Cn_system.run_update None)
   | Some (Init name) -> Cn_system.run_init name
   | Some (Build Cn_lib.Build.Packages) -> Cn_build.run_build ()
   | Some (Build Cn_lib.Build.Check) -> Cn_build.run_check ()
   | Some (Build Cn_lib.Build.Clean) -> Cn_build.run_clean ()
   | Some cmd ->
-      match Cn_hub.find_hub_path (Cn_ffi.Process.cwd ()) with
+      match Cn_hub.discover (Cn_ffi.Process.cwd ()) with
       | None ->
           print_endline (Cn_fmt.fail "Not in a cn hub.");
           print_endline "";
@@ -63,7 +63,12 @@ let () =
           print_endline "  1) cd into an existing hub (cn-sigma, cn-pi, etc.)";
           print_endline "  2) cn init <name> to create a new one";
           Cn_ffi.Process.exit 1
-      | Some hub_path ->
+      | Some placement ->
+          (* #156: hub_root for state/threads/config, workspace_root for
+             project fs/git ops. Currently all callers use hub_path —
+             workspace_root threading happens incrementally. *)
+          let hub_path = placement.Cn_placement.hub_root in
+          let _workspace_root = placement.Cn_placement.workspace_root in
           let name = derive_name hub_path in
           match cmd with
           | Status -> Cn_system.run_status hub_path name
