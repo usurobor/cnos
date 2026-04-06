@@ -53,3 +53,53 @@ let%expect_test "sha256: 64-byte message (exactly one block before padding)" =
   let msg = String.make 64 'a' in
   print_endline (Cn_sha256.hash msg);
   [%expect {| ffe054fe7ae0cb6dc65c3af9b61d5209f439851db43d0ba5997337df154668eb |}]
+
+(* === lookup_checksum (#161) === *)
+
+let%expect_test "lookup_checksum: finds matching binary" =
+  let body = "abc123def456abc123def456abc123def456abc123def456abc123def456abcd1234  cn-linux-x86_64\nfedcba98fedcba98fedcba98fedcba98fedcba98fedcba98fedcba98fedcba98  cn-darwin-arm64" in
+  (match Cn_sha256.lookup_checksum ~body ~binary:"cn-darwin-arm64" with
+   | Some h -> print_endline h
+   | None -> print_endline "NONE");
+  [%expect {| fedcba98fedcba98fedcba98fedcba98fedcba98fedcba98fedcba98fedcba98 |}]
+
+let%expect_test "lookup_checksum: returns None for missing binary" =
+  let body = "abc123def456abc123def456abc123def456abc123def456abc123def456abcd1234  cn-linux-x86_64" in
+  (match Cn_sha256.lookup_checksum ~body ~binary:"cn-darwin-arm64" with
+   | Some _ -> print_endline "FOUND"
+   | None -> print_endline "NONE");
+  [%expect {| NONE |}]
+
+let%expect_test "lookup_checksum: returns None for empty body" =
+  (match Cn_sha256.lookup_checksum ~body:"" ~binary:"cn-linux-x86_64" with
+   | Some _ -> print_endline "FOUND"
+   | None -> print_endline "NONE");
+  [%expect {| NONE |}]
+
+(* === verify_file_checksum (#161) === *)
+
+let%expect_test "verify_file_checksum: valid — hash matches" =
+  let contents = "hello world" in
+  let expected_hash = Cn_sha256.hash contents in
+  let body = expected_hash ^ "  cn-linux-x86_64" in
+  (match Cn_sha256.verify_file_checksum ~checksums_body:body ~binary:"cn-linux-x86_64" ~file_contents:contents with
+   | `Valid -> print_endline "VALID"
+   | `Mismatch -> print_endline "MISMATCH"
+   | `No_checksum -> print_endline "NO_CHECKSUM");
+  [%expect {| VALID |}]
+
+let%expect_test "verify_file_checksum: mismatch — hash differs" =
+  let body = "0000000000000000000000000000000000000000000000000000000000000000  cn-linux-x86_64" in
+  (match Cn_sha256.verify_file_checksum ~checksums_body:body ~binary:"cn-linux-x86_64" ~file_contents:"hello world" with
+   | `Valid -> print_endline "VALID"
+   | `Mismatch -> print_endline "MISMATCH"
+   | `No_checksum -> print_endline "NO_CHECKSUM");
+  [%expect {| MISMATCH |}]
+
+let%expect_test "verify_file_checksum: no_checksum — binary not listed" =
+  let body = "abc123def456abc123def456abc123def456abc123def456abc123def456abcd1234  cn-darwin-arm64" in
+  (match Cn_sha256.verify_file_checksum ~checksums_body:body ~binary:"cn-linux-x86_64" ~file_contents:"anything" with
+   | `Valid -> print_endline "VALID"
+   | `Mismatch -> print_endline "MISMATCH"
+   | `No_checksum -> print_endline "NO_CHECKSUM");
+  [%expect {| NO_CHECKSUM |}]

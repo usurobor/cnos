@@ -192,3 +192,11 @@
  (libraries cn_lib)
  (inline_tests)
  (preprocess (pps ppx_expect)))
+
+; cn_placement tests (ppx_expect) — hub placement manifest parsing (#156)
+(library
+ (name cn_placement_test)
+ (modules cn_placement_test)
+ (libraries cn_cmd cn_lib)
+ (inline_tests)
+ (preprocess (pps ppx_expect)))
