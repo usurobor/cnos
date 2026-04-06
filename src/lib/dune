@@ -18,4 +18,8 @@
 (rule
  (target cn_repo_info.ml)
  (deps ../../cn.json)
- (action (bash "repo=$(sed -n 's|.*github.com/\\([^\"]*\\)\".*|\\1|p' ../../cn.json | head -1 | sed 's/\\.git$//'); if [ -z \"$repo\" ]; then echo 'Error: no GitHub repo URL found in cn.json' >&2; exit 1; fi; echo \"let repo = \\\"${repo}\\\"\" > %{target}")))
+ ; Extract the first URL inside the `repo_urls` array specifically (rather than
+ ; grepping any github.com URL in the file, which would also match maintainer
+ ; hub URLs like usurobor/cn-sigma). awk scopes the match to lines between
+ ; `"repo_urls"` and the closing `]`.
+ (action (bash "repo=$(awk '/\"repo_urls\"/{flag=1;next} /\\]/{flag=0} flag' ../../cn.json | sed -n 's|.*github.com/\\([^\"]*\\)\".*|\\1|p' | head -1 | sed 's/\\.git$//'); if [ -z \"$repo\" ]; then echo 'Error: no GitHub repo URL found in cn.json repo_urls' >&2; exit 1; fi; echo \"let repo = \\\"${repo}\\\"\" > %{target}")))
