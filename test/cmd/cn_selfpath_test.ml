@@ -6,16 +6,22 @@
     3. No hardcoded literals remain in resolved values *)
 
 (* Helper: save, set, run, restore an env var.
-   OCaml stdlib has no unsetenv — empty string is treated as unset
-   by our resolution functions (String.length > 0 guard). *)
+   OCaml stdlib has no portable unsetenv. When the var was originally unset,
+   we restore it to the empty string — every consumer of these vars in this
+   project guards on `String.length > 0`, so empty == unset. If a future
+   consumer switches to `Sys.getenv_opt` directly (which returns `Some ""`
+   here), update both the consumer and this helper together. *)
 let with_env var value f =
   let saved = Sys.getenv_opt var in
   Unix.putenv var value;
-  let result = f () in
-  (match saved with
-   | Some v -> Unix.putenv var v
-   | None -> Unix.putenv var "");
-  result
+  let restore () =
+    match saved with
+    | Some v -> Unix.putenv var v
+    | None -> Unix.putenv var ""
+  in
+  match f () with
+  | result -> restore (); result
+  | exception e -> restore (); raise e
 
 (* ============================================================
    Invariant 1: resolve_bin_path respects $CN_BIN override

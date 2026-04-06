@@ -447,11 +447,13 @@ let resolve_bin_path () =
     match proc_self with
     | Some p when String.length p > 0 -> p
     | _ ->
-      (* macOS / fallback: resolve symlinks on Sys.executable_name *)
-      match Cn_ffi.Child_process.exec
-              (Printf.sprintf "readlink -f '%s' 2>/dev/null" Sys.executable_name) with
-      | Some p when String.length (String.trim p) > 0 -> String.trim p
-      | _ -> Sys.executable_name
+      (* macOS / fallback: resolve symlinks on Sys.executable_name via Unix.realpath
+         (OCaml 4.13+, cross-platform; avoids GNU-only `readlink -f` which does not
+         exist on stock macOS). *)
+      (try
+         let p = Unix.realpath Sys.executable_name in
+         if String.length p > 0 then p else Sys.executable_name
+       with Unix.Unix_error _ -> Sys.executable_name)
 
 let resolve_repo () =
   match Sys.getenv_opt "CN_REPO" with
