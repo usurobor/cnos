@@ -31,8 +31,8 @@ type placement = {
     Returns None if parsing fails or required fields are missing. *)
 let parse_manifest json_str =
   match Cn_json.parse json_str with
-  | exception _ -> None
-  | json ->
+  | Error _ -> None
+  | Ok json ->
       let schema = Cn_json.get_string "schema" json in
       match schema with
       | Some "cn.hub_placement.v1" ->
