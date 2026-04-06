@@ -49,6 +49,10 @@ Review fails via **surface reading** — checking only what changed, missing wha
 
 ### 2.0. Issue — what was promised
 
+**PRE-GATE: Verify branch is unmerged.** Before any review work, confirm the branch has not already landed on main. Run `git log main --oneline | grep <issue-number>` (or check PR state). If already merged: the branch is stale — either review the merged code on main, or skip. Do not review a dead branch.
+  - ❌ Read the diff, post findings, then discover the branch was merged two weeks ago
+  - ✅ "`git log main --oneline | grep 146` → `412414e fix: remove hardcoded paths` — already shipped, redirecting review to main"
+
 **GATE: Complete §2.0 before reading the diff.** The review is structurally incomplete if these tables are absent.
 
 ```markdown
