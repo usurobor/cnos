@@ -49,6 +49,10 @@ Review fails via **surface reading** — checking only what changed, missing wha
 
 ### 2.0. Issue — what was promised
 
+**PRE-GATE: Verify branch is unmerged.** Before any review work, confirm the branch has not already landed on main. Check PR state (`gh pr view <number> --json state,mergedAt`) or, for offline reviews, `git log main --oneline | grep -w <issue-number>`. If already merged: the branch is stale — either review the merged code on main, or skip. Do not review a dead branch. (If this check is added to the review subagent's preflight, this PRE-GATE becomes informational.)
+  - ❌ Read the diff, post findings, then discover the branch was merged two weeks ago
+  - ✅ "`gh pr view 145 --json state` → `MERGED` — branch is stale, redirecting review to main"
+
 **GATE: Complete §2.0 before reading the diff.** The review is structurally incomplete if these tables are absent.
 
 ```markdown
