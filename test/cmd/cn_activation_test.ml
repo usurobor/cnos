@@ -177,7 +177,9 @@ let%expect_test "F5 frontmatter malformed list lines tolerated" =
      ---\n"
   in
   Printf.printf "triggers=%s\n" (String.concat "," fm.fm_triggers);
-  [%expect {| triggers=review,release |}]
+  [%expect {|
+    triggers=review,release
+    cn: activation: skipping malformed line:   garbage line without dash |}]
 
 (* === B1 === *)
 
