@@ -1,7 +1,7 @@
 # Design: Package Artifact Distribution and Command Content Class
 
 **Issue:** #167
-**Version:** 0.3.0
+**Version:** 0.4.0
 **Mode:** MCA
 **Active Skills:** design, cap, writing
 **Engineering Level:** L7
@@ -146,15 +146,47 @@ The package is the delivery unit. The runtime and agent own loading:
 
 **Key principle:** loading logic does not live in the manifest. The manifest declares what content classes exist and what items belong to each class. The runtime and agent know the conventions for each class. This keeps packages simple and loading behavior consistent across all packages.
 
-#### 1.3 Skill orchestration
+#### 1.3 Skill activation and encapsulation
 
-Skills may delegate to sub-skills (e.g., CDD delegates to `cdd/design`, `cdd/review`). This is a **skill-level concern**, not a manifest concern:
+**Activation:** Skills declare activation keywords in their SKILL.md frontmatter:
 
-- The parent skill's `SKILL.md` declares which sub-skills it delegates to and when
-- The manifest lists all skills (parent and children) as flat entries in the `skills` array
-- The agent's skill-loading gate decides when to load a skill; the skill itself decides when to load sub-skills
+```yaml
+---
+name: cdd
+description: Apply Coherence-Driven Development...
+triggers: [review, PR, release, issue, design, plan, assess, post-release]
+---
+```
 
-This keeps the manifest flat and declarative. Orchestration relationships live in the skills themselves, where they can be read and understood in context.
+When a package is installed, the runtime scans exposed skills' frontmatter and builds an activation table. Agent encounters a trigger keyword → runtime loads the matching skill. No per-agent configuration needed.
+
+**Encapsulation:** The manifest exposes only top-level orchestrator skills, not sub-skills:
+
+```json
+{
+  "sources": {
+    "skills": ["cdd", "agent/cap", "agent/coherent"]
+  }
+}
+```
+
+`cdd/design`, `cdd/review`, `cdd/release`, etc. are internal to the CDD skill. They live in the `skills/cdd/` directory but are not listed in the manifest. The orchestrator skill (`cdd/SKILL.md`) owns all delegation — it decides which sub-skill to load at which pipeline step.
+
+Sub-skills declare their parent:
+
+```yaml
+---
+name: review
+description: CLP review protocol...
+parent: cdd
+---
+```
+
+**Result:**
+- Agent sees one skill per concern (e.g., "cdd"), not N sub-skills
+- Activation table has one entry per exposed skill
+- Sub-skills are private implementation — loaded by the orchestrator, not by the runtime
+- Install/uninstall a package → activation keywords appear/disappear automatically
 
 The package artifact is the normal distribution unit for released packages.
 
