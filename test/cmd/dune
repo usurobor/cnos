@@ -152,6 +152,14 @@
  (inline_tests)
  (preprocess (pps ppx_expect)))
 
+; cn_command tests (ppx_expect) — command discovery, dispatch, validation
+(library
+ (name cn_command_test)
+ (modules cn_command_test)
+ (libraries cn_cmd cn_ffi cn_lib unix)
+ (inline_tests)
+ (preprocess (pps ppx_expect)))
+
 ; cn_extension tests (ppx_expect) — extension manifest, registry, dispatch (Issue #73)
 (library
  (name cn_extension_test)

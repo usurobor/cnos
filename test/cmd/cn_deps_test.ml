@@ -142,3 +142,90 @@ let%expect_test "lockfile read/write round-trip (I3)" =
     cnos.eng@9.9.9 sha256=def456
   |}]
 
+(* === I4: compute_sha256 of a known file === *)
+
+(* SHA-256 of the literal bytes "hello" is well-known. *)
+let%expect_test "compute_sha256 matches known hash and detects mismatch (I4)" =
+  let dir = mk_temp_dir "cn-sha256" in
+  Fun.protect ~finally:(fun () -> rm_tree dir) (fun () ->
+    let path = Filename.concat dir "payload" in
+    let oc = open_out path in
+    output_string oc "hello";
+    close_out oc;
+    let actual = Cn_deps.compute_sha256 path in
+    let known  = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824" in
+    Printf.printf "match=%b\n" (actual = known);
+    Printf.printf "mismatch=%b\n"
+      (actual <> "0000000000000000000000000000000000000000000000000000000000000000"));
+  [%expect {|
+    match=true
+    mismatch=true
+  |}]
+
+(* === I5: validate_package_manifest covers all failure modes === *)
+
+let%expect_test "validate_package_manifest accepts a valid manifest (I5)" =
+  let dir = mk_temp_dir "cn-validate-ok" in
+  Fun.protect ~finally:(fun () -> rm_tree dir) (fun () ->
+    touch dir "cn.package.json"
+      "{\"schema\":\"cn.package.v1\",\"name\":\"cnos.core\",\"version\":\"1.0.0\"}";
+    match Cn_deps.validate_package_manifest
+      ~pkg_dir:dir ~expected_name:"cnos.core" with
+    | Ok () -> print_endline "ok"
+    | Error msg -> Printf.printf "ERROR: %s\n" msg);
+  [%expect {| ok |}]
+
+let%expect_test "validate_package_manifest rejects missing/invalid/wrong-name (I5)" =
+  let report label result =
+    match result with
+    | Ok () -> Printf.printf "%s: ok\n" label
+    | Error msg ->
+      let mentions s sub =
+        let sl = String.length s and bl = String.length sub in
+        let rec check i =
+          if i > sl - bl then false
+          else if String.sub s i bl = sub then true
+          else check (i + 1)
+        in bl <= sl && check 0
+      in
+      Printf.printf "%s: error mentions=%b\n" label
+        (mentions msg "cn.package.json"
+         || mentions msg "name"
+         || mentions msg "missing"
+         || mentions msg "invalid")
+  in
+  (* Missing file *)
+  let dir1 = mk_temp_dir "cn-validate-missing" in
+  Fun.protect ~finally:(fun () -> rm_tree dir1) (fun () ->
+    report "missing"
+      (Cn_deps.validate_package_manifest
+         ~pkg_dir:dir1 ~expected_name:"cnos.core"));
+  (* Unparseable JSON *)
+  let dir2 = mk_temp_dir "cn-validate-bad-json" in
+  Fun.protect ~finally:(fun () -> rm_tree dir2) (fun () ->
+    touch dir2 "cn.package.json" "{ this is not json";
+    report "unparseable"
+      (Cn_deps.validate_package_manifest
+         ~pkg_dir:dir2 ~expected_name:"cnos.core"));
+  (* Missing name field *)
+  let dir3 = mk_temp_dir "cn-validate-no-name" in
+  Fun.protect ~finally:(fun () -> rm_tree dir3) (fun () ->
+    touch dir3 "cn.package.json" "{\"schema\":\"cn.package.v1\"}";
+    report "no_name"
+      (Cn_deps.validate_package_manifest
+         ~pkg_dir:dir3 ~expected_name:"cnos.core"));
+  (* Wrong name *)
+  let dir4 = mk_temp_dir "cn-validate-wrong" in
+  Fun.protect ~finally:(fun () -> rm_tree dir4) (fun () ->
+    touch dir4 "cn.package.json"
+      "{\"schema\":\"cn.package.v1\",\"name\":\"other.pkg\"}";
+    report "wrong_name"
+      (Cn_deps.validate_package_manifest
+         ~pkg_dir:dir4 ~expected_name:"cnos.core"));
+  [%expect {|
+    missing: error mentions=true
+    unparseable: error mentions=true
+    no_name: error mentions=true
+    wrong_name: error mentions=true
+  |}]
+
