@@ -1,11 +1,11 @@
-(** cn_deps_test: ppx_expect tests for package restore and lockfile generation
+(** cn_deps_test: ppx_expect tests for package restore and lockfile v2 (#167).
 
     Invariants tested:
     I1 — copy_tree preserves full directory structure (restore primitive)
     I2 — lockfile_for_manifest rejects third-party packages explicitly
-    I3 — lockfile_for_manifest produces valid entries for first-party packages
-    I4 — restore_one skips already-installed packages (idempotent)
-    I5 — no lock entry ever has empty source or subdir *)
+    I3 — lockfile v2 round-trips name+version+sha256 only
+    I6 — compute_integrity / verify_integrity (legacy md5 drift detection,
+         used by doctor; unrelated to artifact SHA-256 verification) *)
 
 (* === Temp directory helpers === *)
 
@@ -94,82 +94,57 @@ let%expect_test "lockfile_for_manifest rejects third-party packages (I2)" =
     schema = "cn.deps.v1";
     profile = "engineer";
     packages = [
-      { name = "cnos.core"; version = "3.17.0" };
+      { name = "cnos.core"; version = Cn_lib.version };
       { name = "external.pkg"; version = "1.0.0" };
     ];
   } in
   (match Cn_deps.lockfile_for_manifest manifest with
    | Ok _ -> print_endline "ERROR: should have rejected"
-   | Error msg -> print_endline msg);
+   | Error msg ->
+     (* Only the third-party rejection prefix is asserted; an index lookup
+        miss would be a different message starting with "Cannot build". *)
+     let has_sub s sub =
+       let slen = String.length s and sublen = String.length sub in
+       let rec check i =
+         if i > slen - sublen then false
+         else if String.sub s i sublen = sub then true
+         else check (i + 1)
+       in sublen <= slen && check 0
+     in
+     Printf.printf "third_party_rejected: %b\n"
+       (has_sub msg "Third-party packages not supported"));
+  [%expect {| third_party_rejected: true |}]
+
+(* === I3: lockfile v2 round-trips name+version+sha256 only === *)
+
+let%expect_test "lockfile v2 read/write round-trip (I3)" =
+  let hub = mk_temp_dir "cn-deps-lockv2" in
+  Fun.protect ~finally:(fun () -> rm_tree hub) (fun () ->
+    Cn_ffi.Fs.ensure_dir (Filename.concat hub ".cn");
+    let lock : Cn_deps.lockfile = {
+      schema = "cn.lock.v2";
+      packages = [
+        { name = "cnos.core"; version = "9.9.9"; sha256 = "abc123" };
+        { name = "cnos.eng";  version = "9.9.9"; sha256 = "def456" };
+      ];
+    } in
+    Cn_deps.write_lockfile ~hub_path:hub lock;
+    match Cn_deps.read_lockfile ~hub_path:hub with
+    | None -> print_endline "ERROR: could not read"
+    | Some lf ->
+      Printf.printf "schema=%s\n" lf.schema;
+      Printf.printf "count=%d\n" (List.length lf.packages);
+      List.iter (fun (d : Cn_deps.locked_dep) ->
+        Printf.printf "%s@%s sha256=%s\n" d.name d.version d.sha256
+      ) lf.packages);
   [%expect {|
-    Third-party packages not supported (no registry): external.pkg
+    schema=cn.lock.v2
+    count=2
+    cnos.core@9.9.9 sha256=abc123
+    cnos.eng@9.9.9 sha256=def456
   |}]
 
-let%expect_test "lockfile_for_manifest rejects multiple third-party (I2)" =
-  let manifest : Cn_deps.manifest = {
-    schema = "cn.deps.v1";
-    profile = "engineer";
-    packages = [
-      { name = "foo.bar"; version = "1.0" };
-      { name = "baz.qux"; version = "2.0" };
-    ];
-  } in
-  (match Cn_deps.lockfile_for_manifest manifest with
-   | Ok _ -> print_endline "ERROR: should have rejected"
-   | Error msg -> print_endline msg);
-  [%expect {|
-    Third-party packages not supported (no registry): foo.bar, baz.qux
-  |}]
-
-(* === I3: lockfile_for_manifest produces valid first-party entries === *)
-
-let%expect_test "lockfile_for_manifest accepts all first-party (I3)" =
-  let manifest : Cn_deps.manifest = {
-    schema = "cn.deps.v1";
-    profile = "engineer";
-    packages = [
-      { name = "cnos.core"; version = "3.17.0" };
-      { name = "cnos.eng"; version = "3.17.0" };
-    ];
-  } in
-  (match Cn_deps.lockfile_for_manifest manifest with
-   | Ok lock ->
-       Printf.printf "packages: %d\n" (List.length lock.packages);
-       lock.packages |> List.iter (fun (dep : Cn_deps.locked_dep) ->
-         let has_source = dep.source <> "" in
-         let has_subdir = dep.subdir <> "" in
-         let has_rev = dep.rev <> "" in
-         Printf.printf "%s: source=%b subdir=%b rev=%b\n"
-           dep.name has_source has_subdir has_rev)
-   | Error msg -> Printf.printf "ERROR: %s\n" msg);
-  [%expect {|
-    packages: 2
-    cnos.core: source=true subdir=true rev=true
-    cnos.eng: source=true subdir=true rev=true
-  |}]
-
-let%expect_test "first-party subdir follows packages/<name> pattern (I3)" =
-  let manifest : Cn_deps.manifest = {
-    schema = "cn.deps.v1";
-    profile = "engineer";
-    packages = [
-      { name = "cnos.core"; version = "3.17.0" };
-      { name = "cnos.eng"; version = "3.17.0" };
-    ];
-  } in
-  (match Cn_deps.lockfile_for_manifest manifest with
-   | Ok lock ->
-       lock.packages |> List.iter (fun (dep : Cn_deps.locked_dep) ->
-         Printf.printf "%s -> %s\n" dep.name dep.subdir)
-   | Error msg -> Printf.printf "ERROR: %s\n" msg);
-  [%expect {|
-    cnos.core -> packages/cnos.core
-    cnos.eng -> packages/cnos.eng
-  |}]
-
-(* === I5: no lock entry has empty source (negative space) === *)
-
-(* === I6: compute_integrity produces deterministic hash === *)
+(* === I6: compute_integrity (legacy md5 drift detection) === *)
 
 let%expect_test "compute_integrity produces deterministic hash for same content (I6)" =
   let dir = mk_temp_dir "cn-integrity" in
@@ -254,42 +229,5 @@ let%expect_test "verify_integrity passes when expected is None (I7)" =
      | Error msg -> Printf.printf "ERROR: %s\n" msg));
   [%expect {| skipped (no integrity) |}]
 
-(* === I8: lockfile_for_manifest generates integrity hashes === *)
-
-let%expect_test "lockfile_for_manifest generates integrity when source available (I8)" =
-  let manifest : Cn_deps.manifest = {
-    schema = "cn.deps.v1";
-    profile = "engineer";
-    packages = [
-      { name = "cnos.core"; version = "3.17.0" };
-    ];
-  } in
-  (match Cn_deps.lockfile_for_manifest manifest with
-   | Ok lock ->
-     lock.packages |> List.iter (fun (dep : Cn_deps.locked_dep) ->
-       let has_integrity = dep.integrity <> None in
-       Printf.printf "%s: has_integrity=%b\n" dep.name has_integrity)
-   | Error msg -> Printf.printf "ERROR: %s\n" msg);
-  [%expect {|
-    cnos.core: has_integrity=true
-  |}]
-
-(* === I5: no lock entry has empty source (negative space) === *)
-
-let%expect_test "no lock entry ever has empty source (I5 negative)" =
-  let manifest : Cn_deps.manifest = {
-    schema = "cn.deps.v1";
-    profile = "engineer";
-    packages = [
-      { name = "cnos.core"; version = "3.17.0" };
-    ];
-  } in
-  (match Cn_deps.lockfile_for_manifest manifest with
-   | Ok lock ->
-       let empty_sources = lock.packages
-         |> List.filter (fun (d : Cn_deps.locked_dep) -> d.source = "") in
-       Printf.printf "entries with empty source: %d\n" (List.length empty_sources)
-   | Error _ -> print_endline "rejected (also acceptable)");
-  [%expect {|
-    entries with empty source: 0
-  |}]
+(* I5/I8 (git transport invariants) removed in #167: lockfile v2 has no
+   source/rev/subdir/integrity fields — those concepts no longer exist. *)
