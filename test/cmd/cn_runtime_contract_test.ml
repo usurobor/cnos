@@ -410,3 +410,108 @@ let%expect_test "to_json: exec_enabled reflects shell_config" =
   [%expect {|
     has_exec: true
     has_exec_allowlist: true |}]
+
+(* ============================================================ *)
+(* === ACTIVATION INDEX + REGISTRIES (#173)                  === *)
+(* ============================================================ *)
+
+(** Augment the with_test_hub fixture: declare commands + skills with
+    triggers in the cnos.core manifest, and create a SKILL.md with a
+    triggers frontmatter so the activation index is non-empty. *)
+let with_activation_hub f =
+  with_test_hub (fun hub ->
+    let v = Cn_lib.version in
+    let core = Printf.sprintf ".cn/vendor/packages/cnos.core@%s" v in
+    let core_dir = Filename.concat hub core in
+    (* Override the manifest with one that declares commands +
+       orchestrators + skills (so the activation index has something). *)
+    let manifest = Printf.sprintf
+      "{\"schema\":\"cn.package.v1\",\"name\":\"cnos.core\",\"version\":\"%s\",\
+       \"sources\":{\
+       \"skills\":[\"reflect\"],\
+       \"commands\":{\"daily\":{\"entrypoint\":\"commands/cn-daily\",\"summary\":\"daily\"}},\
+       \"orchestrators\":[{\"name\":\"daily-review\",\"trigger_kinds\":[\"command\",\"schedule\"]}]}}"
+      v in
+    let oc = open_out (Filename.concat core_dir "cn.package.json") in
+    output_string oc manifest;
+    close_out oc;
+    Cn_ffi.Fs.ensure_dir (Filename.concat core_dir "skills/reflect");
+    let oc = open_out (Filename.concat core_dir "skills/reflect/SKILL.md") in
+    output_string oc
+      "---\nname: reflect\ndescription: reflective practice\ntriggers:\n  - reflect\n  - introspect\n---\n# Body\n";
+    close_out oc;
+    Cn_ffi.Fs.ensure_dir (Filename.concat core_dir "commands");
+    let oc = open_out (Filename.concat core_dir "commands/cn-daily") in
+    output_string oc "#!/bin/sh\necho daily\n";
+    close_out oc;
+    Unix.chmod (Filename.concat core_dir "commands/cn-daily") 0o755;
+    f hub)
+
+let%expect_test "to_json: cognition.activation_index includes exposed skills (#173)" =
+  with_activation_hub (fun hub ->
+    let assets = Cn_assets.summarize ~hub_path:hub in
+    let c = Cn_runtime_contract.gather ~hub_path:hub
+              ~shell_config:default_shell_config ~assets ~peers:[] () in
+    let json = Cn_runtime_contract.to_json ~shell_config:default_shell_config c in
+    match Cn_json.get "cognition" json with
+    | None -> print_endline "no cognition"
+    | Some cog ->
+      match Cn_json.get "activation_index" cog with
+      | None -> print_endline "no activation_index"
+      | Some idx ->
+        match Cn_json.get "skills" idx with
+        | Some (Cn_json.Array items) ->
+          Printf.printf "count=%d\n" (List.length items);
+          items |> List.iter (fun pkg ->
+            let id = Cn_json.get_string "id" pkg in
+            let p  = Cn_json.get_string "package" pkg in
+            let trig_count = match Cn_json.get "triggers" pkg with
+              | Some (Cn_json.Array xs) -> List.length xs
+              | _ -> 0
+            in
+            Printf.printf "id=%s pkg=%s triggers=%d\n"
+              (Option.value ~default:"?" id)
+              (Option.value ~default:"?" p)
+              trig_count)
+        | _ -> print_endline "skills not array");
+  [%expect {|
+    count=1
+    id=reflect pkg=cnos.core triggers=2 |}]
+
+let%expect_test "to_json: body.commands and body.orchestrators present (#173)" =
+  with_activation_hub (fun hub ->
+    let assets = Cn_assets.summarize ~hub_path:hub in
+    let c = Cn_runtime_contract.gather ~hub_path:hub
+              ~shell_config:default_shell_config ~assets ~peers:[] () in
+    let json = Cn_runtime_contract.to_json ~shell_config:default_shell_config c in
+    match Cn_json.get "body" json with
+    | None -> print_endline "no body"
+    | Some body ->
+      let cmds = match Cn_json.get "commands" body with
+        | Some (Cn_json.Array xs) -> List.length xs | _ -> -1 in
+      let orchs = match Cn_json.get "orchestrators" body with
+        | Some (Cn_json.Array xs) -> List.length xs | _ -> -1 in
+      Printf.printf "commands=%d orchestrators=%d\n" cmds orchs);
+  [%expect {| commands=1 orchestrators=1 |}]
+
+let%expect_test "render_markdown: activation_index appears as Skills section (#173)" =
+  with_activation_hub (fun hub ->
+    let assets = Cn_assets.summarize ~hub_path:hub in
+    let c = Cn_runtime_contract.gather ~hub_path:hub
+              ~shell_config:default_shell_config ~assets ~peers:[] () in
+    let md = Cn_runtime_contract.render_markdown c in
+    let mentions s sub =
+      let sl = String.length s and bl = String.length sub in
+      let rec check i =
+        if i > sl - bl then false
+        else if String.sub s i bl = sub then true
+        else check (i + 1)
+      in bl <= sl && check 0
+    in
+    Printf.printf "has_skills_header=%b\n" (mentions md "Skills:");
+    Printf.printf "has_reflect=%b\n" (mentions md "reflect");
+    Printf.printf "has_trigger=%b\n" (mentions md "introspect"));
+  [%expect {|
+    has_skills_header=true
+    has_reflect=true
+    has_trigger=true |}]
