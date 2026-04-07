@@ -317,13 +317,33 @@ An orchestrator is not:
 - a runtime extension
 - arbitrary executable code produced by the agent
 
-### 7.2 Source forms
+### 7.2 Authoring stack
 
-Allowed source forms:
-- F# computation expressions
-- YAML workflow files for simple cases
+Three authoring surfaces, one canonical IR:
 
-Both compile to the same canonical IR.
+| Surface | Author | Strength |
+|---------|--------|----------|
+| **F# computation expressions** | Humans | Sequencing, binding, branching, effect boundaries — compact and type-safe |
+| **YAML** | Humans | Simple workflows, low ceremony |
+| **ETB (Event-Task-Binding)** | LLMs | Compact, typed, low-ambiguity DSL optimized for constrained generation |
+
+All three compile to the same canonical IR (`cn.orchestrator.v1` JSON).
+
+```
+F# CE / YAML / ETB  →  compiler  →  cn.orchestrator.v1 JSON  →  runtime
+  (authoring)            (build)         (canonical IR)          (execution)
+```
+
+**ETB** is the missing middle layer between natural language intent and the JSON IR. It expresses events, tasks/steps, bindings, and branches in a form LLMs can generate more reliably than raw JSON or raw F#. The runtime never sees ETB — it only validates and executes compiled JSON.
+
+**Natural language → ETB** is a future planner step, not a v1 requirement. The safe sequence:
+1. Define canonical JSON IR
+2. Define ETB compact DSL
+3. Let LLMs generate ETB
+4. Compile ETB to IR
+5. Later: natural language → ETB as a planner step
+
+Do not make natural language compile directly to runtime IR. That bundles planning, normalization, capability selection, control-flow construction, and validation into one implicit step.
 
 ### 7.3 Canonical runtime form
 
