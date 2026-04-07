@@ -1,7 +1,7 @@
 # Design: Package Artifact Distribution and Command Content Class
 
 **Issue:** #167
-**Version:** 0.2.0
+**Version:** 0.3.0
 **Mode:** MCA
 **Active Skills:** design, cap, writing
 **Engineering Level:** L7
@@ -94,9 +94,67 @@ A package artifact is a tarball:
 <name>-<version>.tar.gz
 ```
 
-Contents:
-- Package files organized by content class (skills/, doctrine/, mindsets/, templates/, commands/)
-- `cn.package.json` (metadata including all content class declarations)
+#### 1.1 Package directory layout
+
+A package follows a well-known directory structure. Each content class has a conventional directory. The runtime knows how to discover and load each class from these directories — the manifest declares what exists, the runtime owns loading semantics. (NuGet model: dumb package, smart framework.)
+
+```
+<name>@<version>/
+├── cn.package.json          # manifest (required)
+├── doctrine/                # doctrinal specs
+│   ├── FOUNDATIONS.md
+│   └── ...
+├── mindsets/                # agent mindsets
+│   ├── ENGINEERING.md
+│   └── ...
+├── skills/                  # agent skills
+│   ├── cdd/
+│   │   ├── SKILL.md         # entry point (convention)
+│   │   ├── design/
+│   │   │   └── SKILL.md
+│   │   ├── review/
+│   │   │   └── SKILL.md
+│   │   └── ...
+│   ├── agent/
+│   │   ├── cap/
+│   │   │   └── SKILL.md
+│   │   └── ...
+│   └── ...
+├── extensions/              # runtime capability providers
+│   └── cnos.net.http/
+│       └── ...
+├── templates/               # hub initialization templates
+│   ├── SOUL.md
+│   └── USER.md
+└── commands/                # CLI command executables
+    ├── cn-daily
+    └── cn-weekly
+```
+
+#### 1.2 Loading conventions
+
+The package is the delivery unit. The runtime and agent own loading:
+
+| Content class | Convention | Loaded by | When |
+|--------------|-----------|-----------|------|
+| **doctrine** | `doctrine/*.md` | Runtime at wake | Always |
+| **mindsets** | `mindsets/*.md` | Runtime at wake | Always |
+| **skills** | `skills/<name>/SKILL.md` | Agent skill-loading gate | By trigger (keyword, work shape, explicit) |
+| **extensions** | `extensions/<name>/` | Runtime extension host | At capability registration |
+| **templates** | `templates/*.md` | `cn setup` / `cn init` | At hub initialization |
+| **commands** | `commands/cn-<name>` | `cn` CLI dispatch | By operator invocation |
+
+**Key principle:** loading logic does not live in the manifest. The manifest declares what content classes exist and what items belong to each class. The runtime and agent know the conventions for each class. This keeps packages simple and loading behavior consistent across all packages.
+
+#### 1.3 Skill orchestration
+
+Skills may delegate to sub-skills (e.g., CDD delegates to `cdd/design`, `cdd/review`). This is a **skill-level concern**, not a manifest concern:
+
+- The parent skill's `SKILL.md` declares which sub-skills it delegates to and when
+- The manifest lists all skills (parent and children) as flat entries in the `skills` array
+- The agent's skill-loading gate decides when to load a skill; the skill itself decides when to load sub-skills
+
+This keeps the manifest flat and declarative. Orchestration relationships live in the skills themselves, where they can be read and understood in context.
 
 The package artifact is the normal distribution unit for released packages.
 
