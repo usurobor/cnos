@@ -1,4 +1,4 @@
-(** cn_help.ml — Help text rendering with command discovery (#167).
+(** cn_help.ml — Help text rendering with command discovery.
 
     Built-in commands come from the static `Cn_lib.help_text`. External
     commands (repo-local + package-provided) are discovered from the

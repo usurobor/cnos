@@ -41,10 +41,9 @@ let () =
 
   match parse_command cmd_args with
   | None ->
-      (* External command dispatch (#167): if the first token names an
-         external command discoverable from the current hub, exec it
-         (precedence: built-in already handled above, then repo-local,
-         then vendored package). Otherwise fall through to help+exit. *)
+      (* No built-in matched: try external command discovery
+         (repo-local, then vendored package). Fall through to help on
+         no match. *)
       (match cmd_args with
        | cmd_name :: rest ->
            (match Cn_hub.discover (Cn_ffi.Process.cwd ()) with

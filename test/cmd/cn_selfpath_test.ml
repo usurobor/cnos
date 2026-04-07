@@ -75,7 +75,6 @@ let%expect_test "cnos_repo: build-time value is owner/repo format" =
 
 (* ============================================================
    Invariant 4: cn_deps package_index_url derives from cnos_repo
-   (git transport removed in #167 — packages fetch by HTTPS tarball)
    ============================================================ *)
 
 let%expect_test "package_index_url: derived from cnos_repo" =

@@ -331,9 +331,9 @@ let%expect_test "to_json: medium contains zone entries" =
 (* === PACKAGE PROVENANCE (AC7, Issue #113)                  === *)
 (* ============================================================ *)
 
-let%expect_test "gather: package info includes sha256 from lockfile (AC7, #167)" =
+let%expect_test "gather: package info includes sha256 from lockfile" =
   with_test_hub (fun hub ->
-    (* Create a lockfile (cn.lock.v2) so gather can read sha256 *)
+    (* Create a lockfile so gather can read package sha256 *)
     let v = Cn_lib.version in
     let lock : Cn_deps.lockfile = {
       schema = "cn.lock.v2";
@@ -354,7 +354,7 @@ let%expect_test "gather: package info includes sha256 from lockfile (AC7, #167)"
     cnos.core: sha256=deadbeef
     cnos.eng: sha256=cafef00d |}]
 
-let%expect_test "to_json: package entries include sha256 (AC7, #167)" =
+let%expect_test "to_json: package entries include sha256" =
   with_test_hub (fun hub ->
     let v = Cn_lib.version in
     let lock : Cn_deps.lockfile = {

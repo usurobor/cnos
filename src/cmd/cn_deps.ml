@@ -1,25 +1,22 @@
-(** cn_deps.ml — Package manifest, lockfile v2, and HTTP artifact restore.
+(** cn_deps.ml — Package manifest, lockfile, and package restore.
 
-    Handles .cn/deps.json (manifest, schema cn.deps.v1) and
-    .cn/deps.lock.json (lockfile, schema cn.lock.v2).
+    Handles .cn/deps.json (manifest) and .cn/deps.lock.json (lockfile).
 
-    Distribution model (#167):
-    - Released first-party packages are versioned tarball artifacts
-      published to GitHub releases. The package index
-      (packages/index.json, schema cn.package-index.v1) maps
-      name+version to URL+SHA-256.
-    - The lockfile stores name+version+sha256 only — no git transport
-      detail. Move hosting without rewriting locks.
-    - Restore: lockfile -> index lookup -> HTTPS download -> SHA-256
-      verify -> tar -xzf into .cn/vendor/packages/<name>@<version>/
-      -> validate cn.package.json. No git in the normal path.
-    - Local development falls through to a local first-party copy if
-      we're inside a cnos checkout. *)
+    First-party packages are distributed as versioned tarball artifacts
+    published to GitHub releases. The package index (packages/index.json)
+    maps name+version to URL+SHA-256. The lockfile pins name+version
+    +sha256 per package; hosting can move without rewriting locks.
+
+    Restore: lockfile -> index lookup -> HTTPS download -> SHA-256
+    verify -> tar -xzf into .cn/vendor/packages/<name>@<version>/
+    -> validate cn.package.json. When running inside a cnos checkout,
+    first-party packages are copied from the local source tree instead,
+    after a freshness check against src/agent/. *)
 
 (* === Constants === *)
 
 (** Stable URL for the package index (raw GitHub view of main).
-    Constructed from cnos_repo so a fork-and-rename does not break it. *)
+    Derived from cnos_repo so a fork or rename does not break it. *)
 let package_index_url () =
   Printf.sprintf
     "https://raw.githubusercontent.com/%s/main/packages/index.json"
@@ -33,7 +30,7 @@ type manifest_dep = {
   version : string;
 }
 
-(** Lockfile v2 entry: name + version + content hash. *)
+(** Lockfile entry: name + version + tarball sha256. *)
 type locked_dep = {
   name : string;
   version : string;
@@ -106,7 +103,7 @@ let write_manifest ~hub_path (m : manifest) =
   ] in
   Cn_ffi.Fs.write (manifest_path hub_path) (Cn_json.to_string json ^ "\n")
 
-(* === JSON: lockfile v2 === *)
+(* === JSON: lockfile === *)
 
 let locked_dep_to_json (d : locked_dep) =
   Cn_json.Object [
@@ -226,45 +223,6 @@ let rm_tree path =
   if Cn_ffi.Fs.exists path then
     ignore (Cn_ffi.Process.exec_args ~prog:"rm" ~args:["-rf"; path] ())
 
-(* === Local-drift integrity (legacy md5 — used by doctor only) ===
-   This is unrelated to package artifact SHA-256 verification. It exists to
-   detect accidental modification of an installed vendor tree. *)
-
-let rec collect_files_sorted root dir =
-  let full = Cn_ffi.Path.join root dir in
-  if not (Cn_ffi.Fs.exists full) then []
-  else if Sys.is_directory full then
-    (try
-       Cn_ffi.Fs.readdir full
-       |> List.sort String.compare
-       |> List.concat_map (fun entry ->
-         collect_files_sorted root
-           (if dir = "." then entry else dir ^ "/" ^ entry))
-     with _ -> [])
-  else [dir]
-
-let compute_integrity dir =
-  if not (Cn_ffi.Fs.exists dir) then None
-  else
-    let files = collect_files_sorted dir "." in
-    let pairs = files |> List.map (fun rel ->
-      let content = Cn_ffi.Fs.read (Cn_ffi.Path.join dir rel) in
-      Printf.sprintf "%s:%s" rel (Digest.to_hex (Digest.string content))
-    ) in
-    let combined = String.concat "\n" pairs in
-    Some (Printf.sprintf "md5:%s" (Digest.to_hex (Digest.string combined)))
-
-let verify_integrity ~pkg_dir ~expected =
-  match expected with
-  | None -> Ok ()
-  | Some expected_hash ->
-      (match compute_integrity pkg_dir with
-       | None -> Error "package directory does not exist"
-       | Some actual_hash ->
-           if actual_hash = expected_hash then Ok ()
-           else Error (Printf.sprintf "integrity mismatch: expected %s, got %s"
-             expected_hash actual_hash))
-
 (* === First-party local source resolution (development) === *)
 
 let is_first_party name =
@@ -285,10 +243,9 @@ let find_local_package_source pkg_name =
 
 (* === HTTP download + extract === *)
 
-(** Download a binary blob to a temp file using curl --output.
-    Returns the temp file path on success. We use exec_args directly so
-    binary content is written to disk by curl rather than streamed through
-    an OCaml string buffer (Cn_ffi.Http.get is text-oriented). *)
+(** Download a binary blob to a file using `curl --output`. curl writes
+    directly to disk so binary content never passes through an OCaml
+    string buffer. *)
 let download_to_file ~url ~dest =
   let dir = Filename.dirname dest in
   Cn_ffi.Fs.ensure_dir dir;
@@ -349,9 +306,8 @@ let restore_one_http ~hub_path ~index (dep : locked_dep) =
   let pkg_dir = Cn_ffi.Path.join pkg_root
     (Printf.sprintf "%s@%s" dep.name dep.version) in
   if Cn_ffi.Fs.exists pkg_dir then
-    (* Already installed: trust the prior install. Re-validating the SHA
-       would require re-tarring identically, which we can't promise; the
-       artifact-level hash only applies to the on-the-wire tarball. *)
+    (* Already materialised. The lockfile sha256 is an on-the-wire
+       check and cannot be recomputed from the extracted tree. *)
     None
   else
     match lookup_index index ~name:dep.name ~version:dep.version with
@@ -423,8 +379,8 @@ let restore_one ~hub_path ~index (dep : locked_dep) =
                             dep.name dep.version msg)
     | None -> restore_one_http ~hub_path ~index dep
 
-(** Install packages from lockfile into .cn/vendor/packages/.
-    AC3 + AC4 + AC5: HTTP fetch -> SHA-256 verify -> validate manifest. *)
+(** Install every package declared in the lockfile into
+    .cn/vendor/packages/. *)
 let restore ~hub_path =
   match read_lockfile ~hub_path with
   | None -> Ok ()
@@ -432,8 +388,8 @@ let restore ~hub_path =
   | Some lock ->
       (match load_package_index () with
        | Error msg ->
-           (* Fall through to local-only restore: development inside the
-              cnos checkout doesn't strictly need the index. *)
+           (* No index: fall back to local-source restore for any
+              first-party package found in a cnos checkout. *)
            let errors = lock.packages |> List.filter_map (fun dep ->
              match try_restore_local ~hub_path dep with
              | Some (Ok ()) -> None
@@ -589,7 +545,7 @@ let default_manifest_for_profile profile =
   ] in
   { schema = "cn.deps.v1"; profile; packages }
 
-(** Build a v2 lockfile from the manifest by resolving each package
+(** Build a lockfile from the manifest by resolving each package
     against the package index. Third-party packages are rejected. *)
 let lockfile_for_manifest (m : manifest) =
   let third_party = m.packages
