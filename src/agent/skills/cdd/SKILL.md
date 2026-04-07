@@ -300,34 +300,12 @@ If a substantial change lands directly on main without a branch or PR, the canon
 
 ## 4. Pipeline Reference
 
-Master table of CDD steps, their inputs, outputs, and artifacts. Each step's output is the next step's input.
+The master pipeline tables live in the canonical spec:
 
-| Step | Input | Output | Artifact | Owner |
-|------|-------|--------|----------|-------|
-| **0 Observe** | CHANGELOG TSC, lag table, doctor, last assessment | Selected gap | — | CDD |
-| **1 Branch** | Selected gap | Branch | `claude/<version>-<issue>-<slug>` | CDD |
-| **2 Bootstrap** | Branch | Version dir + stubs | `docs/gamma/cdd/<version>/README.md` | CDD |
-| **3 Gap** | Observation evidence | Named incoherence | Gap statement in README | CDD |
-| **4 Mode + Skills** | Gap | MCA/MCI + 2–3 active skills | Mode + skills in README | CDD |
-| **5 Design** | Gap + mode + skills | Proposal + impact graph + ACs | Design doc | `cdd/design` |
-| **6 Contract** | Design | Coherence contract | Contract in README or design doc | CDD |
-| **7 Plan** | Design + contract | Ordered steps + per-step ACs | Plan doc (if 3+ steps) | `cdd/plan` |
-| **8 Tests** | Plan + ACs | Test modules | `test/cmd/*_test.ml` | Active skills |
-| **9 Code** | Tests + plan | Implementation | `src/**/*.ml` | Active skills |
-| **9a Handoff** *(if delegated)* | Steps 4–8 outputs | Implementation prompt with: active skills, test requirements, conventions, artifact order | Prompt + self-verification report from implementer | CDD §2.5a |
-| **10 Docs** | Code | Updated specs + help text | `docs/**/*.md`, PACKAGE-SYSTEM.md, etc. | Active skills |
-| **11 Self-coherence** | All above | α/β/γ assessment | `SELF-COHERENCE.md` | CDD |
-| **12 Review** | All above | Verdict + findings | Review on PR | `cdd/review` |
-| **13 Gate** | Review + CI | PROCEED / HOLD | `GATE.md` | CDD |
-| **14 Release** | Gate PROCEED | Tag + CHANGELOG + RELEASE.md | Release artifacts | `cdd/release` |
-| **15 Assess** | Release + production validation | Post-release assessment | Assessment doc | `cdd/post-release` |
-| **16 Close** | Assessment | Immediate outputs + next MCA | Skill patches, lag table updates | CDD |
+- **Step lifecycle:** `docs/gamma/cdd/CDD.md` §4.1 (steps 0–13, purpose, required output)
+- **Artifact manifest:** `docs/gamma/cdd/CDD.md` §5.3 (step, evidence, format, owner, producer, skill)
 
-**Key invariants:**
-- Steps 8–9 (tests before code) must not be inverted without explicit justification
-- Step 9a replaces steps 8–10 when implementation is delegated; the self-verification report is the implementer's exit gate
-- Steps 14–16 (release → assess → close) are part of the method, not aftermath
-- Each step's output must exist before the next step begins (except where noted)
+This skill does not duplicate those tables. If this skill and the canonical doc disagree, the canonical doc governs (§6).
 
 ---
 

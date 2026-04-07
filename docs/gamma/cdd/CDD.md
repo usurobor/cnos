@@ -202,7 +202,7 @@ CDD owns the full arc from observation back to observation.
 | 3 | Bootstrap | Create snapshot skeleton | Version dir + stubs |
 | 4 | Gap | Name the incoherence precisely | Coherence contract draft |
 | 5 | Mode | Choose MCA/MCI and governing skills | Mode + active skill set |
-| 6 | Artifacts | Design → contract → plan → tests → code → docs | Aligned implementation artifacts |
+| 6 | Artifacts | Design → contract → plan → tests → code → docs (or delegated handoff §2.5a) | Aligned implementation artifacts |
 | 7 | Self-coherence | Author checks own work against ACs and triad | Self-coherence report |
 | 8 | Review | CLP with another CA or human reviewer | Converged review outcome |
 | 9 | Gate | Verify release readiness | Gate checklist passes |
@@ -315,6 +315,7 @@ CDD is artifact-driven. For substantial changes, each lifecycle step must leave 
 | 6c | Tests | build | test files or explicit reason none apply | — (diff) | diff / primary branch artifact | agent | always | testing |
 | 6d | Code | build | implementation diff or "docs/process only" | — (diff) | diff / primary branch artifact | agent | always | active generation skills |
 | 6e | Docs | build | changed canonical docs / specs / READMEs | — (diff) | diff | agent | when docs affected | writing |
+| 6f | Delegated handoff | build | implementation prompt with: active skills, test requirements per module, engineering conventions, artifact order + self-verification report from implementer | cdd/SKILL.md §2.5a | prompt + report | delegator + implementer | when implementation is delegated | cdd |
 | 7 | Self-coherence | build | SELF-COHERENCE.md | `docs/gamma/cdd/SELF-COHERENCE-TEMPLATE.md` | version directory | agent | substantial only | cdd |
 | 8 | Review | review | review artifact / PR review / comment link | review/SKILL.md output format | review surface | reviewer | always | review |
 | 9 | Gate | release | gate result / release-readiness evidence | `docs/gamma/cdd/GATE-TEMPLATE.md` | release or review surface | mechanical + reviewer | always | release |
