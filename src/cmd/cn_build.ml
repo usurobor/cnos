@@ -13,22 +13,17 @@
 
 (* === Types === *)
 
-(** Command declaration: name -> (entrypoint relative to package root, summary). *)
-type command_decl = {
-  cmd_name : string;
-  entrypoint : string;
-  summary : string;
-}
-
 (** Parsed source declaration from cn.package.json.
-    Maps asset categories to paths relative to src/agent/<category>/. *)
+    Maps asset categories to paths relative to src/agent/<category>/.
+    Commands are authored directly under packages/<name>/commands/
+    and are not assembled by cn build; they are consumed by
+    Cn_command during dispatch and are ignored here. *)
 type source_decl = {
   doctrine : string list;
   mindsets : string list;
   skills : string list;
   extensions : string list;
   templates : string list;
-  commands : command_decl list;
 }
 
 type package_manifest = {
@@ -63,20 +58,6 @@ let parse_string_array json key =
         | _ -> None)
   | _ -> []
 
-(** Parse a "commands" object into a list of command_decl.
-    Schema: { "<name>": { "entrypoint": "...", "summary": "..." }, ... }
-    Missing entrypoint or summary => entry skipped. *)
-let parse_commands src_json =
-  match Cn_json.get "commands" src_json with
-  | Some (Cn_json.Object fields) ->
-      fields |> List.filter_map (fun (cmd_name, cmd_json) ->
-        match Cn_json.get_string "entrypoint" cmd_json,
-              Cn_json.get_string "summary" cmd_json with
-        | Some entrypoint, Some summary ->
-            Some { cmd_name; entrypoint; summary }
-        | _ -> None)
-  | _ -> []
-
 let parse_sources json =
   match Cn_json.get "sources" json with
   | None -> None
@@ -87,7 +68,6 @@ let parse_sources json =
         skills = parse_string_array src_json "skills";
         extensions = parse_string_array src_json "extensions";
         templates = parse_string_array src_json "templates";
-        commands = parse_commands src_json;
       }
 
 let parse_package_json path =
@@ -170,8 +150,11 @@ let copy_source ~agent_root ~pkg_dir ~category entry =
       copy_tree src dst
   end
 
-(** Clean generated content from a package directory.
-    Preserves cn.package.json, removes doctrine/, mindsets/, skills/. *)
+(** Clean built content from a package directory. Removes every
+    content-class subdirectory that cn build assembles from
+    src/agent/ (doctrine, mindsets, skills, extensions, templates).
+    Preserves cn.package.json and any hand-authored subdirectories
+    such as commands/. *)
 let clean_package_dir pkg_dir =
   List.iter (fun sub ->
     let path = Cn_ffi.Path.join pkg_dir sub in
