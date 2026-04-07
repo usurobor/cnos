@@ -1,7 +1,7 @@
 # Design: Package Artifact Distribution and Command Content Class
 
 **Issue:** #167
-**Version:** 0.4.0
+**Version:** 0.5.0
 **Mode:** MCA
 **Active Skills:** design, cap, writing
 **Engineering Level:** L7
@@ -67,6 +67,7 @@ Runtime extensions = typed capability providers for the agent/runtime plane (net
 - `cn doctor` — validate package integrity + command integrity
 - `cn help` — discover and list package commands + repo-local commands
 - `cn <name>` dispatch — resolve by precedence (built-in → repo-local → package)
+- `cn_runtime_contract.ml` — emit skill activation table in cognition layer at wake
 - Lockfile schema — simplifies (drops git transport fields)
 - `cn.package.json` schema — extends (`commands` content class)
 - `PACKAGE-SYSTEM.md` — must document `commands` as content class and artifact-first distribution
@@ -189,6 +190,24 @@ parent: cdd
 3. **Uninstall:** Package directory removed → runtime rebuilds activation table from remaining packages → trigger keywords from uninstalled package disappear
 
 The activation table is derived, not configured. It is always the union of trigger keywords from all exposed skills in all installed packages. No manual maintenance.
+
+**Where the activation table lives:** in the runtime contract, emitted at every wake. The runtime contract (`cn_runtime_contract.ml`) already describes the agent's identity, cognition, body, and medium. The activation table belongs in **cognition** — it tells the agent what skills it has and when to use them.
+
+```
+## Cognition
+
+Packages:
+  cnos.core 3.34.0 (doctrine: 12, mindsets: 9, skills: 4, commands: 2)
+  cnos.eng 3.34.0 (skills: 15)
+
+Skills:
+  cdd       [triggers: review, PR, release, issue, design, plan, assess, post-release]
+  coherent  [triggers: coherence, check, verify]
+  cap       [triggers: action, MCA, MCI, change]
+  agent-ops [triggers: ops, status, doctor, hub]
+```
+
+The agent reads this at wake and knows: what skills are available, what keywords activate them. No BOOTSTRAP.md table, no per-agent configuration. The runtime contract is the agent's complete self-knowledge — identity, cognition (including skill activation), body (capabilities), and medium (environment). Everything derived from installed packages.
 
 **Result:**
 - Agent sees one skill per concern (e.g., "cdd"), not N sub-skills
@@ -430,6 +449,7 @@ No PATH fallback in v1. If two external commands claim the same name at the same
 - `docs/alpha/package-system/PACKAGE-SYSTEM.md` — add `commands` content class, document artifact-first distribution
 - `packages/cnos.core/cn.package.json` — add `commands` content class entries
 - `packages/cnos.eng/cn.package.json` — add `commands` content class entries if applicable
+- `src/cmd/cn_runtime_contract.ml` — add skill activation table to cognition layer (scan exposed skills' frontmatter for trigger keywords)
 
 ### Delete
 - Git fetch/clone logic in `cn_deps.ml`
