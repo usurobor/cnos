@@ -261,8 +261,8 @@ let download_to_file ~url ~dest =
   if code = 0 then Ok ()
   else Error (Printf.sprintf "curl exit %d: %s" code (String.trim output))
 
-(** Compute SHA-256 of a file using the stdlib path: read fully, hash. *)
-let sha256_of_file path =
+(** Compute the SHA-256 of a file (read fully, hash the bytes). *)
+let compute_sha256 path =
   let content = Cn_ffi.Fs.read path in
   Cn_sha256.hash content
 
@@ -277,12 +277,13 @@ let extract_tarball ~tarball ~dest_dir =
   if code = 0 then Ok ()
   else Error (Printf.sprintf "tar exit %d: %s" code (String.trim output))
 
-(** Validate the cn.package.json file inside an extracted package directory:
-    must exist, be parseable, and declare a name matching the lock entry. *)
-let validate_extracted ~pkg_dir ~expected_name =
+(** Validate the cn.package.json inside an installed package directory:
+    must exist, be parseable JSON, and declare a `name` field matching
+    the expected package name. *)
+let validate_package_manifest ~pkg_dir ~expected_name =
   let meta = Cn_ffi.Path.join pkg_dir "cn.package.json" in
   if not (Cn_ffi.Fs.exists meta) then
-    Error "missing cn.package.json after extraction"
+    Error "missing cn.package.json"
   else
     match Cn_json.parse (Cn_ffi.Fs.read meta) with
     | Error msg -> Error (Printf.sprintf "invalid cn.package.json: %s" msg)
@@ -319,23 +320,27 @@ let restore_one_http ~hub_path ~index (dep : locked_dep) =
              Some (Printf.sprintf "Failed to download %s@%s from %s: %s"
                dep.name dep.version entry.ie_url msg)
          | Ok () ->
-             let actual = sha256_of_file tmp_tar in
+             let actual = compute_sha256 tmp_tar in
              if actual <> dep.sha256 then begin
-               (try Sys.remove tmp_tar with _ -> ());
+               (try Sys.remove tmp_tar
+                with Sys_error e ->
+                  Printf.eprintf "cn: cannot remove %s: %s\n" tmp_tar e);
                Some (Printf.sprintf
                  "SHA-256 mismatch for %s@%s: expected %s, got %s"
                  dep.name dep.version dep.sha256 actual)
              end else begin
                Cn_ffi.Fs.ensure_dir pkg_dir;
                let result = extract_tarball ~tarball:tmp_tar ~dest_dir:pkg_dir in
-               (try Sys.remove tmp_tar with _ -> ());
+               (try Sys.remove tmp_tar
+                with Sys_error e ->
+                  Printf.eprintf "cn: cannot remove %s: %s\n" tmp_tar e);
                match result with
                | Error msg ->
                    rm_tree pkg_dir;
                    Some (Printf.sprintf "Failed to extract %s@%s: %s"
                      dep.name dep.version msg)
                | Ok () ->
-                   match validate_extracted ~pkg_dir ~expected_name:dep.name with
+                   match validate_package_manifest ~pkg_dir ~expected_name:dep.name with
                    | Ok () -> None
                    | Error msg ->
                        rm_tree pkg_dir;
@@ -426,7 +431,10 @@ let list_installed ~hub_path =
               (String.length dir_name - i - 1) in
             Some (name, version)
         | None -> Some (dir_name, "unknown"))
-    with _ -> []
+    with exn ->
+      Printf.eprintf "cn: list_installed: cannot read %s: %s\n"
+        pkg_root (Printexc.to_string exn);
+      []
 
 (* === Doctor === *)
 
@@ -525,7 +533,9 @@ let doctor ~hub_path =
                       name version)
                 end
               | None -> ())
-          with _ -> ()
+          with exn ->
+            add (Printf.sprintf "doctor: cannot scan %s: %s"
+              pkg_root (Printexc.to_string exn))
         end
   end;
 

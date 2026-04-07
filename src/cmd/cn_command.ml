@@ -53,7 +53,10 @@ let discover_repo_local ~hub_path =
           else None
         else None)
       |> List.sort (fun a b -> compare a.name b.name)
-    with _ -> []
+    with exn ->
+      Printf.eprintf "cn: command discovery: cannot read %s: %s\n"
+        dir (Printexc.to_string exn);
+      []
 
 (* === Package command discovery === *)
 
@@ -100,7 +103,10 @@ let discover_package ~hub_path =
                     entrypoint_path = Cn_ffi.Path.join pkg_dir entrypoint;
                     package_root = pkg_dir;
                     summary }))
-    with _ -> []
+    with exn ->
+      Printf.eprintf "cn: command discovery: cannot read %s: %s\n"
+        pkg_root (Printexc.to_string exn);
+      []
 
 (* === Unified view === *)
 
@@ -221,7 +227,9 @@ let validate ~hub_path =
                           add (Printf.sprintf
                             "package %s: commands field is not an object"
                             pkg_name)))
-     with _ -> ())
+     with exn ->
+       Printf.eprintf "cn: command validation: cannot read %s: %s\n"
+         pkg_root (Printexc.to_string exn))
   end;
 
   (* Duplicates within the same precedence layer. Repo-local is a flat
