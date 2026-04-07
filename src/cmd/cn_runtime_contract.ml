@@ -182,10 +182,12 @@ let build_command_registry ~hub_path =
     })
 
 (** Read [sources.orchestrators] from each installed package's manifest.
-    The schema for an entry is
+    Schema per entry:
       { "name": "...", "trigger_kinds": ["command", "schedule", ...] }
-    Entries that don't parse are skipped silently; doctor surfaces them
-    via cn_deps validation if the manifest is malformed. *)
+    Malformed manifests and entries without a [name] are logged to
+    stderr with package context, not silently dropped. The logged
+    message is informational only; cn doctor / cn_deps remain the
+    canonical validation surfaces. *)
 let build_orchestrator_registry ~hub_path =
   Cn_assets.list_installed_packages hub_path
   |> List.concat_map (fun (pkg_name, pkg_dir) ->
@@ -193,7 +195,11 @@ let build_orchestrator_registry ~hub_path =
     if not (Cn_ffi.Fs.exists manifest_path) then []
     else
       match Cn_json.parse (Cn_ffi.Fs.read manifest_path) with
-      | Error _ -> []
+      | Error msg ->
+          Printf.eprintf
+            "cn: runtime_contract: package %s: cannot parse %s: %s\n"
+            pkg_name manifest_path msg;
+          []
       | Ok json ->
           match Cn_json.get "sources" json with
           | None -> []
@@ -203,7 +209,12 @@ let build_orchestrator_registry ~hub_path =
                   items |> List.filter_map (function
                     | Cn_json.Object _ as entry ->
                         (match Cn_json.get_string "name" entry with
-                         | None -> None
+                         | None ->
+                             Printf.eprintf
+                               "cn: runtime_contract: package %s: orchestrator \
+                                entry missing 'name' field, skipping\n"
+                               pkg_name;
+                             None
                          | Some name ->
                              let trigger_kinds = match Cn_json.get "trigger_kinds" entry with
                                | Some (Cn_json.Array xs) ->
@@ -218,8 +229,19 @@ let build_orchestrator_registry ~hub_path =
                                orch_package = pkg_name;
                                orch_trigger_kinds = trigger_kinds;
                              })
-                    | _ -> None)
-              | _ -> [])
+                    | _ ->
+                        Printf.eprintf
+                          "cn: runtime_contract: package %s: orchestrator \
+                           entry is not an object, skipping\n"
+                          pkg_name;
+                        None)
+              | Some _ ->
+                  Printf.eprintf
+                    "cn: runtime_contract: package %s: sources.orchestrators \
+                     is not an array, ignoring\n"
+                    pkg_name;
+                  []
+              | None -> [])
 
 (** Build the runtime contract from current hub state. *)
 let gather ~hub_path ~(shell_config : Cn_shell.shell_config)
@@ -390,9 +412,14 @@ returns a contract_redirect, not file content.\n\n";
     ) c.cognition.extensions_installed
   end;
 
-  (* Activation index — exposed skills with declarative triggers *)
+  (* Activation index — exposed skills with declarative triggers.
+     Render preserves the JSON schema's two-level nesting
+     (activation_index > skills) so a future addition of siblings
+     (events, tokens, paths, ...) is a mechanical extension of both
+     renderers instead of a shape divergence. *)
   if c.cognition.activation_index <> [] then begin
-    Buffer.add_string buf "Skills:\n";
+    Buffer.add_string buf "activation_index:\n";
+    Buffer.add_string buf "  skills:\n";
     c.cognition.activation_index
     |> List.iter (fun (a : Cn_activation.activation_entry) ->
       let triggers_str = match a.triggers with
@@ -400,7 +427,7 @@ returns a contract_redirect, not file content.\n\n";
         | xs -> String.concat ", " xs
       in
       Buffer.add_string buf (Printf.sprintf
-        "  %s [%s] triggers: %s\n" a.skill_id a.package triggers_str))
+        "    %s [%s] triggers: %s\n" a.skill_id a.package triggers_str))
   end;
 
   let ov = c.cognition.overrides in

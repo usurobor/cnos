@@ -494,7 +494,7 @@ let%expect_test "to_json: body.commands and body.orchestrators present (#173)" =
       Printf.printf "commands=%d orchestrators=%d\n" cmds orchs);
   [%expect {| commands=1 orchestrators=1 |}]
 
-let%expect_test "render_markdown: activation_index appears as Skills section (#173)" =
+let%expect_test "render_markdown: activation_index nests under skills header (#173, F3 parity)" =
   with_activation_hub (fun hub ->
     let assets = Cn_assets.summarize ~hub_path:hub in
     let c = Cn_runtime_contract.gather ~hub_path:hub
@@ -508,10 +508,85 @@ let%expect_test "render_markdown: activation_index appears as Skills section (#1
         else check (i + 1)
       in bl <= sl && check 0
     in
-    Printf.printf "has_skills_header=%b\n" (mentions md "Skills:");
+    (* Parity with JSON: activation_index > skills. F3. *)
+    Printf.printf "has_activation_header=%b\n"
+      (mentions md "activation_index:");
+    Printf.printf "has_skills_subkey=%b\n"
+      (mentions md "  skills:");
     Printf.printf "has_reflect=%b\n" (mentions md "reflect");
     Printf.printf "has_trigger=%b\n" (mentions md "introspect"));
   [%expect {|
-    has_skills_header=true
+    has_activation_header=true
+    has_skills_subkey=true
     has_reflect=true
     has_trigger=true |}]
+
+let%expect_test "to_json: orchestrators include declared entries and skip malformed (#173, F4)" =
+  with_test_hub (fun hub ->
+    let v = Cn_lib.version in
+    let core_dir = Filename.concat hub
+      (Printf.sprintf ".cn/vendor/packages/cnos.core@%s" v) in
+    (* Manifest declaring two orchestrators: one well-formed, one
+       missing the required "name" field. Builder must emit the first
+       and log-skip the second. *)
+    let manifest = Printf.sprintf
+      "{\"schema\":\"cn.package.v1\",\"name\":\"cnos.core\",\"version\":\"%s\",\
+       \"sources\":{\"orchestrators\":[\
+       {\"name\":\"daily-review\",\"trigger_kinds\":[\"command\",\"schedule\"]},\
+       {\"trigger_kinds\":[\"command\"]}\
+       ]}}"
+      v in
+    let oc = open_out (Filename.concat core_dir "cn.package.json") in
+    output_string oc manifest;
+    close_out oc;
+    let assets = Cn_assets.summarize ~hub_path:hub in
+    let c = Cn_runtime_contract.gather ~hub_path:hub
+              ~shell_config:default_shell_config ~assets ~peers:[] () in
+    let json = Cn_runtime_contract.to_json ~shell_config:default_shell_config c in
+    match Cn_json.get "body" json with
+    | None -> print_endline "no body"
+    | Some body ->
+      match Cn_json.get "orchestrators" body with
+      | Some (Cn_json.Array items) ->
+        Printf.printf "count=%d\n" (List.length items);
+        items |> List.iter (fun entry ->
+          let name = Cn_json.get_string "name" entry
+            |> Option.value ~default:"?" in
+          let pkg  = Cn_json.get_string "package" entry
+            |> Option.value ~default:"?" in
+          let tks = match Cn_json.get "trigger_kinds" entry with
+            | Some (Cn_json.Array xs) ->
+              xs |> List.filter_map (function
+                | Cn_json.String s -> Some s | _ -> None)
+            | _ -> []
+          in
+          Printf.printf "name=%s pkg=%s trigger_kinds=[%s]\n"
+            name pkg (String.concat "," tks))
+      | _ -> print_endline "orchestrators not array");
+  [%expect {|
+    count=1
+    name=daily-review pkg=cnos.core trigger_kinds=[command,schedule] |}]
+
+let%expect_test "to_json: orchestrators empty when sources.orchestrators absent (#173, F4)" =
+  with_test_hub (fun hub ->
+    let v = Cn_lib.version in
+    let core_dir = Filename.concat hub
+      (Printf.sprintf ".cn/vendor/packages/cnos.core@%s" v) in
+    let manifest = Printf.sprintf
+      "{\"schema\":\"cn.package.v1\",\"name\":\"cnos.core\",\"version\":\"%s\",\
+       \"sources\":{}}" v in
+    let oc = open_out (Filename.concat core_dir "cn.package.json") in
+    output_string oc manifest;
+    close_out oc;
+    let assets = Cn_assets.summarize ~hub_path:hub in
+    let c = Cn_runtime_contract.gather ~hub_path:hub
+              ~shell_config:default_shell_config ~assets ~peers:[] () in
+    let json = Cn_runtime_contract.to_json ~shell_config:default_shell_config c in
+    match Cn_json.get "body" json with
+    | Some body ->
+      (match Cn_json.get "orchestrators" body with
+       | Some (Cn_json.Array xs) ->
+         Printf.printf "count=%d\n" (List.length xs)
+       | _ -> print_endline "orchestrators not array")
+    | None -> print_endline "no body");
+  [%expect {| count=0 |}]
