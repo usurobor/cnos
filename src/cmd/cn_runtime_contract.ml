@@ -56,16 +56,33 @@ type extension_contract_info = {
   ext_ops : string list;
 }
 
+type command_entry = {
+  cmd_name : string;
+  cmd_source : string;          (** "repo-local" | "package" *)
+  cmd_package : string option;
+  cmd_summary : string;
+}
+
+type orchestrator_entry = {
+  orch_name : string;
+  orch_source : string;         (** always "package" in v1 *)
+  orch_package : string;
+  orch_trigger_kinds : string list;
+}
+
 type cognition = {
   packages : package_info list;
   overrides : override_info;
   extensions_installed : extension_contract_info list;
+  activation_index : Cn_activation.activation_entry list;
 }
 
 type body_contract = {
   capabilities_text : string;
   peers : string list;
   extensions_active : extension_contract_info list;
+  commands : command_entry list;
+  orchestrators : orchestrator_entry list;
 }
 
 type runtime_contract = {
@@ -123,7 +140,10 @@ let list_md_relative ~hub_path dir =
       |> List.filter (fun f -> Filename.check_suffix f ".md")
       |> List.sort String.compare
       |> List.map (fun f -> dir ^ "/" ^ f)
-    with _ -> []
+    with exn ->
+      Printf.eprintf "cn: runtime_contract: cannot read %s: %s\n"
+        full (Printexc.to_string exn);
+      []
 
 (** List SKILL.md overrides under a directory, returning hub-relative paths. *)
 let list_skill_overrides ~hub_path dir =
@@ -145,6 +165,61 @@ let extensions_from_registry registry =
       ext_state = Cn_extension.string_of_lifecycle_state entry.state;
       ext_ops = List.map (fun op -> op.Cn_extension.op_kind) entry.manifest.ops;
     })
+
+(** Project Cn_command discoveries to runtime-contract command entries. *)
+let build_command_registry ~hub_path =
+  Cn_command.discover ~hub_path
+  |> List.map (fun (c : Cn_command.external_cmd) ->
+    let cmd_source, cmd_package = match c.source with
+      | Cn_command.Repo_local -> "repo-local", None
+      | Cn_command.Package p  -> "package", Some p
+    in
+    {
+      cmd_name = c.name;
+      cmd_source;
+      cmd_package;
+      cmd_summary = c.summary;
+    })
+
+(** Read [sources.orchestrators] from each installed package's manifest.
+    The schema for an entry is
+      { "name": "...", "trigger_kinds": ["command", "schedule", ...] }
+    Entries that don't parse are skipped silently; doctor surfaces them
+    via cn_deps validation if the manifest is malformed. *)
+let build_orchestrator_registry ~hub_path =
+  Cn_assets.list_installed_packages hub_path
+  |> List.concat_map (fun (pkg_name, pkg_dir) ->
+    let manifest_path = Cn_ffi.Path.join pkg_dir "cn.package.json" in
+    if not (Cn_ffi.Fs.exists manifest_path) then []
+    else
+      match Cn_json.parse (Cn_ffi.Fs.read manifest_path) with
+      | Error _ -> []
+      | Ok json ->
+          match Cn_json.get "sources" json with
+          | None -> []
+          | Some sources ->
+              match Cn_json.get "orchestrators" sources with
+              | Some (Cn_json.Array items) ->
+                  items |> List.filter_map (function
+                    | Cn_json.Object _ as entry ->
+                        (match Cn_json.get_string "name" entry with
+                         | None -> None
+                         | Some name ->
+                             let trigger_kinds = match Cn_json.get "trigger_kinds" entry with
+                               | Some (Cn_json.Array xs) ->
+                                   xs |> List.filter_map (function
+                                     | Cn_json.String s -> Some s
+                                     | _ -> None)
+                               | _ -> []
+                             in
+                             Some {
+                               orch_name = name;
+                               orch_source = "package";
+                               orch_package = pkg_name;
+                               orch_trigger_kinds = trigger_kinds;
+                             })
+                    | _ -> None)
+              | _ -> [])
 
 (** Build the runtime contract from current hub state. *)
 let gather ~hub_path ~(shell_config : Cn_shell.shell_config)
@@ -174,22 +249,22 @@ let gather ~hub_path ~(shell_config : Cn_shell.shell_config)
       in
       let sha256 = match lock_entry with
         | Some d -> Some d.sha256 | None -> None in
+      let count_md dir =
+        if not (Cn_ffi.Fs.exists dir) then 0
+        else
+          try
+            Cn_ffi.Fs.readdir dir
+            |> List.filter (fun f -> Filename.check_suffix f ".md")
+            |> List.length
+          with exn ->
+            Printf.eprintf "cn: runtime_contract: cannot read %s: %s\n"
+              dir (Printexc.to_string exn);
+            0
+      in
       let doctrine_dir = Cn_ffi.Path.join pkg_path "doctrine" in
-      let doctrine_count =
-        if Cn_ffi.Fs.exists doctrine_dir then
-          (try Cn_ffi.Fs.readdir doctrine_dir
-               |> List.filter (fun f -> Filename.check_suffix f ".md")
-               |> List.length with _ -> 0)
-        else 0
-      in
+      let doctrine_count = count_md doctrine_dir in
       let mindsets_dir = Cn_ffi.Path.join pkg_path "mindsets" in
-      let mindset_count =
-        if Cn_ffi.Fs.exists mindsets_dir then
-          (try Cn_ffi.Fs.readdir mindsets_dir
-               |> List.filter (fun f -> Filename.check_suffix f ".md")
-               |> List.length with _ -> 0)
-        else 0
-      in
+      let mindset_count = count_md mindsets_dir in
       let skills_dir = Cn_ffi.Path.join pkg_path "skills" in
       let skill_count = List.length (Cn_assets.walk_skills skills_dir) in
       { name = pkg_name; version = pkg_version;
@@ -230,6 +305,9 @@ let gather ~hub_path ~(shell_config : Cn_shell.shell_config)
     e.ext_state = "enabled") all_ext_info in
 
   let medium = classify_zones ~hub_path in
+  let activation_index = Cn_activation.build_index ~hub_path in
+  let commands = build_command_registry ~hub_path in
+  let orchestrators = build_orchestrator_registry ~hub_path in
 
   {
     identity = {
@@ -245,11 +323,14 @@ let gather ~hub_path ~(shell_config : Cn_shell.shell_config)
         skills = skill_overrides;
       };
       extensions_installed = all_ext_info;
+      activation_index;
     };
     body = {
       capabilities_text;
       peers;
       extensions_active = active_ext_info;
+      commands;
+      orchestrators;
     };
     medium;
   }
@@ -309,6 +390,19 @@ returns a contract_redirect, not file content.\n\n";
     ) c.cognition.extensions_installed
   end;
 
+  (* Activation index — exposed skills with declarative triggers *)
+  if c.cognition.activation_index <> [] then begin
+    Buffer.add_string buf "Skills:\n";
+    c.cognition.activation_index
+    |> List.iter (fun (a : Cn_activation.activation_entry) ->
+      let triggers_str = match a.triggers with
+        | [] -> "(no triggers)"
+        | xs -> String.concat ", " xs
+      in
+      Buffer.add_string buf (Printf.sprintf
+        "  %s [%s] triggers: %s\n" a.skill_id a.package triggers_str))
+  end;
+
   let ov = c.cognition.overrides in
   let total_overrides = List.length ov.doctrine
     + List.length ov.mindsets
@@ -328,6 +422,26 @@ returns a contract_redirect, not file content.\n\n";
   if c.body.peers <> [] then
     Buffer.add_string buf (Printf.sprintf "peers: %s\n"
       (String.concat ", " c.body.peers));
+  if c.body.commands <> [] then begin
+    Buffer.add_string buf "commands:\n";
+    c.body.commands |> List.iter (fun (cmd : command_entry) ->
+      let owner = match cmd.cmd_package with
+        | Some p -> Printf.sprintf "[%s]" p
+        | None -> "[repo-local]"
+      in
+      let summary = if cmd.cmd_summary = "" then ""
+                    else " — " ^ cmd.cmd_summary in
+      Buffer.add_string buf (Printf.sprintf
+        "  %s %s%s\n" cmd.cmd_name owner summary))
+  end;
+  if c.body.orchestrators <> [] then begin
+    Buffer.add_string buf "orchestrators:\n";
+    c.body.orchestrators |> List.iter (fun (o : orchestrator_entry) ->
+      Buffer.add_string buf (Printf.sprintf
+        "  %s [%s] trigger_kinds: %s\n"
+        o.orch_name o.orch_package
+        (String.concat ", " o.orch_trigger_kinds)))
+  end;
 
   (* Medium — what world do I inhabit? *)
   Buffer.add_string buf "\n### Medium\n";
@@ -399,6 +513,16 @@ let to_json ~(shell_config : Cn_shell.shell_config) (c : runtime_contract) =
           "state", str e.ext_state;
           "ops", Cn_json.Array (List.map str e.ext_ops);
         ]) c.cognition.extensions_installed);
+      "activation_index", Cn_json.Object [
+        "skills", Cn_json.Array (List.map
+          (fun (a : Cn_activation.activation_entry) ->
+            Cn_json.Object [
+              "id", str a.skill_id;
+              "package", str a.package;
+              "summary", str a.summary;
+              "triggers", Cn_json.Array (List.map str a.triggers);
+            ]) c.cognition.activation_index);
+      ];
     ];
     "body", Cn_json.Object ([
       "capabilities", Cn_json.Object ([
@@ -423,6 +547,24 @@ let to_json ~(shell_config : Cn_shell.shell_config) (c : runtime_contract) =
           "name", str e.ext_name;
           "ops", Cn_json.Array (List.map str e.ext_ops);
         ]) c.body.extensions_active);
+      "commands", Cn_json.Array (List.map (fun (cmd : command_entry) ->
+        let pkg_field = match cmd.cmd_package with
+          | Some p -> [("package", str p)]
+          | None -> []
+        in
+        Cn_json.Object ([
+          "name", str cmd.cmd_name;
+          "source", str cmd.cmd_source;
+          "summary", str cmd.cmd_summary;
+        ] @ pkg_field)) c.body.commands);
+      "orchestrators", Cn_json.Array (List.map
+        (fun (o : orchestrator_entry) ->
+          Cn_json.Object [
+            "name", str o.orch_name;
+            "source", str o.orch_source;
+            "package", str o.orch_package;
+            "trigger_kinds", Cn_json.Array (List.map str o.orch_trigger_kinds);
+          ]) c.body.orchestrators);
     ]);
     "medium", Cn_json.Object [
       "zones", Cn_json.Array (List.map (fun (e : zone_entry) ->
