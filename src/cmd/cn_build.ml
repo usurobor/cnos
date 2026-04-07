@@ -13,8 +13,6 @@
 
 (* === Types === *)
 
-(** Parsed source declaration from cn.package.json.
-    Maps asset categories to paths relative to src/agent/<category>/. *)
 (** Command declaration: name -> (entrypoint relative to package root, summary). *)
 type command_decl = {
   cmd_name : string;
@@ -22,6 +20,8 @@ type command_decl = {
   summary : string;
 }
 
+(** Parsed source declaration from cn.package.json.
+    Maps asset categories to paths relative to src/agent/<category>/. *)
 type source_decl = {
   doctrine : string list;
   mindsets : string list;
