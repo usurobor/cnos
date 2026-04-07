@@ -182,6 +182,14 @@ parent: cdd
 ---
 ```
 
+**Lifecycle:**
+
+1. **Install:** `cn deps restore` extracts package → runtime scans exposed skills' frontmatter → trigger keywords added to agent's activation table, referencing the orchestrator skill
+2. **Activate:** Agent encounters trigger keyword → runtime looks up activation table → loads the orchestrator skill → orchestrator delegates to internal sub-skills as needed
+3. **Uninstall:** Package directory removed → runtime rebuilds activation table from remaining packages → trigger keywords from uninstalled package disappear
+
+The activation table is derived, not configured. It is always the union of trigger keywords from all exposed skills in all installed packages. No manual maintenance.
+
 **Result:**
 - Agent sees one skill per concern (e.g., "cdd"), not N sub-skills
 - Activation table has one entry per exposed skill
