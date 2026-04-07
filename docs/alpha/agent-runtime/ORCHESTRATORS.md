@@ -352,22 +352,57 @@ F# computation expressions and YAML remain as alternative authoring surfaces for
 
 Do not make natural language compile directly to runtime IR. That bundles planning, normalization, capability selection, control-flow construction, and validation into one implicit step.
 
-### 7.3 Canonical runtime form
+### 7.3 Three-layer execution model
 
-The canonical runtime artifact is:
-- `cn.orchestrator.v1`
+CTB is the source language, not the runtime IR. Three layers, each with a distinct role:
 
-It is a compiled JSON manifest. Humans do not need to author JSON directly if they do not want to. The runtime validates JSON.
+| Layer | What | Form | Deterministic? |
+|-------|------|------|---------------|
+| **CTB program** | Source / authoring language | `.ctb` source | Yes — pure, equation-only |
+| **Effect Plan** | Semantic IR / runtime contract | JSON (`cn.effect-plan.v1`) | Yes — pure data, hashable, verifiable |
+| **Runtime bridge** | Executor with capabilities | `cn` binary | No — impure at effect boundaries |
 
-### 7.4 Why JSON as canonical IR
+```
+CTB source  →  compile/evaluate  →  Effect Plan (JSON)  →  runtime bridge execution
+  (pure)          (pure)              (pure data)           (capability-gated)
+```
 
-Use JSON for the canonical IR because:
-- package manifests are already JSON
-- typed ops manifests are already JSON
-- runtime validation already trusts manifests, not authors
-- generated machine artifacts benefit from rigid structure
+The Effect Plan is the actual IR — pure data, capability-declarable, runtime-interpretable, reproducible. CTB programs evaluate to effect plans. The runtime bridge interprets effect plans under explicit capability policy. Peers can re-run the same CTB program and get the same plan.
 
-YAML is acceptable as a source form. JSON is the canonical compiled form.
+This matches CTB-v4.0.0-VISION.md exactly:
+- CTB programs are equations over triadic terms (§3.1)
+- A CTB "skill" is a pure function `State → EffectPlan` (§4)
+- The runtime bridge interprets the plan with explicit capabilities (§4)
+- The runtime becomes a driver, not the source of truth
+
+### 7.4 Why JSON as the wire/storage encoding
+
+The Effect Plan is the semantic IR. JSON is its serialized wire/storage form:
+- Package manifests are already JSON
+- Typed ops manifests are already JSON
+- Runtime validation trusts the serialized plan, not the source language
+- Machine artifacts benefit from rigid structure
+- Plans are hashable and diffable in JSON
+
+JSON is not the authoring surface — CTB is. JSON is one layer down: the compiled, validated, transportable form of the effect plan.
+
+### 7.5 What CTB is for cnos
+
+CTB is the programmable skill language for cnos. The CTB vision doc says it explicitly:
+- "Skills are programs, not prose" (§1)
+- "A shared skills layer written in Markdown or prose cannot be executed consistently" (§1)
+- "We need a skills substrate where peers can re-run the same program and get the same plan" (§1)
+
+This means:
+- **Markdown skills** remain as human-facing judgment docs (CAP, review, design)
+- **CTB programs** become the canonical source for executable workflow logic / orchestrators
+- **Commands** dispatch into CTB where appropriate — `cn daily` → CTB program → Effect Plan → runtime execution
+
+The execution path:
+1. Command selected explicitly by operator
+2. Command may invoke a CTB orchestrator
+3. CTB produces effect plan (pure data)
+4. Runtime bridge executes under capability policy
 
 ---
 
