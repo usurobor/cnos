@@ -323,25 +323,32 @@ Three authoring surfaces, one canonical IR:
 
 | Surface | Author | Strength |
 |---------|--------|----------|
+| **CTB (Coherent Triadic Binding)** | LLMs + Humans | Deterministic, expression-only, effects-as-data. Small surface area, canonical formatting, LLM-friendly. See [CTB-v4.0.0-VISION.md](../ctb/CTB-v4.0.0-VISION.md) |
 | **F# computation expressions** | Humans | Sequencing, binding, branching, effect boundaries — compact and type-safe |
 | **YAML** | Humans | Simple workflows, low ceremony |
-| **ETB (Event-Task-Binding)** | LLMs | Compact, typed, low-ambiguity DSL optimized for constrained generation |
 
 All three compile to the same canonical IR (`cn.orchestrator.v1` JSON).
 
 ```
-F# CE / YAML / ETB  →  compiler  →  cn.orchestrator.v1 JSON  →  runtime
+CTB / F# CE / YAML  →  compiler  →  cn.orchestrator.v1 JSON  →  runtime
   (authoring)            (build)         (canonical IR)          (execution)
 ```
 
-**ETB** is the missing middle layer between natural language intent and the JSON IR. It expresses events, tasks/steps, bindings, and branches in a form LLMs can generate more reliably than raw JSON or raw F#. The runtime never sees ETB — it only validates and executes compiled JSON.
+**CTB** is the canonical authoring language for orchestrators. A CTB program evaluates to an **Effect Plan** — a pure data term describing what should happen — which maps directly to the orchestrator IR step graph. This is the connection between CTB (§4: separation of logic and effects) and the orchestrator runtime: CTB programs produce effect plans, the runtime executes them with explicit capabilities.
 
-**Natural language → ETB** is a future planner step, not a v1 requirement. The safe sequence:
-1. Define canonical JSON IR
-2. Define ETB compact DSL
-3. Let LLMs generate ETB
-4. Compile ETB to IR
-5. Later: natural language → ETB as a planner step
+CTB is the preferred authoring surface because it is:
+- **Deterministic** — same inputs, same outputs (CTB-v4.0.0-VISION §3.1)
+- **Misuse-resistant** — no ambiguous clause overlap, no hidden state (§3.1.3)
+- **LLM-friendly** — small surface area, predictable syntax, witness-based errors (§3.1.5)
+- **Effects-as-data** — programs return effect plans, not side effects (§3.1.4)
+
+F# computation expressions and YAML remain as alternative authoring surfaces for humans who prefer them. All compile to the same IR.
+
+**Natural language → CTB** is a future planner step, not a v1 requirement. The safe sequence:
+1. Define canonical JSON IR (#174)
+2. Build CTB → IR compiler (#175)
+3. Let LLMs generate CTB directly
+4. Later: natural language → CTB as a planner step
 
 Do not make natural language compile directly to runtime IR. That bundles planning, normalization, capability selection, control-flow construction, and validation into one implicit step.
 
