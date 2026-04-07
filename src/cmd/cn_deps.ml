@@ -386,16 +386,6 @@ let list_installed ~hub_path =
 
 (* === Doctor === *)
 
-(** Verify installed packages match lockfile. Returns Ok () or Error with
-    list of issues found.
-
-    Validates the full package system chain:
-    - desired state (manifest) exists and is parseable
-    - resolved state (lockfile) exists and is parseable
-    - manifest packages are all represented in lockfile
-    - lockfile packages are all installed on disk
-    - installed package metadata (cn.package.json) is valid
-    - integrity hashes match (when set) *)
 (** Check whether a vendored package directory contains a valid package
     (cn.package.json present and parseable with a name field). Used by
     `cn deps vendor` for offline-first short-circuit (#155 AC2) and by
@@ -410,6 +400,16 @@ let is_valid_vendored_package pkg_dir =
       | Ok json -> Cn_json.get_string "name" json <> None
       | Error _ -> false
 
+(** Verify installed packages match lockfile. Returns Ok () or Error with
+    list of issues found.
+
+    Validates the full package system chain:
+    - desired state (manifest) exists and is parseable
+    - resolved state (lockfile) exists and is parseable
+    - manifest packages are all represented in lockfile
+    - lockfile packages are all installed on disk
+    - installed package metadata (cn.package.json) is valid
+    - integrity hashes match (when set) *)
 let doctor ~hub_path =
   let issues = ref [] in
   let add msg = issues := msg :: !issues in
