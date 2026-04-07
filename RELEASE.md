@@ -1,28 +1,50 @@
-# RELEASE.md
+# cnos v3.34.0
 
-## Outcome
+## Headline
 
-Coherence delta: C_Σ pending · **Level:** `L7`
+Package artifact distribution replaces git-based restore. Commands become a package content class.
 
-Installer rewritten from 80-line bootstrap hack to production-grade product surface. Checksum verification added end-to-end (workflow generates SHA-256, installer verifies). Version detection hardened against API format changes.
+## What changed
 
-## Why it matters
+### Package distribution (#167)
+- `cn deps restore` now downloads versioned tarballs over HTTPS instead of fetching git commits
+- Package index (`packages/index.json`) resolves name+version to URL+SHA-256
+- Lockfile v2: `{name, version, sha256}` — no git transport metadata
+- All `source_kind`/`rev`/`subdir` logic deleted from `cn_deps.ml`
+- `scripts/build-packages.sh` generates tarballs and index at release time
 
-The installer is the first contact surface for new users. Silent failures during install (wrong platform, truncated download, corrupted binary) erode trust before the tool is even used. A robust installer with actionable errors, integrity verification, and atomic writes sets the right expectation for the tool itself.
+### Commands content class (#167)
+- `commands` is the 7th package content class in `cn.package.json`
+- `cn_command.ml`: discovery + dispatch (built-in > repo-local > package)
+- `cn help` lists external commands with source and summary
+- `cn doctor` validates command integrity (duplicates, missing entrypoints, non-executable, malformed)
+- `.cn/commands/` repo-local commands discoverable
 
-## Changed
+### CDD process improvements (#167)
+- §2.5a: delegated implementation handoff protocol + self-verification gate
+- CDD.md §5.3: step 6f (delegated handoff) in artifact manifest
+- Architecture-evolution skill §5: five L7 diagnostic patterns
 
-- **install.sh rewrite** (#158): UX helpers (ok/warn/fail with color), NO_COLOR support, cleanup trap, platform detection with actionable rejection, atomic install (same-filesystem mktemp+mv), minimum size validation, SHA-256 checksum verification against release checksums.txt.
-- **Release workflow**: generates checksums.txt (SHA-256 per artifact) and uploads alongside binaries. Both release paths (curated RELEASE.md and auto-generated) include checksums.
-- **Version detection**: replaced GitHub API JSON parsing with HTTP redirect-based detection (`/releases/latest` Location header). No jq/sed on JSON required.
+### Also included
+- #155: vendor offline-first short-circuit, manual vendor recognition, help surface
+- #161: self-update checksum verification
+- #146: review findings on hardcoded-paths removal
+- Review PRE-GATE: verify branch is unmerged before reviewing
+- Release tooling: `cn release` CLI removed, replaced by `scripts/release.sh`
 
-## Validation
+## Breaking changes
 
-- `shellcheck install.sh` — clean (no warnings)
-- Checksum verification tested: sha256sum (Linux) and shasum -a 256 (macOS) paths both covered
-- Graceful degradation: missing checksums.txt or missing hash tool produces warning, not failure
+- Lockfile format changed from `cn.deps.lock.v1` to `cn.lock.v2`. Existing lockfiles must be regenerated (`cn deps restore` will create a new one).
+- `cn release` CLI command removed. Use `scripts/release.sh` instead.
 
-## Known Issues
+## Design documents
 
-- Checksum verification requires a release with checksums.txt uploaded — first release after this change will be the first to include them.
-- install.sh cannot verify its own integrity (bootstrap trust problem) — users must trust the raw.githubusercontent.com fetch.
+- `docs/alpha/package-system/PACKAGE-ARTIFACTS.md` v0.5.0 — artifact-first distribution, NuGet model
+- `docs/alpha/agent-runtime/ORCHESTRATORS.md` v0.1.0 — follow-up design for #170
+
+## Upgrade
+
+```sh
+cn update
+cn deps restore   # regenerates lockfile in v2 format
+```
