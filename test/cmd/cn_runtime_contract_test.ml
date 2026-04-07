@@ -381,7 +381,8 @@ let%expect_test "to_json: package entries include sha256 (AC7, #167)" =
         ) pkgs
       | _ -> print_endline "packages not array");
   [%expect {|
-    cnos.core: sha256=true |}]
+    cnos.core: sha256=true
+    cnos.eng: sha256=false |}]
 
 let%expect_test "to_json: exec_enabled reflects shell_config" =
   with_test_hub (fun hub ->
