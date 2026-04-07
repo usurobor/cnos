@@ -160,6 +160,24 @@ For substantial changes:
 
 Do not invert the order casually. Each step should reduce uncertainty for the next.
 
+### 2.5a Delegated implementation handoff
+
+When implementation is delegated to another agent (Claude Code, sub-agent, human contractor), the prompt or brief is the contract. The receiving agent does not have session context, prior cycle learnings, or loaded skills.
+
+The handoff must include:
+
+1. **Active skills by name + location** — not just "follow best practices." The implementer must be told which SKILL.md files constrain the work and where to find them.
+2. **Test requirements per module** — which new modules need tests, what coverage shape (unit, integration, expect-test), and what invariants the tests must prove. "Run dune runtest" is a gate, not a test spec.
+3. **Engineering conventions from prior cycles** — any relevant precedent that the implementer would not know. Examples: "v3.32.0 removed all bare `with _ ->` catches — do not reintroduce them," "lockfile types live in cn_deps.ml, not cn_lib.ml."
+4. **Artifact order** — the handoff must specify tests-before-code (§2.5) or explicitly justify inversion. A prompt that describes only code stages implicitly inverts the pipeline.
+
+**Why this is mechanical, not judgment:** a checklist on the handoff, not a review finding after the fact. Two agents writing the same handoff should produce the same constraints. Review catching convention violations that the handoff should have prevented is a process bug — the gap is in the handoff, not the review.
+
+Failure mode: the handoff describes *what to build* but not *how the project constrains building it*. The implementer produces correct features with wrong engineering conventions.
+
+  - ❌ "Build HTTP restore, command discovery, and doctor validation. Run dune build before committing."
+  - ✅ "Build HTTP restore, command discovery, and doctor validation. Active skills: ocaml (src/agent/skills/eng/ocaml/SKILL.md — §3.1: no bare `with _ ->`, use Result types), testing (test each new module with ppx_expect). Convention: v3.32.0 removed all silent exception swallowing — do not reintroduce. Artifact order: tests before code per CDD §2.5."
+
 ### 2.6 Review
 
 Use CLP. Ask for:
