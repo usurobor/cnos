@@ -188,6 +188,73 @@ parent: cdd
 - Sub-skills are private implementation — loaded by the orchestrator, not by the runtime
 - Install/uninstall a package → activation keywords appear/disappear automatically
 
+#### 1.4 Worked example: CDD skill package
+
+End-to-end flow from package install to skill execution.
+
+**Package structure on disk** (`cnos.core@3.34.0/`):
+
+```
+skills/
+└── cdd/
+    ├── SKILL.md              ← orchestrator (exposed in manifest)
+    ├── design/
+    │   └── SKILL.md          ← sub-skill (internal, parent: cdd)
+    ├── review/
+    │   └── SKILL.md
+    ├── release/
+    │   └── SKILL.md
+    ├── post-release/
+    │   └── SKILL.md
+    ├── plan/
+    │   └── SKILL.md
+    └── issue/
+        └── SKILL.md
+```
+
+**Manifest** (`cn.package.json`):
+
+```json
+{
+  "sources": {
+    "skills": ["cdd"]
+  }
+}
+```
+
+One entry. Sub-skills not listed — they are internal to the CDD skill.
+
+**Orchestrator frontmatter** (`cdd/SKILL.md`):
+
+```yaml
+---
+name: cdd
+description: Coherence-Driven Development — full lifecycle from observed gap to closed cycle.
+triggers: [review, PR, release, issue, design, plan, assess, post-release, ship, tag, approve]
+---
+```
+
+**Sub-skill frontmatter** (`cdd/review/SKILL.md`):
+
+```yaml
+---
+name: review
+description: CLP review protocol for CDD step 8.
+parent: cdd
+---
+```
+
+**Loading sequence:**
+
+1. `cn deps restore` installs `cnos.core@3.34.0` → extracts to `.cn/vendor/packages/`
+2. Runtime scans exposed skills' frontmatter → builds activation table: `{review, PR, release, ...} → cdd`
+3. Agent encounters "review this PR"
+4. Runtime matches "review" → loads `skills/cdd/SKILL.md`
+5. CDD SKILL.md §5 delegation table: review = pipeline step 8 → load `cdd/review/SKILL.md`
+6. Agent loads the sub-skill, executes review within CDD's pipeline context
+
+The agent never loads `cdd/review` directly. It always enters through CDD. CDD provides the pipeline context (what step, what came before, what comes next). The sub-skill provides step-level execution detail.
+
 The package artifact is the normal distribution unit for released packages.
 
 ### 2. Package index
