@@ -14,7 +14,10 @@
 (* === Types === *)
 
 (** Parsed source declaration from cn.package.json.
-    Maps asset categories to paths relative to src/agent/<category>/. *)
+    Maps asset categories to paths relative to src/agent/<category>/.
+    Commands are authored directly under packages/<name>/commands/
+    and are not assembled by cn build; they are consumed by
+    Cn_command during dispatch and are ignored here. *)
 type source_decl = {
   doctrine : string list;
   mindsets : string list;
@@ -147,8 +150,11 @@ let copy_source ~agent_root ~pkg_dir ~category entry =
       copy_tree src dst
   end
 
-(** Clean generated content from a package directory.
-    Preserves cn.package.json, removes doctrine/, mindsets/, skills/. *)
+(** Clean built content from a package directory. Removes every
+    content-class subdirectory that cn build assembles from
+    src/agent/ (doctrine, mindsets, skills, extensions, templates).
+    Preserves cn.package.json and any hand-authored subdirectories
+    such as commands/. *)
 let clean_package_dir pkg_dir =
   List.iter (fun sub ->
     let path = Cn_ffi.Path.join pkg_dir sub in

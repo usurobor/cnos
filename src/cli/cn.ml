@@ -41,10 +41,29 @@ let () =
 
   match parse_command cmd_args with
   | None ->
-      (match cmd_args with cmd :: _ -> print_endline (Cn_fmt.fail (Printf.sprintf "Unknown command: %s" cmd)) | [] -> ());
-      print_endline help_text;
-      Cn_ffi.Process.exit 1
-  | Some Help -> print_endline help_text
+      (* No built-in matched: try external command discovery
+         (repo-local, then vendored package). parse_command returns
+         Some Help on [], so cmd_args is guaranteed non-empty here. *)
+      let cmd_name, rest = match cmd_args with
+        | c :: r -> c, r
+        | [] -> assert false
+      in
+      let unknown () =
+        print_endline (Cn_fmt.fail
+          (Printf.sprintf "Unknown command: %s" cmd_name));
+        Cn_help.run_help ();
+        Cn_ffi.Process.exit 1
+      in
+      (match Cn_hub.discover (Cn_ffi.Process.cwd ()) with
+       | None -> unknown ()
+       | Some placement ->
+           let hub_path = placement.Cn_placement.hub_root in
+           match Cn_command.find ~hub_path cmd_name with
+           | None -> unknown ()
+           | Some cmd ->
+               let code = Cn_command.dispatch cmd ~hub_path ~args:rest in
+               Cn_ffi.Process.exit code)
+  | Some Help -> Cn_help.run_help ()
   | Some Version -> Printf.printf "cn %s (%s)\n" version cnos_commit
   | Some Update ->
       (match Cn_hub.discover (Cn_ffi.Process.cwd ()) with
@@ -72,7 +91,7 @@ let () =
           let name = derive_name hub_path in
           match cmd with
           | Status -> Cn_system.run_status hub_path name
-          | Doctor -> Cn_system.run_doctor hub_path
+          | Doctor -> Cn_doctor.run_doctor ~hub_path
           | Inbox Inbox.Check -> Cn_mail.inbox_check hub_path name
           | Inbox Inbox.Process -> Cn_mail.inbox_process hub_path
           | Inbox Inbox.Flush -> Cn_mail.inbox_flush hub_path name

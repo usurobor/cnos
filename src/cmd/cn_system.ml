@@ -357,7 +357,8 @@ let setup_assets hub_path =
     end
   in
 
-  (* Write lockfile from manifest (pins current rev + subdir) *)
+  (* Write lockfile from manifest (resolves name+version to sha256
+     via the package index). *)
   if not (Cn_ffi.Fs.exists (Cn_ffi.Path.join hub_path ".cn/deps.lock.json")) then begin
     (match Cn_deps.lockfile_for_manifest manifest with
      | Ok lock ->

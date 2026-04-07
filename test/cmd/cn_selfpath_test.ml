@@ -74,13 +74,15 @@ let%expect_test "cnos_repo: build-time value is owner/repo format" =
   |}]
 
 (* ============================================================
-   Invariant 4: cn_deps derives source from cnos_repo
+   Invariant 4: cn_deps package_index_url derives from cnos_repo
    ============================================================ *)
 
-let%expect_test "default_first_party_source: derived from cnos_repo" =
-  let source = Cn_deps.default_first_party_source in
-  let expected = Printf.sprintf "https://github.com/%s.git" Cn_lib.cnos_repo in
-  Printf.printf "matches = %b\n" (source = expected);
+let%expect_test "package_index_url: derived from cnos_repo" =
+  let url = Cn_deps.package_index_url () in
+  let expected = Printf.sprintf
+    "https://raw.githubusercontent.com/%s/main/packages/index.json"
+    Cn_lib.cnos_repo in
+  Printf.printf "matches = %b\n" (url = expected);
   [%expect {| matches = true |}]
 
 (* ============================================================
