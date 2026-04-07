@@ -83,7 +83,17 @@ Replaces the flat `workspace` block with **zone-classified paths**:
   },
   "cognition": {
     "installed_packages": [...],
-    "active_overrides": { "doctrine": [], "mindsets": [], "skills": [] }
+    "active_overrides": { "doctrine": [], "mindsets": [], "skills": [] },
+    "activation_index": {
+      "skills": [
+        {
+          "id": "cdd",
+          "package": "cnos.core",
+          "summary": "Coherence-Driven Development...",
+          "triggers": ["review", "release", "design"]
+        }
+      ]
+    }
   },
   "body": {
     "capabilities": {
@@ -94,7 +104,13 @@ Replaces the flat `workspace` block with **zone-classified paths**:
       "max_passes": 5,
       "budgets": { ... }
     },
-    "peers": ["sigma"]
+    "peers": ["sigma"],
+    "commands": [
+      { "name": "daily", "source": "package", "package": "cnos.core", "summary": "Daily reflection" }
+    ],
+    "orchestrators": [
+      { "name": "daily-review", "source": "package", "package": "cnos.core", "trigger_kinds": ["command", "schedule"] }
+    ]
   },
   "medium": {
     "zones": [
