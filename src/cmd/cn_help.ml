@@ -11,10 +11,11 @@ let print_external_section ~hub_path =
     print_endline "";
     print_endline "External commands:";
     cmds |> List.iter (fun (c : Cn_command.external_cmd) ->
-      Printf.printf "  cn %-16s  [%s] %s\n"
-        c.name
-        (Cn_command.source_label c.source)
-        c.summary)
+      let label = Cn_command.source_label c.source in
+      if c.summary = "" then
+        Printf.printf "  cn %-16s  [%s]\n" c.name label
+      else
+        Printf.printf "  cn %-16s  [%s] %s\n" c.name label c.summary)
   end
 
 (** Print the help text. If we are inside a hub, also list external

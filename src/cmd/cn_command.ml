@@ -22,6 +22,7 @@ type external_cmd = {
   name : string;
   source : source;
   entrypoint_path : string;  (** absolute path on disk *)
+  package_root : string;     (** hub root for Repo_local; package dir for Package *)
   summary : string;
 }
 
@@ -47,7 +48,8 @@ let discover_repo_local ~hub_path =
             Some { name;
                    source = Repo_local;
                    entrypoint_path = path;
-                   summary = Printf.sprintf "repo-local: %s" entry }
+                   package_root = hub_path;
+                   summary = "" }
           else None
         else None)
       |> List.sort (fun a b -> compare a.name b.name)
@@ -96,6 +98,7 @@ let discover_package ~hub_path =
                   { name;
                     source = Package pkg_name;
                     entrypoint_path = Cn_ffi.Path.join pkg_dir entrypoint;
+                    package_root = pkg_dir;
                     summary }))
     with _ -> []
 
@@ -113,46 +116,42 @@ let find ~hub_path name =
 
 (* === Dispatch === *)
 
-(** Execute an external command with argv-style args. Inherits stdio.
-    Returns the child exit status. Exits the parent with that status
-    on success; on spawn failure prints an error and returns non-zero. *)
+(** Execute an external command. Inherits the parent's stdio; returns
+    the child's exit status. Exit codes follow shell conventions: 126
+    for "found but not executable", 127 for "entrypoint missing", and
+    the child's own code on successful spawn. *)
 let dispatch (cmd : external_cmd) ~hub_path ~args =
   if not (Sys.file_exists cmd.entrypoint_path) then begin
-    Printf.eprintf "cn: command %s: entrypoint missing: %s\n"
+    Printf.eprintf "cn: %s: entrypoint missing: %s\n"
       cmd.name cmd.entrypoint_path;
-    2
-  end else begin
-    (* Unix.access checks X_OK; fall through on failure with a clearer msg. *)
-    (try Unix.access cmd.entrypoint_path [Unix.X_OK]
-     with Unix.Unix_error (_, _, _) ->
-       Printf.eprintf "cn: command %s: entrypoint not executable: %s\n\
-                       hint: chmod +x %s\n"
-         cmd.name cmd.entrypoint_path cmd.entrypoint_path);
-    let pkg_root = match cmd.source with
-      | Package _ -> Filename.dirname cmd.entrypoint_path
-      | Repo_local -> hub_path
-    in
-    let env = Array.append (Unix.environment ()) [|
-      "CN_HUB_PATH=" ^ hub_path;
-      "CN_PACKAGE_ROOT=" ^ pkg_root;
-      "CN_COMMAND_NAME=" ^ cmd.name;
-    |] in
-    let argv = Array.of_list (cmd.entrypoint_path :: args) in
-    try
-      let pid = Unix.create_process_env
-        cmd.entrypoint_path argv env
-        Unix.stdin Unix.stdout Unix.stderr in
-      let _, status = Unix.waitpid [] pid in
-      (match status with
-       | Unix.WEXITED c -> c
-       | Unix.WSIGNALED s -> 128 + s
-       | Unix.WSTOPPED s -> 128 + s)
-    with
-    | Unix.Unix_error (e, fn, _) ->
-        Printf.eprintf "cn: command %s: %s failed: %s\n"
-          cmd.name fn (Unix.error_message e);
-        2
-  end
+    127
+  end else
+    match Unix.access cmd.entrypoint_path [Unix.X_OK] with
+    | exception Unix.Unix_error _ ->
+        Printf.eprintf
+          "cn: %s: entrypoint not executable: %s (hint: chmod +x)\n"
+          cmd.name cmd.entrypoint_path;
+        126
+    | () ->
+        let env = Array.append (Unix.environment ()) [|
+          "CN_HUB_PATH=" ^ hub_path;
+          "CN_PACKAGE_ROOT=" ^ cmd.package_root;
+          "CN_COMMAND_NAME=" ^ cmd.name;
+        |] in
+        let argv = Array.of_list (cmd.entrypoint_path :: args) in
+        (try
+           let pid = Unix.create_process_env
+             cmd.entrypoint_path argv env
+             Unix.stdin Unix.stdout Unix.stderr in
+           let _, status = Unix.waitpid [] pid in
+           (match status with
+            | Unix.WEXITED c -> c
+            | Unix.WSIGNALED s -> 128 + s
+            | Unix.WSTOPPED s -> 128 + s)
+         with Unix.Unix_error (e, fn, _) ->
+           Printf.eprintf "cn: %s: %s failed: %s\n"
+             cmd.name fn (Unix.error_message e);
+           2)
 
 (* === Doctor validation === *)
 

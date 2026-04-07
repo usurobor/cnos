@@ -141,8 +141,6 @@ let write_lockfile ~hub_path (l : lockfile) =
   ] in
   Cn_ffi.Fs.write (lockfile_path hub_path) (Cn_json.to_string json ^ "\n")
 
-let empty_lockfile = { schema = "cn.lock.v2"; packages = [] }
-
 (* === Package index === *)
 
 (** Parse a cn.package-index.v1 JSON document. *)
