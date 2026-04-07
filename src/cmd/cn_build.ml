@@ -15,12 +15,20 @@
 
 (** Parsed source declaration from cn.package.json.
     Maps asset categories to paths relative to src/agent/<category>/. *)
+(** Command declaration: name -> (entrypoint relative to package root, summary). *)
+type command_decl = {
+  cmd_name : string;
+  entrypoint : string;
+  summary : string;
+}
+
 type source_decl = {
   doctrine : string list;
   mindsets : string list;
   skills : string list;
   extensions : string list;
   templates : string list;
+  commands : command_decl list;
 }
 
 type package_manifest = {
@@ -55,6 +63,20 @@ let parse_string_array json key =
         | _ -> None)
   | _ -> []
 
+(** Parse a "commands" object into a list of command_decl.
+    Schema: { "<name>": { "entrypoint": "...", "summary": "..." }, ... }
+    Missing entrypoint or summary => entry skipped. *)
+let parse_commands src_json =
+  match Cn_json.get "commands" src_json with
+  | Some (Cn_json.Object fields) ->
+      fields |> List.filter_map (fun (cmd_name, cmd_json) ->
+        match Cn_json.get_string "entrypoint" cmd_json,
+              Cn_json.get_string "summary" cmd_json with
+        | Some entrypoint, Some summary ->
+            Some { cmd_name; entrypoint; summary }
+        | _ -> None)
+  | _ -> []
+
 let parse_sources json =
   match Cn_json.get "sources" json with
   | None -> None
@@ -65,6 +87,7 @@ let parse_sources json =
         skills = parse_string_array src_json "skills";
         extensions = parse_string_array src_json "extensions";
         templates = parse_string_array src_json "templates";
+        commands = parse_commands src_json;
       }
 
 let parse_package_json path =

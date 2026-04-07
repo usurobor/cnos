@@ -57,6 +57,7 @@
     "templates": [
       "SOUL.md",
       "USER.md"
-    ]
+    ],
+    "commands": {}
   }
 }
