@@ -565,7 +565,8 @@ let%expect_test "to_json: orchestrators include declared entries and skip malfor
       | _ -> print_endline "orchestrators not array");
   [%expect {|
     count=1
-    name=daily-review pkg=cnos.core trigger_kinds=[command,schedule] |}]
+    name=daily-review pkg=cnos.core trigger_kinds=[command,schedule]
+    cn: runtime_contract: package cnos.core: orchestrator entry missing 'name' field, skipping |}]
 
 let%expect_test "to_json: orchestrators empty when sources.orchestrators absent (#173, F4)" =
   with_test_hub (fun hub ->
