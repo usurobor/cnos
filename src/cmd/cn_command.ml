@@ -1,4 +1,4 @@
-(** cn_command.ml — Discovery and dispatch for external CLI commands (#167).
+(** cn_command.ml — Discovery and dispatch for external CLI commands.
 
     External commands live in two places:
     - Repo-local: .cn/commands/cn-<name> (executable file inside the hub)
@@ -10,8 +10,8 @@
       2. Repo-local (.cn/commands/cn-<name>)
       3. Vendored package command
 
-    When more than one external command of the *same* layer claims the
-    same name, that is a doctor error. Dispatch honors the first match
+    When more than one external command at the *same* layer claims the
+    same name, that is a doctor error. Dispatch honours the first match
     in precedence order; doctor reports conflicts. *)
 
 type source =

@@ -33,7 +33,7 @@ It answers:
 A package content class is a named category of assets that the build system
 knows how to copy from `src/agent/<class>/` into `packages/<name>/<class>/`.
 
-### 1.1 Current set (7 classes)
+### 1.1 Content classes
 
 | Class | Copy mode | Source location | Declared in manifest | Runtime role |
 |-------|-----------|-----------------|---------------------|--------------|
@@ -45,15 +45,17 @@ knows how to copy from `src/agent/<class>/` into `packages/<name>/<class>/`.
 | commands | declared entries | `packages/<name>/commands/` | `"commands": { "<name>": { ... } }` | Operator-facing CLI commands |
 | (metadata) | implicit | `packages/<name>/` | `cn.package.json` | Package identity, version, engine constraint |
 
-**Commands** differ from the other content classes in two ways:
+Most content classes are copied from `src/agent/<class>/` by `cn build`.
+The `commands` class is the exception: command files are authored
+directly under `packages/<name>/commands/<file>` and ship with the
+package tree. The manifest entry for a command is a JSON object
+mapping the command name to `{ entrypoint, summary }`, where
+`entrypoint` is a file path relative to the package root
+(e.g. `commands/cn-daily`) and `summary` is a one-line description
+shown by `cn help`.
 
-1. They are **not derived from `src/agent/`** — command files are authored directly under `packages/<name>/commands/<file>` and ship with the package. `cn build` does not copy them.
-2. They are declared as an **object**, not a string list: each entry maps a command name to `{ entrypoint, summary }`, where `entrypoint` is a file path relative to the package root (e.g. `commands/cn-daily`) and `summary` is a one-line description used by `cn help`.
-
-See §7 ("Command discovery") for dispatch precedence, and `PACKAGE-ARTIFACTS.md` for the full design trace.
-
-Metadata (`cn.package.json`) is not a source-declared content class. It is
-always present and not copied from `src/agent/`.
+Metadata (`cn.package.json`) is not a source-declared content class.
+It is always present and not copied from `src/agent/`.
 
 ### 1.2 Copy modes
 
@@ -127,18 +129,25 @@ spec/SOUL.md (in hub)
 
 ### 2.4 Install (cn deps restore)
 
-Released first-party packages are distributed as **versioned tarball artifacts** over HTTPS, not by fetching repository objects. The flow is:
+First-party packages are distributed as versioned tarball artifacts
+published to GitHub releases. The restore flow is:
 
-1. Read the lockfile (`.cn/deps.lock.json`, schema `cn.lock.v2`) — name + version + sha256 per package
-2. Look the name+version up in the **package index** (`packages/index.json`, schema `cn.package-index.v1`) for a URL
+1. Read the lockfile (`.cn/deps.lock.json`) — name + version + sha256 per package
+2. Look the name+version up in the package index (`packages/index.json`) for a URL
 3. Download `<name>-<version>.tar.gz` over HTTPS
 4. Verify the SHA-256 against the lockfile entry
 5. Extract into `.cn/vendor/packages/<name>@<version>/`
 6. Validate the extracted `cn.package.json`
 
-No git protocol is involved in the normal restore path. The package index is the resolution authority; the lockfile is the integrity authority. Hosting can move (the lockfile only stores name + version + hash, not URLs) by republishing a new index.
+The package index is the resolution authority (name+version → URL);
+the lockfile is the integrity authority (name+version → sha256).
+Hosting can move by republishing a new index without touching any
+hub's lockfile.
 
-Local development uses `cn deps restore --from-local <path>` or per-package overrides; this is the only escape hatch in v1. See `PACKAGE-ARTIFACTS.md` for the full rationale and decision trace.
+When `cn deps restore` runs inside a cnos checkout, first-party
+packages are copied directly from the local source tree after a
+freshness check against `src/agent/`. This is the development path;
+consumers always go through the index.
 
 ---
 
@@ -270,7 +279,6 @@ identity templates. The set is intentionally closed:
 | v3.4.0 | Package system introduced (doctrine, mindsets, skills) |
 | v3.18.0 | Extensions added as 4th content class |
 | v3.24.0 | Templates added as 5th declared content class (#119) |
-| v3.34.0 | Commands added as 6th declared content class; artifact-first distribution (#167) |
 
 ---
 

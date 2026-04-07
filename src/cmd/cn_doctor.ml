@@ -1,7 +1,7 @@
-(** cn_doctor.ml — Doctor command thin wrapper (#167).
+(** cn_doctor.ml — Doctor command entry point.
 
-    Adds package-command integrity checks (Cn_command.validate) on top
-    of the existing system doctor in Cn_system.run_doctor. *)
+    Runs the system doctor (Cn_system.run_doctor) and then the
+    external-command integrity checks from Cn_command.validate. *)
 
 let run_doctor ~hub_path =
   Cn_system.run_doctor hub_path;
