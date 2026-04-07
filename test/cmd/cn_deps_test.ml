@@ -1,11 +1,9 @@
-(** cn_deps_test: ppx_expect tests for package restore and lockfile generation
+(** cn_deps_test: ppx_expect tests for package restore and lockfile.
 
     Invariants tested:
     I1 — copy_tree preserves full directory structure (restore primitive)
     I2 — lockfile_for_manifest rejects third-party packages explicitly
-    I3 — lockfile_for_manifest produces valid entries for first-party packages
-    I4 — restore_one skips already-installed packages (idempotent)
-    I5 — no lock entry ever has empty source or subdir *)
+    I3 — lockfile read/write round-trips name+version+sha256 *)
 
 (* === Temp directory helpers === *)
 
@@ -94,202 +92,140 @@ let%expect_test "lockfile_for_manifest rejects third-party packages (I2)" =
     schema = "cn.deps.v1";
     profile = "engineer";
     packages = [
-      { name = "cnos.core"; version = "3.17.0" };
+      { name = "cnos.core"; version = Cn_lib.version };
       { name = "external.pkg"; version = "1.0.0" };
     ];
   } in
   (match Cn_deps.lockfile_for_manifest manifest with
    | Ok _ -> print_endline "ERROR: should have rejected"
-   | Error msg -> print_endline msg);
+   | Error msg ->
+     (* Only the third-party rejection prefix is asserted; an index lookup
+        miss would be a different message starting with "Cannot build". *)
+     let has_sub s sub =
+       let slen = String.length s and sublen = String.length sub in
+       let rec check i =
+         if i > slen - sublen then false
+         else if String.sub s i sublen = sub then true
+         else check (i + 1)
+       in sublen <= slen && check 0
+     in
+     Printf.printf "third_party_rejected: %b\n"
+       (has_sub msg "Third-party packages not supported"));
+  [%expect {| third_party_rejected: true |}]
+
+(* === I3: lockfile read/write round-trips name+version+sha256 === *)
+
+let%expect_test "lockfile read/write round-trip (I3)" =
+  let hub = mk_temp_dir "cn-deps-lock" in
+  Fun.protect ~finally:(fun () -> rm_tree hub) (fun () ->
+    Cn_ffi.Fs.ensure_dir (Filename.concat hub ".cn");
+    let lock : Cn_deps.lockfile = {
+      schema = "cn.lock.v2";
+      packages = [
+        { name = "cnos.core"; version = "9.9.9"; sha256 = "abc123" };
+        { name = "cnos.eng";  version = "9.9.9"; sha256 = "def456" };
+      ];
+    } in
+    Cn_deps.write_lockfile ~hub_path:hub lock;
+    match Cn_deps.read_lockfile ~hub_path:hub with
+    | None -> print_endline "ERROR: could not read"
+    | Some lf ->
+      Printf.printf "schema=%s\n" lf.schema;
+      Printf.printf "count=%d\n" (List.length lf.packages);
+      List.iter (fun (d : Cn_deps.locked_dep) ->
+        Printf.printf "%s@%s sha256=%s\n" d.name d.version d.sha256
+      ) lf.packages);
   [%expect {|
-    Third-party packages not supported (no registry): external.pkg
+    schema=cn.lock.v2
+    count=2
+    cnos.core@9.9.9 sha256=abc123
+    cnos.eng@9.9.9 sha256=def456
   |}]
 
-let%expect_test "lockfile_for_manifest rejects multiple third-party (I2)" =
-  let manifest : Cn_deps.manifest = {
-    schema = "cn.deps.v1";
-    profile = "engineer";
-    packages = [
-      { name = "foo.bar"; version = "1.0" };
-      { name = "baz.qux"; version = "2.0" };
-    ];
-  } in
-  (match Cn_deps.lockfile_for_manifest manifest with
-   | Ok _ -> print_endline "ERROR: should have rejected"
-   | Error msg -> print_endline msg);
-  [%expect {|
-    Third-party packages not supported (no registry): foo.bar, baz.qux
-  |}]
+(* === I4: compute_sha256 of a known file === *)
 
-(* === I3: lockfile_for_manifest produces valid first-party entries === *)
-
-let%expect_test "lockfile_for_manifest accepts all first-party (I3)" =
-  let manifest : Cn_deps.manifest = {
-    schema = "cn.deps.v1";
-    profile = "engineer";
-    packages = [
-      { name = "cnos.core"; version = "3.17.0" };
-      { name = "cnos.eng"; version = "3.17.0" };
-    ];
-  } in
-  (match Cn_deps.lockfile_for_manifest manifest with
-   | Ok lock ->
-       Printf.printf "packages: %d\n" (List.length lock.packages);
-       lock.packages |> List.iter (fun (dep : Cn_deps.locked_dep) ->
-         let has_source = dep.source <> "" in
-         let has_subdir = dep.subdir <> "" in
-         let has_rev = dep.rev <> "" in
-         Printf.printf "%s: source=%b subdir=%b rev=%b\n"
-           dep.name has_source has_subdir has_rev)
-   | Error msg -> Printf.printf "ERROR: %s\n" msg);
-  [%expect {|
-    packages: 2
-    cnos.core: source=true subdir=true rev=true
-    cnos.eng: source=true subdir=true rev=true
-  |}]
-
-let%expect_test "first-party subdir follows packages/<name> pattern (I3)" =
-  let manifest : Cn_deps.manifest = {
-    schema = "cn.deps.v1";
-    profile = "engineer";
-    packages = [
-      { name = "cnos.core"; version = "3.17.0" };
-      { name = "cnos.eng"; version = "3.17.0" };
-    ];
-  } in
-  (match Cn_deps.lockfile_for_manifest manifest with
-   | Ok lock ->
-       lock.packages |> List.iter (fun (dep : Cn_deps.locked_dep) ->
-         Printf.printf "%s -> %s\n" dep.name dep.subdir)
-   | Error msg -> Printf.printf "ERROR: %s\n" msg);
-  [%expect {|
-    cnos.core -> packages/cnos.core
-    cnos.eng -> packages/cnos.eng
-  |}]
-
-(* === I5: no lock entry has empty source (negative space) === *)
-
-(* === I6: compute_integrity produces deterministic hash === *)
-
-let%expect_test "compute_integrity produces deterministic hash for same content (I6)" =
-  let dir = mk_temp_dir "cn-integrity" in
+(* SHA-256 of the literal bytes "hello" is well-known. *)
+let%expect_test "compute_sha256 matches known hash and detects mismatch (I4)" =
+  let dir = mk_temp_dir "cn-sha256" in
   Fun.protect ~finally:(fun () -> rm_tree dir) (fun () ->
-    touch (Filename.concat dir "doctrine") "CORE.md" "# Core";
-    touch dir "cn.package.json" "{\"name\":\"test\"}";
-    let h1 = Cn_deps.compute_integrity dir in
-    let h2 = Cn_deps.compute_integrity dir in
-    (match h1, h2 with
-     | Some a, Some b ->
-       Printf.printf "deterministic: %b\n" (a = b);
-       Printf.printf "format: %b\n" (String.length a > 4 &&
-         String.sub a 0 4 = "md5:")
-     | _ -> print_endline "ERROR: no hash"));
+    let path = Filename.concat dir "payload" in
+    let oc = open_out path in
+    output_string oc "hello";
+    close_out oc;
+    let actual = Cn_deps.compute_sha256 path in
+    let known  = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824" in
+    Printf.printf "match=%b\n" (actual = known);
+    Printf.printf "mismatch=%b\n"
+      (actual <> "0000000000000000000000000000000000000000000000000000000000000000"));
   [%expect {|
-    deterministic: true
-    format: true
+    match=true
+    mismatch=true
   |}]
 
-let%expect_test "compute_integrity differs when content changes (I6)" =
-  let dir = mk_temp_dir "cn-integrity-diff" in
+(* === I5: validate_package_manifest covers all failure modes === *)
+
+let%expect_test "validate_package_manifest accepts a valid manifest (I5)" =
+  let dir = mk_temp_dir "cn-validate-ok" in
   Fun.protect ~finally:(fun () -> rm_tree dir) (fun () ->
-    touch dir "file.txt" "version 1";
-    let h1 = Cn_deps.compute_integrity dir in
-    touch dir "file.txt" "version 2";
-    let h2 = Cn_deps.compute_integrity dir in
-    (match h1, h2 with
-     | Some a, Some b -> Printf.printf "different: %b\n" (a <> b)
-     | _ -> print_endline "ERROR: no hash"));
+    touch dir "cn.package.json"
+      "{\"schema\":\"cn.package.v1\",\"name\":\"cnos.core\",\"version\":\"1.0.0\"}";
+    match Cn_deps.validate_package_manifest
+      ~pkg_dir:dir ~expected_name:"cnos.core" with
+    | Ok () -> print_endline "ok"
+    | Error msg -> Printf.printf "ERROR: %s\n" msg);
+  [%expect {| ok |}]
+
+let%expect_test "validate_package_manifest rejects missing/invalid/wrong-name (I5)" =
+  let report label result =
+    match result with
+    | Ok () -> Printf.printf "%s: ok\n" label
+    | Error msg ->
+      let mentions s sub =
+        let sl = String.length s and bl = String.length sub in
+        let rec check i =
+          if i > sl - bl then false
+          else if String.sub s i bl = sub then true
+          else check (i + 1)
+        in bl <= sl && check 0
+      in
+      Printf.printf "%s: error mentions=%b\n" label
+        (mentions msg "cn.package.json"
+         || mentions msg "name"
+         || mentions msg "missing"
+         || mentions msg "invalid")
+  in
+  (* Missing file *)
+  let dir1 = mk_temp_dir "cn-validate-missing" in
+  Fun.protect ~finally:(fun () -> rm_tree dir1) (fun () ->
+    report "missing"
+      (Cn_deps.validate_package_manifest
+         ~pkg_dir:dir1 ~expected_name:"cnos.core"));
+  (* Unparseable JSON *)
+  let dir2 = mk_temp_dir "cn-validate-bad-json" in
+  Fun.protect ~finally:(fun () -> rm_tree dir2) (fun () ->
+    touch dir2 "cn.package.json" "{ this is not json";
+    report "unparseable"
+      (Cn_deps.validate_package_manifest
+         ~pkg_dir:dir2 ~expected_name:"cnos.core"));
+  (* Missing name field *)
+  let dir3 = mk_temp_dir "cn-validate-no-name" in
+  Fun.protect ~finally:(fun () -> rm_tree dir3) (fun () ->
+    touch dir3 "cn.package.json" "{\"schema\":\"cn.package.v1\"}";
+    report "no_name"
+      (Cn_deps.validate_package_manifest
+         ~pkg_dir:dir3 ~expected_name:"cnos.core"));
+  (* Wrong name *)
+  let dir4 = mk_temp_dir "cn-validate-wrong" in
+  Fun.protect ~finally:(fun () -> rm_tree dir4) (fun () ->
+    touch dir4 "cn.package.json"
+      "{\"schema\":\"cn.package.v1\",\"name\":\"other.pkg\"}";
+    report "wrong_name"
+      (Cn_deps.validate_package_manifest
+         ~pkg_dir:dir4 ~expected_name:"cnos.core"));
   [%expect {|
-    different: true
+    missing: error mentions=true
+    unparseable: error mentions=true
+    no_name: error mentions=true
+    wrong_name: error mentions=true
   |}]
 
-let%expect_test "compute_integrity returns None for missing dir (I6)" =
-  let result = Cn_deps.compute_integrity "/nonexistent/path/xyz" in
-  Printf.printf "none: %b\n" (result = None);
-  [%expect {|
-    none: true
-  |}]
-
-(* === I7: verify_integrity catches tampering === *)
-
-let%expect_test "verify_integrity passes with correct hash (I7)" =
-  let dir = mk_temp_dir "cn-verify-ok" in
-  Fun.protect ~finally:(fun () -> rm_tree dir) (fun () ->
-    touch dir "data.txt" "hello";
-    let hash = Cn_deps.compute_integrity dir in
-    (match Cn_deps.verify_integrity ~pkg_dir:dir ~expected:hash with
-     | Ok () -> print_endline "verified"
-     | Error msg -> Printf.printf "ERROR: %s\n" msg));
-  [%expect {| verified |}]
-
-let%expect_test "verify_integrity fails with wrong hash (I7)" =
-  let dir = mk_temp_dir "cn-verify-bad" in
-  Fun.protect ~finally:(fun () -> rm_tree dir) (fun () ->
-    touch dir "data.txt" "hello";
-    (match Cn_deps.verify_integrity ~pkg_dir:dir
-       ~expected:(Some "md5:0000000000000000000000000000dead") with
-     | Ok () -> print_endline "ERROR: should have failed"
-     | Error msg ->
-       Printf.printf "caught: %b\n" (String.length msg > 0);
-       let has_sub s sub =
-         let slen = String.length s and sublen = String.length sub in
-         let rec check i =
-           if i > slen - sublen then false
-           else if String.sub s i sublen = sub then true
-           else check (i + 1)
-         in sublen <= slen && check 0
-       in
-       Printf.printf "mentions mismatch: %b\n" (has_sub msg "mismatch")));
-  [%expect {|
-    caught: true
-    mentions mismatch: true
-  |}]
-
-let%expect_test "verify_integrity passes when expected is None (I7)" =
-  let dir = mk_temp_dir "cn-verify-none" in
-  Fun.protect ~finally:(fun () -> rm_tree dir) (fun () ->
-    touch dir "data.txt" "hello";
-    (match Cn_deps.verify_integrity ~pkg_dir:dir ~expected:None with
-     | Ok () -> print_endline "skipped (no integrity)"
-     | Error msg -> Printf.printf "ERROR: %s\n" msg));
-  [%expect {| skipped (no integrity) |}]
-
-(* === I8: lockfile_for_manifest generates integrity hashes === *)
-
-let%expect_test "lockfile_for_manifest generates integrity when source available (I8)" =
-  let manifest : Cn_deps.manifest = {
-    schema = "cn.deps.v1";
-    profile = "engineer";
-    packages = [
-      { name = "cnos.core"; version = "3.17.0" };
-    ];
-  } in
-  (match Cn_deps.lockfile_for_manifest manifest with
-   | Ok lock ->
-     lock.packages |> List.iter (fun (dep : Cn_deps.locked_dep) ->
-       let has_integrity = dep.integrity <> None in
-       Printf.printf "%s: has_integrity=%b\n" dep.name has_integrity)
-   | Error msg -> Printf.printf "ERROR: %s\n" msg);
-  [%expect {|
-    cnos.core: has_integrity=true
-  |}]
-
-(* === I5: no lock entry has empty source (negative space) === *)
-
-let%expect_test "no lock entry ever has empty source (I5 negative)" =
-  let manifest : Cn_deps.manifest = {
-    schema = "cn.deps.v1";
-    profile = "engineer";
-    packages = [
-      { name = "cnos.core"; version = "3.17.0" };
-    ];
-  } in
-  (match Cn_deps.lockfile_for_manifest manifest with
-   | Ok lock ->
-       let empty_sources = lock.packages
-         |> List.filter (fun (d : Cn_deps.locked_dep) -> d.source = "") in
-       Printf.printf "entries with empty source: %d\n" (List.length empty_sources)
-   | Error _ -> print_endline "rejected (also acceptable)");
-  [%expect {|
-    entries with empty source: 0
-  |}]

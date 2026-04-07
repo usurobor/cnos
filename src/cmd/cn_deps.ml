@@ -1,45 +1,40 @@
-(** cn_deps.ml — Dependency manifest, lockfile, and package restore
+(** cn_deps.ml — Package manifest, lockfile, and package restore.
 
-    Handles .cn/deps.json (manifest) and .cn/deps.lock.json (lockfile)
-    parsing, writing, and the restore pipeline.
+    Handles .cn/deps.json (manifest) and .cn/deps.lock.json (lockfile).
 
-    Unified package model (v3.5):
-    - Everything cognitive is a package (cnos.core, cnos.eng)
-    - Profiles are setup-time presets, not packages
-    - Restore fetches by (source, rev, subdir) and copies into
-      .cn/vendor/packages/<name>@<version>/
-    - No CN_TEMPLATE_PATH, no vendor/core, no runtime network
+    First-party packages are distributed as versioned tarball artifacts
+    published to GitHub releases. The package index (packages/index.json)
+    maps name+version to URL+SHA-256. The lockfile pins name+version
+    +sha256 per package; hosting can move without rewriting locks.
 
-    Key design: runtime never calls this module. Only cn setup,
-    cn deps restore, and cn deps commands use it. *)
-
-(* open Cn_lib — unused; types referenced fully qualified *)
+    Restore: lockfile -> index lookup -> HTTPS download -> SHA-256
+    verify -> tar -xzf into .cn/vendor/packages/<name>@<version>/
+    -> validate cn.package.json. When running inside a cnos checkout,
+    first-party packages are copied from the local source tree instead,
+    after a freshness check against src/agent/. *)
 
 (* === Constants === *)
 
-(** Default git source for first-party packages. *)
-let default_first_party_source = Printf.sprintf "https://github.com/%s.git" Cn_lib.cnos_repo
-
-(** Subdirectory prefix for packages within the cnos repo. *)
-let packages_subdir = "packages"
+(** Stable URL for the package index (raw GitHub view of main).
+    Derived from cnos_repo so a fork or rename does not break it. *)
+let package_index_url () =
+  Printf.sprintf
+    "https://raw.githubusercontent.com/%s/main/packages/index.json"
+    Cn_lib.cnos_repo
 
 (* === Types === *)
 
-(** Manifest entry: what the human wants. *)
+(** Manifest entry: what the operator wants. *)
 type manifest_dep = {
   name : string;
   version : string;
 }
 
-(** Lockfile entry: what the resolver pinned.
-    subdir is required — multiple packages may live in one git repo. *)
+(** Lockfile entry: name + version + tarball sha256. *)
 type locked_dep = {
   name : string;
   version : string;
-  source : string;
-  rev : string;
-  subdir : string;
-  integrity : string option;
+  sha256 : string;
 }
 
 type manifest = {
@@ -53,15 +48,24 @@ type lockfile = {
   packages : locked_dep list;
 }
 
+(** Package index entry. *)
+type index_entry = {
+  ie_url : string;
+  ie_sha256 : string;
+}
+
+(** Parsed package index: (name, version) -> entry. *)
+type package_index = {
+  index_schema : string;
+  index_entries : ((string * string) * index_entry) list;
+}
+
 (* === Paths === *)
 
-let manifest_path hub_path =
-  Cn_ffi.Path.join hub_path ".cn/deps.json"
+let manifest_path hub_path = Cn_ffi.Path.join hub_path ".cn/deps.json"
+let lockfile_path hub_path = Cn_ffi.Path.join hub_path ".cn/deps.lock.json"
 
-let lockfile_path hub_path =
-  Cn_ffi.Path.join hub_path ".cn/deps.lock.json"
-
-(* === JSON helpers === *)
+(* === JSON: manifest === *)
 
 let manifest_dep_to_json (d : manifest_dep) =
   Cn_json.Object [
@@ -69,37 +73,10 @@ let manifest_dep_to_json (d : manifest_dep) =
     "version", Cn_json.String d.version;
   ]
 
-let locked_dep_to_json (d : locked_dep) =
-  let fields = [
-    "name", Cn_json.String d.name;
-    "version", Cn_json.String d.version;
-    "source", Cn_json.String d.source;
-    "rev", Cn_json.String d.rev;
-    "subdir", Cn_json.String d.subdir;
-  ] in
-  let fields = match d.integrity with
-    | Some h -> fields @ ["integrity", Cn_json.String h]
-    | None -> fields
-  in
-  Cn_json.Object fields
-
 let parse_manifest_dep json =
   match Cn_json.get_string "name" json, Cn_json.get_string "version" json with
   | Some name, Some version -> Some { name; version }
   | _ -> None
-
-let parse_locked_dep json =
-  match Cn_json.get_string "name" json,
-        Cn_json.get_string "version" json,
-        Cn_json.get_string "source" json,
-        Cn_json.get_string "rev" json,
-        Cn_json.get_string "subdir" json with
-  | Some name, Some version, Some source, Some rev, Some subdir ->
-      Some { name; version; source; rev; subdir;
-             integrity = Cn_json.get_string "integrity" json }
-  | _ -> None
-
-(* === Read/write === *)
 
 let read_manifest ~hub_path =
   let path = manifest_path hub_path in
@@ -118,21 +95,6 @@ let read_manifest ~hub_path =
         in
         Some { schema; profile; packages }
 
-let read_lockfile ~hub_path =
-  let path = lockfile_path hub_path in
-  if not (Cn_ffi.Fs.exists path) then None
-  else
-    match Cn_ffi.Fs.read path |> Cn_json.parse with
-    | Error _ -> None
-    | Ok json ->
-        let schema = Cn_json.get_string "schema" json
-          |> Option.value ~default:"cn.deps.lock.v1" in
-        let packages = match Cn_json.get "packages" json with
-          | Some (Cn_json.Array items) -> List.filter_map parse_locked_dep items
-          | _ -> []
-        in
-        Some { schema; packages }
-
 let write_manifest ~hub_path (m : manifest) =
   let json = Cn_json.Object [
     "schema", Cn_json.String m.schema;
@@ -141,6 +103,37 @@ let write_manifest ~hub_path (m : manifest) =
   ] in
   Cn_ffi.Fs.write (manifest_path hub_path) (Cn_json.to_string json ^ "\n")
 
+(* === JSON: lockfile === *)
+
+let locked_dep_to_json (d : locked_dep) =
+  Cn_json.Object [
+    "name", Cn_json.String d.name;
+    "version", Cn_json.String d.version;
+    "sha256", Cn_json.String d.sha256;
+  ]
+
+let parse_locked_dep json =
+  match Cn_json.get_string "name" json,
+        Cn_json.get_string "version" json,
+        Cn_json.get_string "sha256" json with
+  | Some name, Some version, Some sha256 -> Some { name; version; sha256 }
+  | _ -> None
+
+let read_lockfile ~hub_path =
+  let path = lockfile_path hub_path in
+  if not (Cn_ffi.Fs.exists path) then None
+  else
+    match Cn_ffi.Fs.read path |> Cn_json.parse with
+    | Error _ -> None
+    | Ok json ->
+        let schema = Cn_json.get_string "schema" json
+          |> Option.value ~default:"cn.lock.v2" in
+        let packages = match Cn_json.get "packages" json with
+          | Some (Cn_json.Array items) -> List.filter_map parse_locked_dep items
+          | _ -> []
+        in
+        Some { schema; packages }
+
 let write_lockfile ~hub_path (l : lockfile) =
   let json = Cn_json.Object [
     "schema", Cn_json.String l.schema;
@@ -148,64 +141,65 @@ let write_lockfile ~hub_path (l : lockfile) =
   ] in
   Cn_ffi.Fs.write (lockfile_path hub_path) (Cn_json.to_string json ^ "\n")
 
-(* === Integrity === *)
+(* === Package index === *)
 
-(** Compute a deterministic integrity hash for a package directory.
-    Walks all files sorted by relative path, hashes each with Digest (md5),
-    then hashes the concatenation of (path:hash) pairs.
-    Returns "md5:<hex>" or None if directory doesn't exist.
+(** Parse a cn.package-index.v1 JSON document. *)
+let parse_package_index json =
+  let schema = Cn_json.get_string "schema" json
+    |> Option.value ~default:"cn.package-index.v1" in
+  let entries = match Cn_json.get "packages" json with
+    | Some (Cn_json.Object pkgs) ->
+        pkgs |> List.concat_map (fun (name, versions_json) ->
+          match versions_json with
+          | Cn_json.Object versions ->
+              versions |> List.filter_map (fun (version, entry_json) ->
+                match Cn_json.get_string "url" entry_json,
+                      Cn_json.get_string "sha256" entry_json with
+                | Some url, Some sha256 ->
+                    Some ((name, version), { ie_url = url; ie_sha256 = sha256 })
+                | _ -> None)
+          | _ -> [])
+    | _ -> []
+  in
+  { index_schema = schema; index_entries = entries }
 
-    Threat model: drift detection, not adversarial tampering. Packages are
-    local-only (no registry, no network fetch to untrusted sources). md5 is
-    sufficient for detecting corruption, stale installs, and accidental
-    modification. The "md5:" prefix enables algorithm migration (e.g. to
-    sha256) when a crypto library is added to deps. *)
-let rec collect_files_sorted root dir =
-  let full = Cn_ffi.Path.join root dir in
-  if not (Cn_ffi.Fs.exists full) then []
-  else if Sys.is_directory full then
-    (try
-       Cn_ffi.Fs.readdir full
-       |> List.sort String.compare
-       |> List.concat_map (fun entry ->
-         collect_files_sorted root
-           (if dir = "." then entry else dir ^ "/" ^ entry))
-     with
-     | Sys_error msg ->
-       Printf.eprintf "cn: warning: cannot read directory %s: %s\n" full msg; []
-     | Unix.Unix_error (e, _, _) ->
-       Printf.eprintf "cn: warning: cannot read directory %s: %s\n" full (Unix.error_message e); [])
-  else [dir]
+let lookup_index (idx : package_index) ~name ~version =
+  List.assoc_opt (name, version) idx.index_entries
 
-let compute_integrity dir =
-  if not (Cn_ffi.Fs.exists dir) then None
-  else
-    let files = collect_files_sorted dir "." in
-    let pairs = files |> List.map (fun rel ->
-      let content = Cn_ffi.Fs.read (Cn_ffi.Path.join dir rel) in
-      Printf.sprintf "%s:%s" rel (Digest.to_hex (Digest.string content))
-    ) in
-    let combined = String.concat "\n" pairs in
-    Some (Printf.sprintf "md5:%s" (Digest.to_hex (Digest.string combined)))
+(** Walk up from cwd looking for a packages/index.json (development mode). *)
+let find_local_index_path () =
+  let rec walk dir =
+    let candidate = Cn_ffi.Path.join dir "packages/index.json" in
+    if Cn_ffi.Fs.exists candidate then Some candidate
+    else
+      let parent = Filename.dirname dir in
+      if parent = dir then None else walk parent
+  in
+  walk (Cn_ffi.Process.cwd ())
 
-(** Verify that an installed package directory matches the expected integrity.
-    Returns Ok () if integrity matches or if no integrity is set.
-    Returns Error msg if integrity mismatches. *)
-let verify_integrity ~pkg_dir ~expected =
-  match expected with
-  | None -> Ok ()  (* no integrity to verify *)
-  | Some expected_hash ->
-    (match compute_integrity pkg_dir with
-     | None -> Error "package directory does not exist"
-     | Some actual_hash ->
-       if actual_hash = expected_hash then Ok ()
-       else Error (Printf.sprintf "integrity mismatch: expected %s, got %s"
-         expected_hash actual_hash))
+(** Load the package index. Prefers a local checkout's packages/index.json
+    if we're inside the cnos repo; otherwise downloads from the stable URL.
+    Returns Error msg if both paths fail. *)
+let load_package_index () =
+  let from_json text =
+    match Cn_json.parse text with
+    | Ok json -> Ok (parse_package_index json)
+    | Error msg -> Error (Printf.sprintf "package index parse error: %s" msg)
+  in
+  match find_local_index_path () with
+  | Some path -> from_json (Cn_ffi.Fs.read path)
+  | None ->
+      let url = package_index_url () in
+      (match Cn_ffi.Http.get ~url ~headers:[] with
+       | Ok body -> from_json body
+       | Error msg ->
+           Error (Printf.sprintf "could not fetch package index from %s: %s"
+             url msg))
 
-(* === Recursive copy helper === *)
+(* === Filesystem helpers === *)
 
-(** Copy all files from src_dir to dst_dir, preserving directory structure.
-    Creates directories as needed. *)
+(** Recursive copy: src_dir -> dst_dir, preserving structure. Used by
+    development local-source restore and exposed for tests. *)
 let rec copy_tree src_dir dst_dir =
   if Cn_ffi.Fs.exists src_dir then begin
     Cn_ffi.Fs.ensure_dir dst_dir;
@@ -219,15 +213,19 @@ let rec copy_tree src_dir dst_dir =
         else
           Cn_ffi.Fs.write dst (Cn_ffi.Fs.read src))
     with exn ->
-      Printf.eprintf "cn: warning: cannot copy tree %s: %s\n" src_dir (Printexc.to_string exn)
+      Printf.eprintf "cn: warning: cannot copy tree %s: %s\n"
+        src_dir (Printexc.to_string exn)
   end
 
-(* === First-party package source resolution === *)
+let rm_tree path =
+  if Cn_ffi.Fs.exists path then
+    ignore (Cn_ffi.Process.exec_args ~prog:"rm" ~args:["-rf"; path] ())
 
-(** Resolve the source directory for a first-party package.
-    First-party packages live in the cnos repo under packages/<name>/.
-    At setup time, we look for a local cnos checkout (walk up from cwd).
-    Returns Ok (local_path) if found locally, Error msg otherwise. *)
+(* === First-party local source resolution (development) === *)
+
+let is_first_party name =
+  String.length name >= 5 && String.sub name 0 5 = "cnos."
+
 let find_local_package_source pkg_name =
   let rec walk dir =
     let candidate = Cn_ffi.Path.join dir
@@ -241,127 +239,180 @@ let find_local_package_source pkg_name =
   in
   walk (Cn_ffi.Process.cwd ())
 
-(** Check if a package name is first-party (cnos.xxx). *)
-let is_first_party name =
-  String.length name >= 5 && String.sub name 0 5 = "cnos."
+(* === HTTP download + extract === *)
 
-(* === Safe git helpers (argv-only, no shell strings) === *)
+(** Download a binary blob to a file using `curl --output`. curl writes
+    directly to disk so binary content never passes through an OCaml
+    string buffer. *)
+let download_to_file ~url ~dest =
+  let dir = Filename.dirname dest in
+  Cn_ffi.Fs.ensure_dir dir;
+  let (code, output) = Cn_ffi.Process.exec_args
+    ~prog:"curl"
+    ~args:[
+      "--silent"; "--show-error"; "--fail";
+      "--location";
+      "--connect-timeout"; "10";
+      "--max-time"; "300";
+      "--output"; dest;
+      url;
+    ] ()
+  in
+  if code = 0 then Ok ()
+  else Error (Printf.sprintf "curl exit %d: %s" code (String.trim output))
 
-(** Run git with structured args in a given directory.
-    Returns Ok stdout on exit 0, Error msg otherwise. *)
-let git_in ~cwd args =
-  let full_args = ["-C"; cwd] @ args in
-  let (code, output) = Cn_ffi.Process.exec_args ~prog:"git" ~args:full_args () in
-  if code = 0 then Ok output
-  else Error (Printf.sprintf "git %s failed (exit %d): %s"
-    (String.concat " " args) code output)
+(** Compute the SHA-256 of a file (read fully, hash the bytes). *)
+let compute_sha256 path =
+  let content = Cn_ffi.Fs.read path in
+  Cn_sha256.hash content
 
-(** Remove a directory tree using structured args (no shell injection). *)
-let rm_tree path =
-  if Cn_ffi.Fs.exists path then
-    ignore (Cn_ffi.Process.exec_args ~prog:"rm" ~args:["-rf"; path] ())
+(** Extract a .tar.gz into dest_dir using `tar -xzf`. dest_dir must exist. *)
+let extract_tarball ~tarball ~dest_dir =
+  Cn_ffi.Fs.ensure_dir dest_dir;
+  let (code, output) = Cn_ffi.Process.exec_args
+    ~prog:"tar"
+    ~args:["-xzf"; tarball; "-C"; dest_dir]
+    ()
+  in
+  if code = 0 then Ok ()
+  else Error (Printf.sprintf "tar exit %d: %s" code (String.trim output))
+
+(** Validate the cn.package.json inside an installed package directory:
+    must exist, be parseable JSON, and declare a `name` field matching
+    the expected package name. *)
+let validate_package_manifest ~pkg_dir ~expected_name =
+  let meta = Cn_ffi.Path.join pkg_dir "cn.package.json" in
+  if not (Cn_ffi.Fs.exists meta) then
+    Error "missing cn.package.json"
+  else
+    match Cn_json.parse (Cn_ffi.Fs.read meta) with
+    | Error msg -> Error (Printf.sprintf "invalid cn.package.json: %s" msg)
+    | Ok json ->
+        match Cn_json.get_string "name" json with
+        | None -> Error "cn.package.json missing 'name' field"
+        | Some n when n <> expected_name ->
+            Error (Printf.sprintf
+              "cn.package.json name '%s' does not match expected '%s'"
+              n expected_name)
+        | Some _ -> Ok ()
 
 (* === Restore === *)
 
-(** Install a single package from its lock entry.
-    Uses (source, rev, subdir) to fetch only the package subtree.
-    Returns None on success, Some error_msg on failure. *)
-let restore_one ~hub_path (dep : locked_dep) =
+(** Install one package from its lock entry via HTTP tarball.
+    Returns None on success, Some err on failure. *)
+let restore_one_http ~hub_path ~index (dep : locked_dep) =
   let pkg_root = Cn_assets.vendor_packages_path hub_path in
   let pkg_dir = Cn_ffi.Path.join pkg_root
     (Printf.sprintf "%s@%s" dep.name dep.version) in
   if Cn_ffi.Fs.exists pkg_dir then
-    (* Already installed — verify integrity if set *)
-    (match verify_integrity ~pkg_dir ~expected:dep.integrity with
-     | Ok () -> None
-     | Error msg -> Some (Printf.sprintf "Package %s@%s: %s" dep.name dep.version msg))
+    (* Already materialised. The lockfile sha256 is an on-the-wire
+       check and cannot be recomputed from the extracted tree. *)
+    None
   else
-    (* Try local first-party source first *)
-    let local_result =
-      if is_first_party dep.name then
-        match find_local_package_source dep.name with
-        | Ok local_path ->
-            (* Guard: verify packages/ is in sync with src/agent/.
-               Prevents installing stale generated artifacts. *)
-            (match Cn_build.check_package dep.name with
-             | Error msg -> Some (Error msg)
-             | Ok () ->
-                 Cn_ffi.Fs.ensure_dir pkg_dir;
-                 copy_tree local_path pkg_dir;
-                 Some (Ok ()))
-        | Error _ -> None
-      else None
-    in
-    (* Verify integrity after installation (shared by both paths) *)
-    let verify_after_install () =
-      match verify_integrity ~pkg_dir ~expected:dep.integrity with
-      | Ok () -> None
-      | Error msg ->
-          rm_tree pkg_dir;
-          Some (Printf.sprintf "Package %s@%s: %s" dep.name dep.version msg)
-    in
-    match local_result with
-    | Some (Ok ()) -> verify_after_install ()
-    | Some (Error msg) -> Some msg
+    match lookup_index index ~name:dep.name ~version:dep.version with
     | None ->
-      (* Fetch by exact rev using structured argv calls *)
-      let tmp_dir = Cn_ffi.Path.join hub_path
-        (Printf.sprintf ".cn/tmp/%s-%s" dep.name dep.version) in
-      Cn_ffi.Fs.ensure_dir tmp_dir;
-      let result =
-        match git_in ~cwd:tmp_dir ["init"; "-q"] with
-        | Error msg -> Error msg
-        | Ok _ ->
-        (* Try shallow fetch by SHA first (fast, small). Fall back to full
-           clone + checkout if the server rejects it (#155). *)
-        let fetch_result =
-          match git_in ~cwd:tmp_dir
-            ["fetch"; "-q"; "--depth=1"; dep.source; dep.rev] with
-          | Ok _ -> Ok ()
-          | Error _ ->
-            (* Fallback: fetch default branch, then checkout the rev *)
-            match git_in ~cwd:tmp_dir
-              ["fetch"; "-q"; dep.source] with
-            | Error msg -> Error msg
-            | Ok _ -> Ok ()
-        in
-        match fetch_result with
-        | Error msg -> Error msg
-        | Ok _ ->
-        match git_in ~cwd:tmp_dir ["checkout"; "-q"; dep.rev] with
-        | Error msg -> Error msg
-        | Ok _ -> Ok ()
-      in
-      match result with
-      | Error msg ->
-          rm_tree tmp_dir;
-          Some (Printf.sprintf "Failed to fetch %s@%s from %s (rev %s): %s"
-            dep.name dep.version dep.source dep.rev msg)
-      | Ok () ->
-          (* Copy full package tree — matches local first-party path behavior.
-             Both paths now do copy_tree src pkg_dir. *)
-          let src_root = if dep.subdir <> "" then
-            Cn_ffi.Path.join tmp_dir dep.subdir
-          else tmp_dir in
-          copy_tree src_root pkg_dir;
-          rm_tree tmp_dir;
-          verify_after_install ()
+        Some (Printf.sprintf "Package %s@%s not in index" dep.name dep.version)
+    | Some entry ->
+        let tmp_tar = Cn_ffi.Path.join hub_path
+          (Printf.sprintf ".cn/tmp/%s-%s.tar.gz" dep.name dep.version) in
+        (match download_to_file ~url:entry.ie_url ~dest:tmp_tar with
+         | Error msg ->
+             Some (Printf.sprintf "Failed to download %s@%s from %s: %s"
+               dep.name dep.version entry.ie_url msg)
+         | Ok () ->
+             let actual = compute_sha256 tmp_tar in
+             if actual <> dep.sha256 then begin
+               (try Sys.remove tmp_tar
+                with Sys_error e ->
+                  Printf.eprintf "cn: cannot remove %s: %s\n" tmp_tar e);
+               Some (Printf.sprintf
+                 "SHA-256 mismatch for %s@%s: expected %s, got %s"
+                 dep.name dep.version dep.sha256 actual)
+             end else begin
+               Cn_ffi.Fs.ensure_dir pkg_dir;
+               let result = extract_tarball ~tarball:tmp_tar ~dest_dir:pkg_dir in
+               (try Sys.remove tmp_tar
+                with Sys_error e ->
+                  Printf.eprintf "cn: cannot remove %s: %s\n" tmp_tar e);
+               match result with
+               | Error msg ->
+                   rm_tree pkg_dir;
+                   Some (Printf.sprintf "Failed to extract %s@%s: %s"
+                     dep.name dep.version msg)
+               | Ok () ->
+                   match validate_package_manifest ~pkg_dir ~expected_name:dep.name with
+                   | Ok () -> None
+                   | Error msg ->
+                       rm_tree pkg_dir;
+                       Some (Printf.sprintf "Package %s@%s: %s"
+                         dep.name dep.version msg)
+             end)
 
-(** Install packages from lockfile into .cn/vendor/packages/.
-    Fetches by exact lockfile rev + subdir using argv-only git calls.
-    No vendor/core — everything is a package. *)
+(** Try local first-party install (development mode). Returns:
+    - Some (Ok ())  : installed from local checkout
+    - Some (Error m): tried, failed (e.g. stale build)
+    - None          : not applicable (no local source) *)
+let try_restore_local ~hub_path (dep : locked_dep) =
+  if not (is_first_party dep.name) then None
+  else
+    match find_local_package_source dep.name with
+    | Error _ -> None
+    | Ok local_path ->
+        match Cn_build.check_package dep.name with
+        | Error msg -> Some (Error msg)
+        | Ok () ->
+            let pkg_root = Cn_assets.vendor_packages_path hub_path in
+            let pkg_dir = Cn_ffi.Path.join pkg_root
+              (Printf.sprintf "%s@%s" dep.name dep.version) in
+            Cn_ffi.Fs.ensure_dir pkg_dir;
+            copy_tree local_path pkg_dir;
+            Some (Ok ())
+
+(** Install one package: prefer local first-party source if running inside
+    a cnos checkout, otherwise HTTP artifact restore. *)
+let restore_one ~hub_path ~index (dep : locked_dep) =
+  let pkg_root = Cn_assets.vendor_packages_path hub_path in
+  let pkg_dir = Cn_ffi.Path.join pkg_root
+    (Printf.sprintf "%s@%s" dep.name dep.version) in
+  if Cn_ffi.Fs.exists pkg_dir then None
+  else
+    match try_restore_local ~hub_path dep with
+    | Some (Ok ()) -> None
+    | Some (Error msg) -> Some (Printf.sprintf "Package %s@%s: %s"
+                            dep.name dep.version msg)
+    | None -> restore_one_http ~hub_path ~index dep
+
+(** Install every package declared in the lockfile into
+    .cn/vendor/packages/. *)
 let restore ~hub_path =
   match read_lockfile ~hub_path with
-  | None ->
-      (* No lockfile = nothing to install *)
-      Ok ()
+  | None -> Ok ()
+  | Some lock when lock.packages = [] -> Ok ()
   | Some lock ->
-      let errors = lock.packages |> List.filter_map (fun dep ->
-        restore_one ~hub_path dep
-      ) in
-      match errors with
-      | [] -> Ok ()
-      | errs -> Error (String.concat "\n" errs)
+      (match load_package_index () with
+       | Error msg ->
+           (* No index: fall back to local-source restore for any
+              first-party package found in a cnos checkout. *)
+           let errors = lock.packages |> List.filter_map (fun dep ->
+             match try_restore_local ~hub_path dep with
+             | Some (Ok ()) -> None
+             | Some (Error m) ->
+                 Some (Printf.sprintf "Package %s@%s: %s"
+                   dep.name dep.version m)
+             | None ->
+                 Some (Printf.sprintf "Package %s@%s: %s"
+                   dep.name dep.version msg))
+           in
+           (match errors with
+            | [] -> Ok ()
+            | es -> Error (String.concat "\n" es))
+       | Ok index ->
+           let errors = lock.packages |> List.filter_map (fun dep ->
+             restore_one ~hub_path ~index dep
+           ) in
+           (match errors with
+            | [] -> Ok ()
+            | es -> Error (String.concat "\n" es)))
 
 (* === List installed === *)
 
@@ -381,15 +432,12 @@ let list_installed ~hub_path =
             Some (name, version)
         | None -> Some (dir_name, "unknown"))
     with exn ->
-      Printf.eprintf "cn: warning: cannot list installed packages: %s\n" (Printexc.to_string exn);
+      Printf.eprintf "cn: list_installed: cannot read %s: %s\n"
+        pkg_root (Printexc.to_string exn);
       []
 
 (* === Doctor === *)
 
-(** Check whether a vendored package directory contains a valid package
-    (cn.package.json present and parseable with a name field). Used by
-    `cn deps vendor` for offline-first short-circuit (#155 AC2) and by
-    doctor to recognize manually vendored packages (#155 AC3). *)
 let is_valid_vendored_package pkg_dir =
   if not (Cn_ffi.Fs.exists pkg_dir) then false
   else
@@ -400,26 +448,16 @@ let is_valid_vendored_package pkg_dir =
       | Ok json -> Cn_json.get_string "name" json <> None
       | Error _ -> false
 
-(** Verify installed packages match lockfile. Returns Ok () or Error with
-    list of issues found.
-
-    Validates the full package system chain:
-    - desired state (manifest) exists and is parseable
-    - resolved state (lockfile) exists and is parseable
-    - manifest packages are all represented in lockfile
-    - lockfile packages are all installed on disk
-    - installed package metadata (cn.package.json) is valid
-    - integrity hashes match (when set) *)
+(** Verify installed packages match lockfile. Returns Ok () or Error
+    with the list of issues found. *)
 let doctor ~hub_path =
   let issues = ref [] in
   let add msg = issues := msg :: !issues in
 
-  (* Check installed packages have required assets *)
   (match Cn_assets.validate_packages ~hub_path with
    | Ok () -> ()
    | Error msg -> add msg);
 
-  (* Check manifest exists and is parseable *)
   let manifest_opt =
     if not (Cn_ffi.Fs.exists (manifest_path hub_path)) then begin
       add "Missing .cn/deps.json — run 'cn setup'"; None
@@ -429,7 +467,6 @@ let doctor ~hub_path =
       | Some m -> Some m
   in
 
-  (* Check lockfile exists and is parseable *)
   if not (Cn_ffi.Fs.exists (lockfile_path hub_path)) then
     add "Missing .cn/deps.lock.json — run 'cn setup'"
   else begin
@@ -438,27 +475,25 @@ let doctor ~hub_path =
     | Some lock ->
         let pkg_root = Cn_assets.vendor_packages_path hub_path in
 
-        (* Desired vs resolved: every manifest package should be in lockfile *)
         (match manifest_opt with
          | Some manifest ->
            manifest.packages |> List.iter (fun (dep : manifest_dep) ->
-             let in_lock = lock.packages |> List.exists (fun (ld : locked_dep) ->
-               ld.name = dep.name) in
+             let in_lock = lock.packages |> List.exists
+               (fun (ld : locked_dep) -> ld.name = dep.name) in
              if not in_lock then
                add (Printf.sprintf
                  "Package %s in manifest but not in lockfile — run 'cn deps update'"
                  dep.name))
          | None -> ());
 
-        (* Resolved vs installed: every lockfile package should be on disk *)
         lock.packages |> List.iter (fun (dep : locked_dep) ->
           let pkg_dir = Cn_ffi.Path.join pkg_root
             (Printf.sprintf "%s@%s" dep.name dep.version) in
           if not (Cn_ffi.Fs.exists pkg_dir) then
-            add (Printf.sprintf "Package %s@%s declared in lockfile but not installed"
+            add (Printf.sprintf
+              "Package %s@%s declared in lockfile but not installed"
               dep.name dep.version)
           else begin
-            (* Package metadata validity *)
             let meta_path = Cn_ffi.Path.join pkg_dir "cn.package.json" in
             if not (Cn_ffi.Fs.exists meta_path) then
               add (Printf.sprintf "Package %s@%s missing cn.package.json"
@@ -470,24 +505,15 @@ let doctor ~hub_path =
                 add (Printf.sprintf "Package %s@%s has invalid cn.package.json"
                   dep.name dep.version)
               | Ok json ->
-                let pkg_name = Cn_json.get_string "name" json in
-                (match pkg_name with
+                (match Cn_json.get_string "name" json with
                  | Some n when n <> dep.name ->
                    add (Printf.sprintf
                      "Package %s@%s metadata name mismatch: cn.package.json says %s"
                      dep.name dep.version n)
                  | _ -> ())
-            end;
-
-            (* Integrity verification *)
-            (match verify_integrity ~pkg_dir ~expected:dep.integrity with
-             | Ok () -> ()
-             | Error msg ->
-               add (Printf.sprintf "Package %s@%s: %s"
-                 dep.name dep.version msg))
+            end
           end);
 
-        (* Extra installed: check for packages on disk not in lockfile *)
         if Cn_ffi.Fs.exists pkg_root then begin
           try
             Cn_ffi.Fs.readdir pkg_root |> List.iter (fun dir_name ->
@@ -496,13 +522,10 @@ let doctor ~hub_path =
                 let name = String.sub dir_name 0 i in
                 let version = String.sub dir_name (i + 1)
                   (String.length dir_name - i - 1) in
-                let in_lock = lock.packages |> List.exists (fun (ld : locked_dep) ->
-                  ld.name = name && ld.version = version) in
+                let in_lock = lock.packages |> List.exists
+                  (fun (ld : locked_dep) ->
+                    ld.name = name && ld.version = version) in
                 if not in_lock then begin
-                  (* #155 AC3: a directory with valid cn.package.json is a
-                     manually vendored package — recognize it instead of
-                     flagging as stale. Only treat as stale if the metadata
-                     is missing or unparseable. *)
                   let pkg_dir = Cn_ffi.Path.join pkg_root dir_name in
                   if not (is_valid_vendored_package pkg_dir) then
                     add (Printf.sprintf
@@ -510,7 +533,9 @@ let doctor ~hub_path =
                       name version)
                 end
               | None -> ())
-          with Sys_error _ | Unix.Unix_error _ -> ()
+          with exn ->
+            add (Printf.sprintf "doctor: cannot scan %s: %s"
+              pkg_root (Printexc.to_string exn))
         end
   end;
 
@@ -518,11 +543,8 @@ let doctor ~hub_path =
   | [] -> Ok ()
   | is -> Error (List.rev is)
 
-(* === Default manifest for profile === *)
+(* === Default manifest + lockfile generation === *)
 
-(** Expand a profile name to its package list.
-    Both profiles use the same packages — cnos.pm was removed in the
-    skill reorg (all skills rehomed to eng/ and cdd/). *)
 let default_manifest_for_profile profile =
   let ver = Cn_lib.version in
   let packages = [
@@ -531,13 +553,11 @@ let default_manifest_for_profile profile =
   ] in
   { schema = "cn.deps.v1"; profile; packages }
 
-(** Create a lockfile with first-party package entries.
-    First-party entries use VERSION + cnos_commit for exact coherence.
-    Third-party packages are rejected — no registry exists yet. *)
+(** Build a lockfile from the manifest by resolving each package
+    against the package index. Third-party packages are rejected. *)
 let lockfile_for_manifest (m : manifest) =
-  let first_party_rev = Cn_lib.cnos_commit in
   let third_party = m.packages
-    |> List.filter (fun (dep : manifest_dep) -> not (is_first_party dep.name)) in
+    |> List.filter (fun (d : manifest_dep) -> not (is_first_party d.name)) in
   if third_party <> [] then
     let names = third_party
       |> List.map (fun (d : manifest_dep) -> d.name)
@@ -545,24 +565,31 @@ let lockfile_for_manifest (m : manifest) =
     Error (Printf.sprintf
       "Third-party packages not supported (no registry): %s" names)
   else
-    let packages = m.packages |> List.map (fun (dep : manifest_dep) ->
-      let pkg_subdir = Printf.sprintf "%s/%s" packages_subdir dep.name in
-      (* Compute integrity from local package source if available *)
-      let integrity = match find_local_package_source dep.name with
-        | Ok local_path -> compute_integrity local_path
-        | Error _ -> None
-      in
-      { name = dep.name;
-        version = Cn_lib.version;
-        source = default_first_party_source;
-        rev = first_party_rev;
-        subdir = pkg_subdir;
-        integrity }
-    ) in
-    Ok { schema = "cn.deps.lock.v1"; packages }
-
-let empty_lockfile =
-  { schema = "cn.deps.lock.v1"; packages = [] }
+    match load_package_index () with
+    | Error msg ->
+        Error (Printf.sprintf
+          "Cannot build lockfile: %s. Run 'scripts/build-packages.sh' \
+           inside the cnos repo to generate packages/index.json." msg)
+    | Ok index ->
+        let rec collect acc = function
+          | [] -> Ok (List.rev acc)
+          | (d : manifest_dep) :: rest ->
+              (match lookup_index index ~name:d.name ~version:d.version with
+               | None ->
+                   Error (Printf.sprintf
+                     "Package %s@%s not found in package index"
+                     d.name d.version)
+               | Some entry ->
+                   let lock_entry = {
+                     name = d.name;
+                     version = d.version;
+                     sha256 = entry.ie_sha256;
+                   } in
+                   collect (lock_entry :: acc) rest)
+        in
+        match collect [] m.packages with
+        | Error e -> Error e
+        | Ok packages -> Ok { schema = "cn.lock.v2"; packages }
 
 (* === CLI entry points === *)
 
@@ -575,7 +602,6 @@ let run_list ~hub_path =
     installed |> List.iter (fun (name, version) ->
       print_endline (Printf.sprintf "  %s@%s" name version))
   end;
-  (* Show package validation status *)
   match Cn_assets.validate_packages ~hub_path with
   | Ok () -> print_endline (Cn_fmt.ok "Core doctrine: present")
   | Error _ -> print_endline (Cn_fmt.warn "Core doctrine: missing (run 'cn deps restore')")
@@ -601,7 +627,6 @@ let run_doctor ~hub_path =
       Cn_ffi.Process.exit 1
 
 let run_add ~hub_path pkg_spec =
-  (* Parse pkg_spec as name@version or just name *)
   let name, version = match String.index_opt pkg_spec '@' with
     | Some i ->
         (String.sub pkg_spec 0 i,
@@ -612,10 +637,9 @@ let run_add ~hub_path pkg_spec =
     | Some m -> m
     | None -> default_manifest_for_profile "engineer"
   in
-  (* Check if already present *)
-  if List.exists (fun (d : manifest_dep) -> d.name = name) manifest.packages then begin
-    print_endline (Cn_fmt.warn (Printf.sprintf "%s already in deps" name));
-  end else begin
+  if List.exists (fun (d : manifest_dep) -> d.name = name) manifest.packages then
+    print_endline (Cn_fmt.warn (Printf.sprintf "%s already in deps" name))
+  else begin
     let manifest = { manifest with
       packages = manifest.packages @ [{ name; version }] } in
     write_manifest ~hub_path manifest;
@@ -638,10 +662,6 @@ let run_remove ~hub_path pkg_name =
       end
 
 let run_vendor ~hub_path =
-  (* Offline-first (#155 AC2): if every lockfile package already exists in
-     .cn/vendor/packages/<name>@<version>/ with a valid cn.package.json,
-     skip the fetch entirely. Lets airgapped operators run `cn deps vendor`
-     after manually populating the vendor tree. *)
   let pkg_root = Cn_assets.vendor_packages_path hub_path in
   let all_present =
     match read_lockfile ~hub_path with
@@ -662,7 +682,6 @@ let run_vendor ~hub_path =
      | Error msg ->
          print_endline (Cn_fmt.fail msg);
          Cn_ffi.Process.exit 1);
-  (* Remove .cn/vendor from .gitignore if present *)
   let gitignore = Cn_ffi.Path.join hub_path ".gitignore" in
   if Cn_ffi.Fs.exists gitignore then begin
     let content = Cn_ffi.Fs.read gitignore in

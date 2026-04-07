@@ -15,7 +15,7 @@ A release is not the end of the method. Assessment and closure are part of the m
 ## Algorithm
 
 1. Define — observe the system, select the gap, name the incoherence, choose MCA or MCI.
-2. Unfold — produce artifacts in order: design → contract → plan → tests → code → docs → self-coherence → review → gate → release → observe → assess.
+2. Unfold — produce artifacts in order: design → contract → plan → tests → code (or delegated handoff §2.5a) → docs → self-coherence → review → gate → release → observe → assess.
 3. Rules — enforce the mechanical invariants and leave semantic judgment explicit.
 
 ---
@@ -160,6 +160,34 @@ For substantial changes:
 
 Do not invert the order casually. Each step should reduce uncertainty for the next.
 
+### 2.5a Delegated implementation handoff
+
+When implementation is delegated to another agent (Claude Code, sub-agent, human contractor), the prompt or brief is the contract. The receiving agent does not have session context, prior cycle learnings, or loaded skills.
+
+The handoff must include:
+
+1. **Active skills by name + location** — not just "follow best practices." The implementer must be told which SKILL.md files constrain the work and where to find them.
+2. **Test requirements per module** — which new modules need tests, what coverage shape (unit, integration, expect-test), and what invariants the tests must prove. "Run dune runtest" is a gate, not a test spec.
+3. **Engineering conventions from prior cycles** — any relevant precedent that the implementer would not know. Examples: "v3.32.0 removed all bare `with _ ->` catches — do not reintroduce them," "lockfile types live in cn_deps.ml, not cn_lib.ml."
+4. **Artifact order** — the handoff must specify tests-before-code (§2.5) or explicitly justify inversion. A prompt that describes only code stages implicitly inverts the pipeline.
+
+**Why this is mechanical, not judgment:** a checklist on the handoff, not a review finding after the fact. Two agents writing the same handoff should produce the same constraints. Review catching convention violations that the handoff should have prevented is a process bug — the gap is in the handoff, not the review.
+
+**Self-verification gate:** The handoff must require the implementer to produce a self-verification report before declaring completion. The report must include:
+
+1. **Active skill compliance** — for each named active skill, state which rules were followed and whether any were violated. Evidence: grep or line reference, not "I followed it."
+2. **Test coverage** — for each new module, state: tests exist (yes/no), what invariants they prove, what is untested and why.
+3. **Convention compliance** — for each named convention, state: complied (yes/no), evidence.
+4. **Artifact order** — state whether tests preceded code, or justify inversion.
+
+The self-verification report is the implementer's exit gate. Without it, the handoff is incomplete — even if CI passes. CI proves the code compiles. The report proves the code satisfies the project's constraints.
+
+Failure mode: the handoff describes *what to build* but not *how the project constrains building it*. The implementer produces correct features with wrong engineering conventions. Or: the handoff includes constraints but the implementer has no gate requiring them to verify compliance — constraints are sent but never checked.
+
+  - ❌ "Build HTTP restore, command discovery, and doctor validation. Run dune build before committing."
+  - ❌ "Build with these constraints: [good list]" (no self-verification gate — constraints sent, never checked)
+  - ✅ "Build HTTP restore, command discovery, and doctor validation. Active skills: ocaml (src/agent/skills/eng/ocaml/SKILL.md — §3.1: no bare `with _ ->`, use Result types), testing (test each new module with ppx_expect). Convention: v3.32.0 removed all silent exception swallowing — do not reintroduce. Artifact order: tests before code per CDD §2.5. Before declaring complete: produce a self-verification report covering skill compliance, test coverage per module, convention compliance, and artifact order."
+
 ### 2.6 Review
 
 Use CLP. Ask for:
@@ -270,7 +298,18 @@ If a substantial change lands directly on main without a branch or PR, the canon
 
 ---
 
-## 4. Delegation
+## 4. Pipeline Reference
+
+The master pipeline tables live in the canonical spec:
+
+- **Step lifecycle:** `docs/gamma/cdd/CDD.md` §4.1 (steps 0–13, purpose, required output)
+- **Artifact manifest:** `docs/gamma/cdd/CDD.md` §5.3 (step, evidence, format, owner, producer, skill)
+
+This skill does not duplicate those tables. If this skill and the canonical doc disagree, the canonical doc governs (§6).
+
+---
+
+## 5. Delegation
 
 CDD owns the lifecycle. Sub-skills own execution details:
 
@@ -283,7 +322,7 @@ CDD defines what must happen and in what order. Sub-skills define how.
 
 ---
 
-## 5. Authority
+## 6. Authority
 
 This skill is the executable summary. The canonical algorithm spec is:
 
@@ -295,7 +334,7 @@ If this skill and the canonical doc disagree, the canonical doc governs.
 
 ---
 
-## 6. Reference
+## 7. Reference
 
 - canonical spec: `docs/gamma/cdd/CDD.md`
 - rationale: `docs/gamma/cdd/RATIONALE.md`
@@ -307,7 +346,7 @@ If this skill and the canonical doc disagree, the canonical doc governs.
 
 ---
 
-## 7. Kata
+## 8. Kata
 
 ### Scenario
 

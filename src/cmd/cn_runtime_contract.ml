@@ -17,9 +17,7 @@
 type package_info = {
   name : string;
   version : string;
-  source : string;
-  rev : string;
-  integrity : string option;
+  sha256 : string option;
   doctrine_count : int;
   mindset_count : int;
   skill_count : int;
@@ -174,12 +172,8 @@ let gather ~hub_path ~(shell_config : Cn_shell.shell_config)
           List.find_opt (fun (d : Cn_deps.locked_dep) ->
             d.name = pkg_name && d.version = pkg_version) lf.packages
       in
-      let source = match lock_entry with
-        | Some d -> d.source | None -> "" in
-      let rev = match lock_entry with
-        | Some d -> d.rev | None -> "" in
-      let integrity = match lock_entry with
-        | Some d -> d.integrity | None -> None in
+      let sha256 = match lock_entry with
+        | Some d -> Some d.sha256 | None -> None in
       let doctrine_dir = Cn_ffi.Path.join pkg_path "doctrine" in
       let doctrine_count =
         if Cn_ffi.Fs.exists doctrine_dir then
@@ -199,7 +193,7 @@ let gather ~hub_path ~(shell_config : Cn_shell.shell_config)
       let skills_dir = Cn_ffi.Path.join pkg_path "skills" in
       let skill_count = List.length (Cn_assets.walk_skills skills_dir) in
       { name = pkg_name; version = pkg_version;
-        source; rev; integrity;
+        sha256;
         doctrine_count; mindset_count; skill_count })
   in
 
@@ -294,14 +288,14 @@ returns a contract_redirect, not file content.\n\n";
   else begin
     Buffer.add_char buf '\n';
     List.iter (fun (p : package_info) ->
-      let integrity_str = match p.integrity with
-        | Some h -> Printf.sprintf ", integrity=%s" h
+      let sha_str = match p.sha256 with
+        | Some h -> Printf.sprintf ", sha256=%s" h
         | None -> ""
       in
       Buffer.add_string buf (Printf.sprintf
         "  - %s@%s (%d doctrine, %d mindsets, %d skills%s)\n"
         p.name p.version p.doctrine_count p.mindset_count p.skill_count
-        integrity_str)
+        sha_str)
     ) c.cognition.packages
   end;
 
@@ -382,14 +376,12 @@ let to_json ~(shell_config : Cn_shell.shell_config) (c : runtime_contract) =
         let base = [
           "name", str p.name;
           "version", str p.version;
-          "source", str p.source;
-          "rev", str p.rev;
           "doctrine_count", Cn_json.Int p.doctrine_count;
           "mindset_count", Cn_json.Int p.mindset_count;
           "skill_count", Cn_json.Int p.skill_count;
         ] in
-        let base = match p.integrity with
-          | Some h -> base @ ["integrity", str h]
+        let base = match p.sha256 with
+          | Some h -> base @ ["sha256", str h]
           | None -> base
         in
         Cn_json.Object base) c.cognition.packages);

@@ -66,13 +66,16 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
 
-      - name: Generate checksums
+      - name: Generate binary checksums
         run: |
           cd artifacts
           for dir in cn-*; do
@@ -83,6 +86,29 @@ jobs:
             done
           done
           cat checksums.txt
+
+      - name: Build package tarballs and index
+        env:
+          CNOS_REPO: ${{ github.repository }}
+        run: |
+          scripts/build-packages.sh
+          mkdir -p artifacts/packages
+          cp dist/packages/*.tar.gz artifacts/packages/
+          cp packages/index.json artifacts/packages/
+          ls -la artifacts/packages/
+
+      - name: Commit updated package index
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet -- packages/index.json; then
+            git add packages/index.json
+            git commit -m "chore(release): update packages/index.json for ${GITHUB_REF_NAME}"
+            # Push the index update to main so the raw GitHub URL resolves it.
+            git push origin HEAD:main || echo "WARN: could not push index update to main (non-fatal)"
+          else
+            echo "packages/index.json unchanged"
+          fi
 
       - name: Check for release notes
         id: notes
@@ -100,6 +126,8 @@ jobs:
           files: |
             artifacts/*/cn-*
             artifacts/checksums.txt
+            artifacts/packages/*.tar.gz
+            artifacts/packages/index.json
           body_path: RELEASE.md
 
       - name: Create release (auto-generated)
@@ -109,4 +137,6 @@ jobs:
           files: |
             artifacts/*/cn-*
             artifacts/checksums.txt
+            artifacts/packages/*.tar.gz
+            artifacts/packages/index.json
           generate_release_notes: true

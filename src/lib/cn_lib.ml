@@ -668,10 +668,11 @@ Commands:
   # Dependencies
   deps [list]         List installed packages
   deps restore        Install from lockfile (deterministic)
-                      Tries shallow fetch by SHA first; falls back to a full
-                      fetch + checkout when the server rejects shallow-by-SHA
-                      (sandboxes, mirrors). Already-installed packages are
-                      skipped after integrity verification.
+                      Downloads each package tarball over HTTPS, verifies
+                      SHA-256 against the lockfile, extracts into
+                      .cn/vendor/packages/<name>@<version>/, and validates
+                      cn.package.json. Already-installed packages are
+                      skipped.
   deps doctor         Verify installed assets match lockfile
                       Manually vendored packages with a valid cn.package.json
                       are recognized as installed.

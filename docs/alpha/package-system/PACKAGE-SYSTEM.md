@@ -33,7 +33,7 @@ It answers:
 A package content class is a named category of assets that the build system
 knows how to copy from `src/agent/<class>/` into `packages/<name>/<class>/`.
 
-### 1.1 Current set (6 classes)
+### 1.1 Content classes
 
 | Class | Copy mode | Source location | Declared in manifest | Runtime role |
 |-------|-----------|-----------------|---------------------|--------------|
@@ -42,10 +42,20 @@ knows how to copy from `src/agent/<class>/` into `packages/<name>/<class>/`.
 | skills | directory trees | `src/agent/skills/` | `"skills": ["path/to/skill"]` | Keyword-scored, bounded |
 | extensions | directory trees | `src/agent/extensions/` | `"extensions": ["ext.name"]` | Runtime capability providers |
 | templates | named files | `src/agent/templates/` | `"templates": ["FILE.md"]` | Identity/config scaffolding for new hubs |
+| commands | declared entries | `packages/<name>/commands/` | `"commands": { "<name>": { ... } }` | Operator-facing CLI commands |
 | (metadata) | implicit | `packages/<name>/` | `cn.package.json` | Package identity, version, engine constraint |
 
-Metadata (`cn.package.json`) is not a source-declared content class. It is
-always present and not copied from `src/agent/`.
+Most content classes are copied from `src/agent/<class>/` by `cn build`.
+The `commands` class is the exception: command files are authored
+directly under `packages/<name>/commands/<file>` and ship with the
+package tree. The manifest entry for a command is a JSON object
+mapping the command name to `{ entrypoint, summary }`, where
+`entrypoint` is a file path relative to the package root
+(e.g. `commands/cn-daily`) and `summary` is a one-line description
+shown by `cn help`.
+
+Metadata (`cn.package.json`) is not a source-declared content class.
+It is always present and not copied from `src/agent/`.
 
 ### 1.2 Copy modes
 
@@ -119,9 +129,25 @@ spec/SOUL.md (in hub)
 
 ### 2.4 Install (cn deps restore)
 
-- Fetches package contents (local first-party or remote Git)
-- Materializes into `.cn/vendor/packages/<name>@<version>/`
-- Verifies integrity
+First-party packages are distributed as versioned tarball artifacts
+published to GitHub releases. The restore flow is:
+
+1. Read the lockfile (`.cn/deps.lock.json`) — name + version + sha256 per package
+2. Look the name+version up in the package index (`packages/index.json`) for a URL
+3. Download `<name>-<version>.tar.gz` over HTTPS
+4. Verify the SHA-256 against the lockfile entry
+5. Extract into `.cn/vendor/packages/<name>@<version>/`
+6. Validate the extracted `cn.package.json`
+
+The package index is the resolution authority (name+version → URL);
+the lockfile is the integrity authority (name+version → sha256).
+Hosting can move by republishing a new index without touching any
+hub's lockfile.
+
+When `cn deps restore` runs inside a cnos checkout, first-party
+packages are copied directly from the local source tree after a
+freshness check against `src/agent/`. This is the development path;
+consumers always go through the index.
 
 ---
 
@@ -141,13 +167,19 @@ Content classes are declared in the `sources` object of `cn.package.json`:
     "mindsets": ["ENGINEERING.md", "PM.md", "WISDOM.md"],
     "skills": ["agent/agent-ops", "cdd", "eng/coding"],
     "extensions": ["cnos.net.http"],
-    "templates": ["SOUL.md", "USER.md"]
+    "templates": ["SOUL.md", "USER.md"],
+    "commands": {
+      "daily": {
+        "entrypoint": "commands/cn-daily",
+        "summary": "Create or show the daily reflection thread"
+      }
+    }
   }
 }
 ```
 
 All content class keys are optional. A package may declare any subset.
-Missing keys default to empty lists.
+Missing keys default to empty lists (or empty objects for `commands`).
 
 ---
 
@@ -247,3 +279,21 @@ identity templates. The set is intentionally closed:
 | v3.4.0 | Package system introduced (doctrine, mindsets, skills) |
 | v3.18.0 | Extensions added as 4th content class |
 | v3.24.0 | Templates added as 5th declared content class (#119) |
+
+---
+
+## 7. Command Discovery
+
+CLI commands resolved by `cn <name>` follow a fixed precedence order. The first match wins; later layers are not consulted.
+
+1. **Built-in commands** — compiled into the `cn` binary (`cn status`, `cn doctor`, `cn deps`, ...). Authoritative.
+2. **Repo-local commands** — executable files at `.cn/commands/cn-<name>` inside the current hub. Discovered at dispatch time. Used for hub-specific automation that should not be packaged.
+3. **Vendored package commands** — declared under the `commands` content class of any installed package in `.cn/vendor/packages/<name>@<version>/`. Resolved by walking each installed package's `cn.package.json` and matching `commands.<name>`.
+
+There is no PATH fallback. If two external commands at the **same precedence level** claim the same name, that is a `cn doctor` error (the package author or hub operator must rename). Built-ins always shadow external commands silently — built-ins are part of the system surface.
+
+External commands are dispatched via `exec`: argv (minus `cn`) is passed through, the working directory is the hub root, and a small set of environment variables (`CN_HUB_PATH`, `CN_PACKAGE_ROOT` for package commands) is exported so the script can locate hub state without re-discovering it.
+
+`cn help` lists all three layers with source and summary. `cn doctor` validates package command integrity: duplicate names within a layer, missing entrypoints, non-executable command files, and malformed metadata are all errors.
+
+Runtime capability extensions (see `RUNTIME-EXTENSIONS.md`) are a **separate** system and unaffected by command discovery. Extensions provide typed capability providers for the agent runtime; commands are operator-facing CLI entry points. Both can ship in the same package without overlap.

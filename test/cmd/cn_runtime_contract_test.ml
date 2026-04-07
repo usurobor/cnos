@@ -331,21 +331,15 @@ let%expect_test "to_json: medium contains zone entries" =
 (* === PACKAGE PROVENANCE (AC7, Issue #113)                  === *)
 (* ============================================================ *)
 
-let%expect_test "gather: package info includes provenance from lockfile (AC7)" =
+let%expect_test "gather: package info includes sha256 from lockfile" =
   with_test_hub (fun hub ->
-    (* Create a lockfile so gather can read provenance *)
+    (* Create a lockfile so gather can read package sha256 *)
     let v = Cn_lib.version in
     let lock : Cn_deps.lockfile = {
-      schema = "cn.deps.lock.v1";
+      schema = "cn.lock.v2";
       packages = [
-        { name = "cnos.core"; version = v;
-          source = "https://github.com/usurobor/cnos.git";
-          rev = "abc123"; subdir = "packages/cnos.core";
-          integrity = Some "md5:deadbeef" };
-        { name = "cnos.eng"; version = v;
-          source = "https://github.com/usurobor/cnos.git";
-          rev = "abc123"; subdir = "packages/cnos.eng";
-          integrity = None };
+        { name = "cnos.core"; version = v; sha256 = "deadbeef" };
+        { name = "cnos.eng";  version = v; sha256 = "cafef00d" };
       ];
     } in
     Cn_deps.write_lockfile ~hub_path:hub lock;
@@ -353,24 +347,20 @@ let%expect_test "gather: package info includes provenance from lockfile (AC7)" =
     let c = Cn_runtime_contract.gather ~hub_path:hub
               ~shell_config:default_shell_config ~assets ~peers:[] () in
     List.iter (fun (p : Cn_runtime_contract.package_info) ->
-      Printf.printf "%s: source=%b rev=%b integrity=%s\n"
-        p.name (p.source <> "") (p.rev <> "")
-        (match p.integrity with Some h -> h | None -> "none")
+      Printf.printf "%s: sha256=%s\n"
+        p.name (match p.sha256 with Some h -> h | None -> "none")
     ) c.cognition.packages);
   [%expect {|
-    cnos.core: source=true rev=true integrity=md5:deadbeef
-    cnos.eng: source=true rev=true integrity=none |}]
+    cnos.core: sha256=deadbeef
+    cnos.eng: sha256=cafef00d |}]
 
-let%expect_test "to_json: package entries include source and rev (AC7)" =
+let%expect_test "to_json: package entries include sha256" =
   with_test_hub (fun hub ->
     let v = Cn_lib.version in
     let lock : Cn_deps.lockfile = {
-      schema = "cn.deps.lock.v1";
+      schema = "cn.lock.v2";
       packages = [
-        { name = "cnos.core"; version = v;
-          source = "https://github.com/usurobor/cnos.git";
-          rev = "abc123"; subdir = "packages/cnos.core";
-          integrity = Some "md5:test123" };
+        { name = "cnos.core"; version = v; sha256 = "test123" };
       ];
     } in
     Cn_deps.write_lockfile ~hub_path:hub lock;
@@ -385,16 +375,14 @@ let%expect_test "to_json: package entries include source and rev (AC7)" =
       | Some (Cn_json.Array pkgs) ->
         List.iter (fun pkg ->
           let name = Cn_json.get_string "name" pkg in
-          let has_source = Cn_json.get_string "source" pkg <> None in
-          let has_rev = Cn_json.get_string "rev" pkg <> None in
-          let has_integrity = Cn_json.get_string "integrity" pkg <> None in
-          Printf.printf "%s: source=%b rev=%b integrity=%b\n"
-            (Option.value ~default:"?" name) has_source has_rev has_integrity
+          let has_sha = Cn_json.get_string "sha256" pkg <> None in
+          Printf.printf "%s: sha256=%b\n"
+            (Option.value ~default:"?" name) has_sha
         ) pkgs
       | _ -> print_endline "packages not array");
   [%expect {|
-    cnos.core: source=true rev=true integrity=true
-    cnos.eng: source=true rev=true integrity=false |}]
+    cnos.core: sha256=true
+    cnos.eng: sha256=false |}]
 
 let%expect_test "to_json: exec_enabled reflects shell_config" =
   with_test_hub (fun hub ->
