@@ -173,10 +173,20 @@ The handoff must include:
 
 **Why this is mechanical, not judgment:** a checklist on the handoff, not a review finding after the fact. Two agents writing the same handoff should produce the same constraints. Review catching convention violations that the handoff should have prevented is a process bug — the gap is in the handoff, not the review.
 
-Failure mode: the handoff describes *what to build* but not *how the project constrains building it*. The implementer produces correct features with wrong engineering conventions.
+**Self-verification gate:** The handoff must require the implementer to produce a self-verification report before declaring completion. The report must include:
+
+1. **Active skill compliance** — for each named active skill, state which rules were followed and whether any were violated. Evidence: grep or line reference, not "I followed it."
+2. **Test coverage** — for each new module, state: tests exist (yes/no), what invariants they prove, what is untested and why.
+3. **Convention compliance** — for each named convention, state: complied (yes/no), evidence.
+4. **Artifact order** — state whether tests preceded code, or justify inversion.
+
+The self-verification report is the implementer's exit gate. Without it, the handoff is incomplete — even if CI passes. CI proves the code compiles. The report proves the code satisfies the project's constraints.
+
+Failure mode: the handoff describes *what to build* but not *how the project constrains building it*. The implementer produces correct features with wrong engineering conventions. Or: the handoff includes constraints but the implementer has no gate requiring them to verify compliance — constraints are sent but never checked.
 
   - ❌ "Build HTTP restore, command discovery, and doctor validation. Run dune build before committing."
-  - ✅ "Build HTTP restore, command discovery, and doctor validation. Active skills: ocaml (src/agent/skills/eng/ocaml/SKILL.md — §3.1: no bare `with _ ->`, use Result types), testing (test each new module with ppx_expect). Convention: v3.32.0 removed all silent exception swallowing — do not reintroduce. Artifact order: tests before code per CDD §2.5."
+  - ❌ "Build with these constraints: [good list]" (no self-verification gate — constraints sent, never checked)
+  - ✅ "Build HTTP restore, command discovery, and doctor validation. Active skills: ocaml (src/agent/skills/eng/ocaml/SKILL.md — §3.1: no bare `with _ ->`, use Result types), testing (test each new module with ppx_expect). Convention: v3.32.0 removed all silent exception swallowing — do not reintroduce. Artifact order: tests before code per CDD §2.5. Before declaring complete: produce a self-verification report covering skill compliance, test coverage per module, convention compliance, and artifact order."
 
 ### 2.6 Review
 
