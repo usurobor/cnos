@@ -16,7 +16,7 @@ After every `git tag` + `gh release create`. No exceptions — patch, minor, or 
 
 ## Output
 
-The assessment produces one artifact with five sections:
+The assessment produces one artifact with the following sections:
 
 ```markdown
 ## Post-Release Assessment — vX.Y.Z
