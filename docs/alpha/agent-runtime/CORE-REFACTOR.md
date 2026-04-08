@@ -469,6 +469,20 @@ This refactor does not:
 
 ---
 
+## Immediate Execution Slice (KISS/YAGNI)
+
+The full design is the north star. These three moves execute first:
+
+**Move 1 — Command pipeline symmetry.** Remove the biggest structural exception: commands become ordinary package content, authored in `src/agent/commands/` and flowing through `cn build` like every other content class. Built-in kernel shrinks to: help, init, setup, deps, build, doctor, status, update. First migrations: daily, weekly, save. Leave commit and push built-in for one more cycle until the package-command path proves clean. Runtime extensions and low-level A2A transport remain untouched in this slice.
+
+**Move 2 — Pure-model gravity into `src/lib/`.** Do not create `src/core/`. Widen the existing `src/lib/` with pure types and validators extracted from `src/cmd/`. Candidates: package manifest types (from `cn_deps.ml`), runtime contract record types (from `cn_runtime_contract.ml`), workflow IR types/parser/validator (from `cn_workflow.ml`), activation types/evaluator (from `cn_activation.ml`). Discipline: no filesystem / git / process / HTTP / LLM code may move into `src/lib/`.
+
+**Move 3 — Retire beta package doc (#180).** Replace `docs/beta/architecture/PACKAGE-SYSTEM.md` with a short redirect stub pointing to the alpha spec. Preserves old links while killing the authority conflict.
+
+**Explicitly skipped for now:** package roles, richer activation schema, `src/host/` / `src/runtime/` split, gh-pages package source (#181), full directory-tree refactor. Reassess after Move 2 — if `src/lib/` gets crowded enough to justify `src/core/` / `src/host/` / `src/runtime/`, do it then with evidence.
+
+---
+
 ## Known Debt
 
 - Current `src/cmd/` extraction will take more than one cycle
