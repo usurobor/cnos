@@ -24,6 +24,7 @@ See [RELEASE-LEVEL-CLASSIFICATION.md](docs/gamma/essays/RELEASE-LEVEL-CLASSIFICA
 
 | Version | C_Σ | α | β | γ | Level | Coherence note |
 |---------|-----|---|---|---|-------|----------------|
+| 3.35.0 | A- | A | A- | B+ | L6 | Runtime contract: activation index + command/orchestrator registries (#173). Cognition layer now exposes `activation_index.skills` with declarative triggers from SKILL.md frontmatter. Body layer adds `commands` and `orchestrators` registries. Markdown/JSON parity enforced — markdown projection mirrors JSON schema shape. Silent error suppression eliminated: all manifest parse errors, malformed entries, and leaf-value coercions logged with package context in both `cn_runtime_contract.ml` and `cn_activation.ml`. Sibling audit applied across both modules. Design docs: ORCHESTRATORS.md v0.1.0 CTB connection (#172), #170 dependency graph cleaned. 21 expect-tests in runtime contract, 11 in activation. 3 review rounds on retro-findings PR. Process gap: PR #176 merged without CDD review — corrected via retro-review + findings PR #177. |
 | 3.34.0 | A- | A- | A- | B+ | L7 | Package artifact distribution + commands content class (#167). Replaces git-based package restore with HTTP tarball fetch from package index. Lockfile v2: name+version+sha256 only — no source/rev/subdir. `commands` added as 7th package content class. `cn_command.ml`: discovery + dispatch (built-in > repo-local > package). `cn_help.ml`: lists external commands. `cn_doctor.ml`: validates command integrity. `scripts/build-packages.sh` + `packages/index.json` for release workflow. CDD §2.5a: delegated implementation handoff protocol + self-verification gate. CDD.md §5.3: step 6f (delegated handoff) added to artifact manifest. Architecture-evolution skill §5: five L7 diagnostic patterns. Also includes: #155 vendor offline-first + manual recognition, #161 self-update checksum verification, #146 review findings, review PRE-GATE check, release script. Design: PACKAGE-ARTIFACTS.md v0.5.0, ORCHESTRATORS.md v0.1.0 (#170 follow-up). 2 review rounds, 3 findings R1 (bare catches, missing tests, HTTP restore tests), all addressed R2. |
 | 3.33.0 | A- | A | A- | A- | L6 | Harden installer: checksum verification, redirect detection, curated notes (#158). Version detection replaced GitHub API JSON parsing with HTTP redirect (`/releases/latest` Location header) — no jq dependency. Release workflow generates `checksums.txt` (SHA-256 per artifact), installer downloads and verifies (sha256sum/shasum, graceful degradation). RELEASE.md curated for v3.33.0. 1 review round, 1 minor finding (grep -F defensive hardening, non-blocking). |
 | 3.32.0 | A- | A | A | A- | L6 | Systematic legacy fallback path audit (#152). 29 findings across touched files: 7 removed (dead deprecated functions + flat asset compat), 15 converted (silent `with _ ->` swallows to logged warnings), 7 kept (fail-closed patterns with justification). `run_inbound`, `feed_next_input`, `wake_agent` deleted (dead code since v3.27). All flat hub-path compat helpers deleted (package namespace only since v3.25). Zero bare `with _ ->` in any touched file. 5 review rounds, 7 findings (4 judgment, 3 mechanical/environmental). Gamma improved from B+ (13 rounds in v3.31.0) to A- (5 rounds). Post-release assessment revised gamma: B+ -> A-. |
@@ -98,6 +99,30 @@ See [RELEASE-LEVEL-CLASSIFICATION.md](docs/gamma/essays/RELEASE-LEVEL-CLASSIFICA
 | v0.1.0 | C− | C | C− | D+ | L4 | Moltbook-coupled prototype with SQLite. |
 
 ---
+
+## 3.35.0 (2026-04-07)
+
+### Added
+
+- **Runtime contract activation index** (#173): cognition layer now exposes `activation_index.skills` with declarative triggers parsed from SKILL.md frontmatter. `cn_activation.ml`: frontmatter parser, activation table builder, conflict validator.
+- **Command registry in runtime contract** (#173): body layer includes `commands` registry via `Cn_command.discover`.
+- **Orchestrator registry in runtime contract** (#173): body layer includes `orchestrators` registry from package manifests.
+- **ORCHESTRATORS.md design doc** (#170): four-surface architecture (skills decide, commands dispatch, orchestrators execute, extensions provide capability). CTB as source language, Effect Plan as IR.
+
+### Changed
+
+- **Markdown/JSON parity enforced** (#177, F3): markdown projection of `activation_index` now renders two-level nesting (`activation_index: > skills: > entries`) matching JSON schema shape.
+- **Silent error suppression eliminated** (#177, F1/F2/R2): all manifest parse errors, malformed entries, and leaf-value coercions logged with package context in `cn_runtime_contract.ml` and `cn_activation.ml`.
+- **#170 dependency graph cleaned**: #172 independent, #173 depends on #170 (not #172), #174 explicitly owns orchestrator package-class.
+- **ORCHESTRATORS.md**: ETB replaced with CTB terminology (#172).
+
+### Fixed
+
+- **Retro-review findings** (#177): 5 findings from post-merge retro on PR #176 all addressed — silent orchestrator logging (F1/F2), parity (F3), missing tests (F4), stale bare catch confirmed absent (F5).
+
+### Process
+
+- PR #176 merged without CDD review — process violation corrected via retro-review and findings PR #177. WORKFLOW_AUTO.md created as mechanical gate to prevent recurrence.
 
 ## 3.32.0 (2026-04-04)
 

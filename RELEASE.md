@@ -1,50 +1,41 @@
-# cnos v3.34.0
+# v3.35.0
 
-## Headline
+## Outcome
 
-Package artifact distribution replaces git-based restore. Commands become a package content class.
+Coherence delta: C_Σ A- (`α A`, `β A-`, `γ B+`) · **Level:** `L6`
 
-## What changed
+The runtime contract now exposes the activation surface — which skills exist, what triggers them, and what commands and orchestrators are available. The agent's self-model gained three new registries that were previously invisible. Silent error suppression eliminated across both runtime-contract and activation modules.
 
-### Package distribution (#167)
-- `cn deps restore` now downloads versioned tarballs over HTTPS instead of fetching git commits
-- Package index (`packages/index.json`) resolves name+version to URL+SHA-256
-- Lockfile v2: `{name, version, sha256}` — no git transport metadata
-- All `source_kind`/`rev`/`subdir` logic deleted from `cn_deps.ml`
-- `scripts/build-packages.sh` generates tarballs and index at release time
+## Why it matters
 
-### Commands content class (#167)
-- `commands` is the 7th package content class in `cn.package.json`
-- `cn_command.ml`: discovery + dispatch (built-in > repo-local > package)
-- `cn help` lists external commands with source and summary
-- `cn doctor` validates command integrity (duplicates, missing entrypoints, non-executable, malformed)
-- `.cn/commands/` repo-local commands discoverable
+Before this release, the runtime contract's cognition layer knew about installed packages but not about the skills, commands, or orchestrators inside them. Activation was implicit — the agent couldn't see its own trigger surface. This release makes that surface explicit and queryable, which is the prerequisite for #174 (orchestrator IR runtime).
 
-### CDD process improvements (#167)
-- §2.5a: delegated implementation handoff protocol + self-verification gate
-- CDD.md §5.3: step 6f (delegated handoff) in artifact manifest
-- Architecture-evolution skill §5: five L7 diagnostic patterns
+The process gap matters too: PR #176 shipped without CDD review. The retro-review proved the code was correct, but the process violation was real. The corrective artifact (PR #177) and the mechanical gate (WORKFLOW_AUTO.md) close that gap.
 
-### Also included
-- #155: vendor offline-first short-circuit, manual vendor recognition, help surface
-- #161: self-update checksum verification
-- #146: review findings on hardcoded-paths removal
-- Review PRE-GATE: verify branch is unmerged before reviewing
-- Release tooling: `cn release` CLI removed, replaced by `scripts/release.sh`
+## Added
 
-## Breaking changes
+- **Runtime contract activation index** (#173): `activation_index.skills` in cognition layer with declarative triggers from SKILL.md frontmatter.
+- **Command and orchestrator registries** (#173): body layer exposes discovered commands and declared orchestrators.
+- **ORCHESTRATORS.md** (#170): four-surface architecture design doc — skills, commands, orchestrators, extensions. CTB as source language, Effect Plan as IR.
 
-- Lockfile format changed from `cn.deps.lock.v1` to `cn.lock.v2`. Existing lockfiles must be regenerated (`cn deps restore` will create a new one).
-- `cn release` CLI command removed. Use `scripts/release.sh` instead.
+## Changed
 
-## Design documents
+- **Markdown/JSON parity** (#177, F3): activation_index markdown now mirrors JSON two-level nesting.
+- **Silent suppression eliminated** (#177, F1/F2/R2): all error paths in `cn_runtime_contract.ml` and `cn_activation.ml` now log with package context.
+- **#170 dependency graph** corrected: #172 independent, #173 depends on #170, #174 owns orchestrator package-class.
 
-- `docs/alpha/package-system/PACKAGE-ARTIFACTS.md` v0.5.0 — artifact-first distribution, NuGet model
-- `docs/alpha/agent-runtime/ORCHESTRATORS.md` v0.1.0 — follow-up design for #170
+## Fixed
 
-## Upgrade
+- **Retro-review findings** (#177): all 5 findings from PR #176 post-merge retro addressed in code.
 
-```sh
-cn update
-cn deps restore   # regenerates lockfile in v2 format
-```
+## Validation
+
+- CI green on main (ocaml, I1 drift, I2/I3 traceability).
+- 21 expect-tests in `cn_runtime_contract_test.ml`, 11 in `cn_activation_test.ml`.
+- Zero bare `with _ ->` catches in touched modules.
+- `scripts/check-version-consistency.sh` passes.
+
+## Known Issues
+
+- `cn_runtime_contract.ml` carrying significant rendering + registry + contract logic — module split is future cleanup.
+- ~25 stale `claude/*` remote branches — cleanup deferred.
