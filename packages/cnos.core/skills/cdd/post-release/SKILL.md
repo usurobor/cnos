@@ -145,8 +145,8 @@ This decision is **mandatory**. Every release states the balance.
 Answer three questions:
 1. **What went wrong?** What broke, was caught late, or slipped through?
 2. **What went right?** What process improvement paid off?
-3. **Skill patches needed?** If a repeatable failure mode is identified, patch the skill NOW — not next session.
-4. **Active skill re-evaluation.** For each review finding: would the declared active skills, as written, have prevented it? If not, is the skill underspecified for this pattern, or was it just not applied deeply enough? Underspecified → patch the skill. Application gap → note it but don't patch (the skill was right, the agent didn't follow it).
+3. **Skill patches needed?** If a repeatable failure mode is identified, patch the skill NOW — not next session. This is CDD step 12a: the patch must land in the same commit as the assessment, synced across all surfaces (`src/agent/skills/`, `packages/cnos.core/skills/`, `docs/gamma/cdd/CDD.md`). A "noted for next cycle" commitment is insufficient when the failure mode is recurring — two cycles of the same mechanical failure with no spec-level fix is the trigger.
+4. **Active skill re-evaluation.** For each review finding: would the declared active skills, as written, have prevented it? If not, is the skill underspecified for this pattern, or was it just not applied deeply enough? Underspecified → patch the skill (step 12a). Application gap → note it but don't patch (the skill was right, the agent didn't follow it).
 
 ### Step 5.5: Review quality
 
@@ -238,8 +238,9 @@ Before committing the assessment, verify mechanically:
 - [ ] §4 has all fields: PRs, review rounds, superseded PRs, finding breakdown, mechanical ratio, action
 - [ ] §4 mechanical ratio: if >20%, a process issue is **filed and referenced** (not just noted)
 - [ ] §4a CDD self-coherence: α/β/γ scored, weakest axis named, action stated (or "none" if all ≥3)
+- [ ] §3/§4 skill patches: if §3 identifies a recurring failure mode or skill gap, the patch is **in this commit** (not deferred) and synced across all surfaces: `src/agent/skills/`, `packages/cnos.core/skills/` (build-sync §3.3), `docs/gamma/cdd/CDD.md` (authority-sync §3.3a). Verify with `diff` that src/agent and packages/cnos.core copies are identical.
 - [ ] §5.7 has production verification scenario (or explicit deferral with commitment)
-- [ ] §6 CDD Closeout trace present with rows for observe/assess/close steps
+- [ ] §6 CDD Closeout trace present with rows for observe/assess/close steps (incl. step 12a if skill patches landed)
 - [ ] §7 has all 6 fields: Next MCA, Owner, Branch, **First AC**, MCI frozen?, Rationale
 - [ ] §7 Closure evidence: immediate outputs listed with links, deferred outputs with issue/owner
 - [ ] CHANGELOG TSC row added or updated to match assessment scores
