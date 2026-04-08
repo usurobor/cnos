@@ -192,11 +192,24 @@ Not a one-shot rename. Move logic gradually toward this structure.
 
 ## 5. Execution Order
 
-1. Fix the command authoring asymmetry (§2.3) — smallest change with highest structural payoff
-2. Doc coherence (#180) — retire beta Git-native claim
-3. Package source (#181) — gh-pages consumer endpoint
-4. Phase 1 (core extraction) — the real refactoring work
-5. Phases 2–5 incrementally
+### Immediate execution slice (KISS/YAGNI)
+
+Full design is the north star. Execute three moves first:
+
+1. **Command pipeline symmetry** — commands through `src/agent/` → `cn build` → `packages/`. First migrations: daily, weekly, save. Built-in shrinks to 8.
+2. **Pure-model gravity into `src/lib/`** — no new directories. Pure types sink down, impure stays in `src/cmd/`.
+3. **Retire beta package doc (#180)** — redirect stub to alpha spec.
+
+Skip for now: package roles, richer activation schema, `src/host/`/`src/runtime/` split, gh-pages (#181), full directory tree.
+
+### Full plan (north star)
+
+1. Command pipeline symmetry
+2. `src/lib/` extraction
+3. Doc coherence (#180)
+4. Package source (#181) — when scale justifies
+5. `src/core/` / `src/host/` / `src/runtime/` — when `src/lib/` gets crowded
+6. Full design phases incrementally
 
 ## 6. Related
 
