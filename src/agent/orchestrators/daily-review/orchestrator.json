@@ -5,9 +5,6 @@
     "kind": "command",
     "name": "daily-review"
   },
-  "inputs": {
-    "requires_hub": true
-  },
   "permissions": {
     "llm": true,
     "ops": ["fs_read", "fs_write"],

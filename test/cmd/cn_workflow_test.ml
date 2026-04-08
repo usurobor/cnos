@@ -415,3 +415,72 @@ let%expect_test "X5 execute: llm step — deferred, emits 'not implemented' fail
       Printf.printf "mentions_not_implemented=%b\n"
         (has_substring msg "not yet implemented"));
   [%expect {| mentions_not_implemented=true |}]
+
+let%expect_test "X6 execute: match step selects a case by bound scalar" =
+  with_test_hub (fun hub ->
+    let o = parse_or_fail {|{
+      "kind":"cn.orchestrator.v1","name":"match-case",
+      "trigger":{"kind":"command","name":"x"},
+      "permissions":{"llm":false,"ops":[],"external_effects":false},
+      "steps":[
+        {"id":"pick","kind":"match","input":"flavor",
+         "cases":{"vanilla":"v","chocolate":"c"},"default":"d"},
+        {"id":"v","kind":"return","value":{"chose":"vanilla"}},
+        {"id":"c","kind":"return","value":{"chose":"chocolate"}},
+        {"id":"d","kind":"return","value":{"chose":"default"}}
+      ]
+    }|} in
+    match Cn_workflow.execute ~hub_path:hub
+            ~env:[("flavor", Cn_json.String "vanilla")] o with
+    | Cn_workflow.Failed msg -> Printf.printf "failed: %s\n" msg
+    | Cn_workflow.Completed v ->
+      Printf.printf "chose=%s\n"
+        (Cn_json.get_string "chose" v |> Option.value ~default:"?"));
+  [%expect {| chose=vanilla |}]
+
+let%expect_test "X7 execute: match step falls back to default when no case matches" =
+  with_test_hub (fun hub ->
+    let o = parse_or_fail {|{
+      "kind":"cn.orchestrator.v1","name":"match-default",
+      "trigger":{"kind":"command","name":"x"},
+      "permissions":{"llm":false,"ops":[],"external_effects":false},
+      "steps":[
+        {"id":"pick","kind":"match","input":"flavor",
+         "cases":{"vanilla":"v","chocolate":"c"},"default":"d"},
+        {"id":"v","kind":"return","value":{"chose":"vanilla"}},
+        {"id":"c","kind":"return","value":{"chose":"chocolate"}},
+        {"id":"d","kind":"return","value":{"chose":"default"}}
+      ]
+    }|} in
+    match Cn_workflow.execute ~hub_path:hub
+            ~env:[("flavor", Cn_json.String "strawberry")] o with
+    | Cn_workflow.Failed msg -> Printf.printf "failed: %s\n" msg
+    | Cn_workflow.Completed v ->
+      Printf.printf "chose=%s\n"
+        (Cn_json.get_string "chose" v |> Option.value ~default:"?"));
+  [%expect {| chose=default |}]
+
+let%expect_test "X8 execute: if step branches on bound bool" =
+  with_test_hub (fun hub ->
+    let o = parse_or_fail {|{
+      "kind":"cn.orchestrator.v1","name":"if-branch",
+      "trigger":{"kind":"command","name":"x"},
+      "permissions":{"llm":false,"ops":[],"external_effects":false},
+      "steps":[
+        {"id":"choose","kind":"if","cond":"flag","then":"t","else":"f"},
+        {"id":"t","kind":"return","value":{"branch":"then"}},
+        {"id":"f","kind":"return","value":{"branch":"else"}}
+      ]
+    }|} in
+    let true_outcome = Cn_workflow.execute ~hub_path:hub
+      ~env:[("flag", Cn_json.Bool true)] o in
+    let false_outcome = Cn_workflow.execute ~hub_path:hub
+      ~env:[("flag", Cn_json.Bool false)] o in
+    let show outcome =
+      match outcome with
+      | Cn_workflow.Failed msg -> "fail:" ^ msg
+      | Cn_workflow.Completed v ->
+        Cn_json.get_string "branch" v |> Option.value ~default:"?"
+    in
+    Printf.printf "true=%s false=%s\n" (show true_outcome) (show false_outcome));
+  [%expect {| true=then false=else |}]

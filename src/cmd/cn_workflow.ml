@@ -45,12 +45,10 @@ type step =
       op : string;             (** op kind name e.g. "fs_read" *)
       args : (string * Cn_json.t) list;
       bind : string option;
-      inputs : string list;
     }
   | Llm_step of {
       id : string;
       prompt : string;
-      inputs : string list;
       bind : string option;
     }
   | If_step of {
@@ -132,13 +130,23 @@ let parse_step json =
         | _ -> []
       in
       let bind = Cn_json.get_string "bind" json in
-      let inputs = parse_string_list "inputs" json in
-      Ok (Op_step { id; op; args; bind; inputs })
+      (* Note: the `inputs` field (a string list referencing bound
+         names from prior steps) is accepted by the wire schema
+         (ORCHESTRATORS.md §8) but not yet consumed by the executor.
+         The binding-substitution mechanism is part of the `llm`
+         step design work deferred from this cycle. Once `llm` is
+         wired, `inputs` is re-added to the Op_step record with a
+         resolution pass from the environment into args. For now it
+         is silently accepted at parse time to preserve
+         forward-compatibility at the wire level. *)
+      ignore (parse_string_list "inputs" json);
+      Ok (Op_step { id; op; args; bind })
   | "llm" ->
       let* prompt = require_string "prompt" json in
-      let inputs = parse_string_list "inputs" json in
+      (* Same deferral as Op_step: inputs is accepted but not stored. *)
+      ignore (parse_string_list "inputs" json);
       let bind = Cn_json.get_string "bind" json in
-      Ok (Llm_step { id; prompt; inputs; bind })
+      Ok (Llm_step { id; prompt; bind })
   | "if" ->
       let* cond = require_string "cond" json in
       let* then_ref = require_string "then" json in
@@ -623,8 +631,14 @@ and next_step_after o id =
   in
   walk o.steps
 
-(** Execute the orchestrator from its first step. *)
-let execute ~hub_path ?(shell_config = Cn_shell.default_shell_config) o =
+(** Execute the orchestrator from its first step.
+
+    [env] supplies a pre-seeded binding environment; the default
+    [[]] starts clean. Tests use this to pre-bind scalars so the
+    [if] and [match] branches can be exercised directly without
+    needing a working [llm] step (which is deferred in v1). *)
+let execute ~hub_path ?(shell_config = Cn_shell.default_shell_config)
+            ?(env = []) o =
   match o.steps with
   | [] -> Failed (Printf.sprintf "workflow '%s' has no steps" o.name)
   | first :: _ ->
@@ -638,4 +652,4 @@ let execute ~hub_path ?(shell_config = Cn_shell.default_shell_config) o =
               o.name (step_id step))
         | `Jump (env', next) -> loop env' next
       in
-      loop [] first
+      loop env first

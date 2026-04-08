@@ -39,25 +39,28 @@ The handoff staging maps Stage A → AC1/2/6, Stage B → AC3/4/5, Stage C → A
 
 | Stage | ACs | Work | Commit |
 |-------|-----|------|--------|
-| A | AC1, AC2, AC6 | Content class in `cn_build`; IR types, parser, validator in new `cn_orchestrator.ml`; doctor validation wired into `cn_doctor.ml` | TBD |
+| A | AC1, AC2, AC6 | Content class in `cn_build`; IR types, parser, validator in new `cn_workflow.ml`; doctor validation wired into `cn_doctor.ml` | TBD |
 | B | AC3, AC4, AC5 | Execution engine: op dispatch via `Cn_executor.execute_op`, `if`/`match`/`return`/`fail` flow control, binding environment, permission enforcement before dispatch, receipts via `Cn_trace.gemit` | TBD |
 | C | AC7 | `src/agent/orchestrators/daily-review/orchestrator.json`; `packages/cnos.core/cn.package.json` declares it; `cn build` copies it | TBD |
 
 Each stage gets: tests first → implementation → `dune build` gate → commit. Full plan in `docs/alpha/agent-runtime/PLAN-174-orchestrator-runtime.md`.
 
+Naming note: the new module is `Cn_workflow`, not `Cn_orchestrator`. `Cn_orchestrator` already exists as the N-pass LLM bind-loop orchestrator — an unrelated runtime concern. Two different modules, documented in both `src/cmd/cn_workflow.ml`'s docstring and the self-coherence.
+
 ### Impact Graph
 
 **New files:**
-- `src/cmd/cn_orchestrator.ml` (types, parser, validator, executor)
-- `test/cmd/cn_orchestrator_test.ml`
-- `src/agent/orchestrators/daily-review/orchestrator.json`
+- `src/cmd/cn_workflow.ml` (types, parser, validator, discovery, executor)
+- `test/cmd/cn_workflow_test.ml`
+- `src/agent/orchestrators/daily-review/orchestrator.json` + mirrored into `packages/cnos.core/orchestrators/daily-review/`
 - `docs/gamma/cdd/3.36.0/` (this dir)
 
 **Touched modules:**
-- `src/cmd/cn_build.ml` — add `orchestrators` to `source_decl`, copy logic, summary count
-- `src/cmd/cn_doctor.ml` — add `report_orchestrators` using `Cn_orchestrator.validate`
-- `src/cmd/dune` — register `cn_orchestrator`
-- `test/cmd/dune` — register `cn_orchestrator_test`
+- `src/cmd/cn_build.ml` — add `orchestrators` to `source_decl`, copy logic, summary count, clean list; plus sibling audit (5 pre-existing bare catches cleaned)
+- `src/cmd/cn_doctor.ml` — add `report_orchestrators` using `Cn_workflow.doctor_issues`
+- `src/cmd/cn_runtime_contract.ml` — rewrite `build_orchestrator_registry` to consume `Cn_workflow.discover`, resolving the #173 dueling-schema problem; three obsolete orchestrator tests replaced in `test/cmd/cn_runtime_contract_test.ml`
+- `src/cmd/dune` — register `cn_workflow`
+- `test/cmd/dune` — register `cn_workflow_test`
 
 **Touched docs:**
 - `docs/alpha/package-system/PACKAGE-SYSTEM.md` — `orchestrators` as 8th content class
@@ -65,8 +68,8 @@ Each stage gets: tests first → implementation → `dune build` gate → commit
 **Touched manifests:**
 - `packages/cnos.core/cn.package.json` — declare `sources.orchestrators: ["daily-review"]`
 
-**Untouched (verified):**
-- `cn_deps.ml`, `cn_runtime_contract.ml`, `cn_command.ml`, `cn_activation.ml`, `cn_ext_host.ml`, `cn_extension.ml` — unrelated
+**Untouched (verified by grep):**
+- `cn_deps.ml`, `cn_command.ml`, `cn_activation.ml`, `cn_ext_host.ml`, `cn_extension.ml`, `cn_orchestrator.ml` — unrelated to the workflow surface
 - `cn_executor.ml` — **reused** via `execute_op`, not modified. The orchestrator is a caller, not an extension of the executor.
 
 ### CDD Trace (filled during execution)
