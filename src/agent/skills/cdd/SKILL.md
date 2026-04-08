@@ -188,6 +188,27 @@ Failure mode: the handoff describes *what to build* but not *how the project con
   - ❌ "Build with these constraints: [good list]" (no self-verification gate — constraints sent, never checked)
   - ✅ "Build HTTP restore, command discovery, and doctor validation. Active skills: ocaml (src/agent/skills/eng/ocaml/SKILL.md — §3.1: no bare `with _ ->`, use Result types), testing (test each new module with ppx_expect). Convention: v3.32.0 removed all silent exception swallowing — do not reintroduce. Artifact order: tests before code per CDD §2.5. Before declaring complete: produce a self-verification report covering skill compliance, test coverage per module, convention compliance, and artifact order."
 
+### 2.5b Pre-review (author-side mechanical gate)
+
+Before opening or refreshing the pull request — i.e., before
+asking the reviewer to look — the author runs a mechanical
+gate. This is a checklist, not judgment; two authors on the
+same branch must produce the same answer.
+
+1. **Branch rebased onto current `main`.** `git fetch origin main && git rebase origin/main`. The reviewer must see only this cycle's delta. A diff that contains commits already merged into main on a parallel branch is a process bug — it forces the reviewer to mentally subtract noise and risks reverting other cycles' work.
+2. **Self-coherence artifact present.** §2.5 step 7 must have produced a SELF-COHERENCE.md (or its equivalent for small-change cycles), and the PR body must link or include the CDD Trace through the current step.
+3. **CDD Trace in the PR body.** §5.4 of the canonical spec mandates that for L5/L6 cycles the PR body is the primary branch artifact carrying the trace. For L7 cycles the design artifact carries the trace and the PR body links to it.
+4. **Tests reference ACs.** Each AC the cycle promised should have at least one named test or "not applicable, justified" note in the PR body.
+5. **Known debt explicit.** Anything intentionally deferred is named in the PR body so the reviewer doesn't waste a round flagging it.
+
+This gate exists because the same failure mode (rebase artifact in
+the diff) recurred across consecutive post-release cycles before
+being mechanized here. Each item is a once-per-PR check that closes
+a finding class the reviewer would otherwise have to catch.
+
+  - ❌ Open the PR from a branch cut three days ago without checking whether main has moved.
+  - ✅ `git fetch origin main && git rebase origin/main` immediately before `gh pr create`.
+
 ### 2.6 Review
 
 Use CLP. Ask for:
