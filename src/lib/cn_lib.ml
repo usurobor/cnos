@@ -221,12 +221,14 @@ type command =
   | Out of Out.gtd  (* Agent output — ONLY way to respond *)
   | Commit of string option
   | Push
-  | Save of string option
+  (* Save removed in v3.37.0 (#184) — now a package command at
+     src/agent/commands/save/cn-save, dispatched via Cn_command. *)
   | Agent of Agent.mode  (* replaces Inbound — Step 10 *)
   | Update
   | Adhoc of string  (* Create adhoc thread *)
-  | Daily            (* Create/open daily reflection *)
-  | Weekly           (* Create/open weekly reflection *)
+  (* Daily / Weekly removed in v3.37.0 (#184) — now package commands at
+     src/agent/commands/{daily,weekly}/cn-<id>, dispatched via
+     Cn_command.find → dispatch. *)
   | Setup            (* Hub setup: materialize assets + deps *)
   | Deps of Deps.cmd (* Dependency management *)
   | Build of Build.cmd (* Package assembly from src/agent/ *)
@@ -274,16 +276,12 @@ let string_of_command = function
   | Commit None -> "commit"
   | Commit (Some m) -> "commit " ^ m
   | Push -> "push"
-  | Save None -> "save"
-  | Save (Some m) -> "save " ^ m
   | Agent Agent.Cron -> "agent"
   | Agent Agent.Process -> "agent --process"
   | Agent Agent.Daemon -> "agent --daemon"
   | Agent Agent.Stdio -> "agent --stdio"
   | Update -> "update"
   | Adhoc t -> "adhoc " ^ t
-  | Daily -> "daily"
-  | Weekly -> "weekly"
   | Setup -> "setup"
   | Deps Deps.List -> "deps list"
   | Deps Deps.Restore -> "deps restore"
@@ -446,13 +444,12 @@ let rec parse_command = function
   | "done" :: rest -> parse_gtd_cmd ("done" :: rest) |> Option.map (fun c -> Gtd c)
   | "commit" :: rest -> Some (Commit (join_rest rest))
   | ["push"] -> Some Push
-  | "save" :: rest -> Some (Save (join_rest rest))
+  (* "save" removed in v3.37.0 (#184) — package command *)
   | ["update"] -> Some Update
   (* release removed — use scripts/release.sh *)
   | ["setup"] -> Some Setup
   | "adhoc" :: rest -> join_rest rest |> Option.map (fun t -> Adhoc t)
-  | ["daily"] -> Some Daily
-  | ["weekly"] -> Some Weekly
+  (* "daily" / "weekly" removed in v3.37.0 (#184) — package commands *)
   | "out" :: rest -> parse_out_cmd rest |> Option.map (fun c -> Out c)
   | [alias] ->
       let expanded = expand_alias alias in
@@ -662,9 +659,10 @@ Commands:
   
   # Thread creation
   adhoc <title>       Create adhoc thread
-  daily               Create/show daily reflection
-  weekly              Create/show weekly reflection
-  
+  (daily, weekly      Package commands — see `cn help` external list
+   and save are       or the installed cnos.core package for details)
+   package commands)
+
   # Dependencies
   deps [list]         List installed packages
   deps restore        Install from lockfile (deterministic)
@@ -702,7 +700,6 @@ Commands:
   status              Show hub state
   commit [msg]        Stage + commit
   push                Push to origin
-  save [msg]          Commit + push
   peer                Manage peers
   doctor              Health check
   update              Update cn to latest version

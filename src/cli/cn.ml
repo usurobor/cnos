@@ -125,7 +125,8 @@ let () =
           | Gtd (Gtd.Done t) -> Cn_gtd.gtd_done hub_path t
           | Commit msg -> Cn_commands.run_commit hub_path name msg
           | Push -> Cn_commands.run_push hub_path
-          | Save msg -> Cn_commands.run_commit hub_path name msg; Cn_commands.run_push hub_path
+          (* Save removed in v3.37.0 (#184) — resolved via external
+             command dispatch to packages/cnos.core/commands/save/cn-save. *)
           | Peer Peer.List -> Cn_commands.run_peer_list hub_path
           | Peer (Peer.Add (n, url)) -> Cn_commands.run_peer_add hub_path n url
           | Peer (Peer.Remove n) -> Cn_commands.run_peer_remove hub_path n
@@ -136,8 +137,9 @@ let () =
           | Mca (Mca.Add desc) -> Cn_mca.run_mca_add hub_path name desc
           | Out gtd -> Cn_agent.run_out hub_path name gtd
           | Adhoc title -> Cn_gtd.run_adhoc hub_path title
-          | Daily -> Cn_gtd.run_daily hub_path
-          | Weekly -> Cn_gtd.run_weekly hub_path
+          (* Daily / Weekly removed in v3.37.0 (#184) — external
+             package commands, dispatched via Cn_command.find →
+             dispatch when the built-in parser returns None. *)
           | Setup -> Cn_system.run_setup hub_path
           | Deps Deps.List -> Cn_deps.run_list ~hub_path
           | Deps Deps.Restore -> Cn_deps.run_restore ~hub_path
