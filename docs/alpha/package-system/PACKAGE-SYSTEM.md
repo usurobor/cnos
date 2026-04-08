@@ -43,6 +43,7 @@ knows how to copy from `src/agent/<class>/` into `packages/<name>/<class>/`.
 | extensions | directory trees | `src/agent/extensions/` | `"extensions": ["ext.name"]` | Runtime capability providers |
 | templates | named files | `src/agent/templates/` | `"templates": ["FILE.md"]` | Identity/config scaffolding for new hubs |
 | commands | declared entries | `packages/<name>/commands/` | `"commands": { "<name>": { ... } }` | Operator-facing CLI commands |
+| orchestrators | directory trees | `src/agent/orchestrators/` | `"orchestrators": ["id", ...]` | Mechanical workflows executed by the `cn.orchestrator.v1` runtime |
 | (metadata) | implicit | `packages/<name>/` | `cn.package.json` | Package identity, version, engine constraint |
 
 Most content classes are copied from `src/agent/<class>/` by `cn build`.
@@ -53,6 +54,15 @@ mapping the command name to `{ entrypoint, summary }`, where
 `entrypoint` is a file path relative to the package root
 (e.g. `commands/cn-daily`) and `summary` is a one-line description
 shown by `cn help`.
+
+The `orchestrators` class follows the same on-disk layout as skills:
+each declared id in `sources.orchestrators` points at
+`src/agent/orchestrators/<id>/orchestrator.json`, which `cn build`
+copies to `packages/<name>/orchestrators/<id>/orchestrator.json`.
+The JSON is a `cn.orchestrator.v1` manifest with steps, permissions,
+and a trigger — see `docs/alpha/agent-runtime/ORCHESTRATORS.md` §7–8
+for the full schema. The runtime loads, validates, and executes
+these via the workflow engine (`Cn_workflow`).
 
 Metadata (`cn.package.json`) is not a source-declared content class.
 It is always present and not copied from `src/agent/`.

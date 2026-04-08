@@ -17,13 +17,17 @@
     Maps asset categories to paths relative to src/agent/<category>/.
     Commands are authored directly under packages/<name>/commands/
     and are not assembled by cn build; they are consumed by
-    Cn_command during dispatch and are ignored here. *)
+    Cn_command during dispatch and are ignored here.
+    Orchestrators follow the same on-disk layout: authored under
+    src/agent/orchestrators/<id>/orchestrator.json and copied
+    mechanically to packages/<name>/orchestrators/<id>/. *)
 type source_decl = {
   doctrine : string list;
   mindsets : string list;
   skills : string list;
   extensions : string list;
   templates : string list;
+  orchestrators : string list;
 }
 
 type package_manifest = {
@@ -68,6 +72,7 @@ let parse_sources json =
         skills = parse_string_array src_json "skills";
         extensions = parse_string_array src_json "extensions";
         templates = parse_string_array src_json "templates";
+        orchestrators = parse_string_array src_json "orchestrators";
       }
 
 let parse_package_json path =
@@ -98,7 +103,9 @@ let rec copy_tree src_dir dst_dir =
           copy_tree src dst
         else
           Cn_ffi.Fs.write dst (Cn_ffi.Fs.read src))
-    with _ -> ())
+    with exn ->
+      Printf.eprintf "cn: build: copy_tree %s: %s\n"
+        src_dir (Printexc.to_string exn))
   end
 
 (** Remove a directory tree. *)
@@ -111,7 +118,9 @@ let rec rm_tree path =
         Unix.rmdir path
       end else
         Sys.remove path
-    with _ -> ())
+    with exn ->
+      Printf.eprintf "cn: build: rm_tree %s: %s\n"
+        path (Printexc.to_string exn))
   end
 
 (** Copy a single source entry for a given category.
@@ -132,7 +141,9 @@ let copy_source ~agent_root ~pkg_dir ~category entry =
           let dst = Cn_ffi.Path.join dst_category_dir f in
           if not (Sys.is_directory src) then
             Cn_ffi.Fs.write dst (Cn_ffi.Fs.read src))
-      with _ -> ())
+      with exn ->
+        Printf.eprintf "cn: build: wildcard copy %s: %s\n"
+          src_category_dir (Printexc.to_string exn))
     end
   end else if category = "mindsets" || category = "templates" then begin
     (* Individual file copy *)
@@ -152,14 +163,14 @@ let copy_source ~agent_root ~pkg_dir ~category entry =
 
 (** Clean built content from a package directory. Removes every
     content-class subdirectory that cn build assembles from
-    src/agent/ (doctrine, mindsets, skills, extensions, templates).
-    Preserves cn.package.json and any hand-authored subdirectories
-    such as commands/. *)
+    src/agent/: doctrine, mindsets, skills, extensions, templates,
+    orchestrators. Preserves cn.package.json and any hand-authored
+    subdirectories such as commands/. *)
 let clean_package_dir pkg_dir =
   List.iter (fun sub ->
     let path = Cn_ffi.Path.join pkg_dir sub in
     if Cn_ffi.Fs.exists path then rm_tree path
-  ) ["doctrine"; "mindsets"; "skills"; "extensions"; "templates"]
+  ) ["doctrine"; "mindsets"; "skills"; "extensions"; "templates"; "orchestrators"]
 
 (* === Build === *)
 
@@ -177,7 +188,10 @@ let discover_packages root =
         match parse_package_json manifest_path with
         | Some pkg -> Some (dir_name, pkg)
         | None -> None)
-    with _ -> []
+    with exn ->
+      Printf.eprintf "cn: build: discover_packages %s: %s\n"
+        pkgs_dir (Printexc.to_string exn);
+      []
 
 (** Build a single package: clean then copy sources. *)
 let build_one ~agent_root ~pkgs_dir (dir_name, pkg) =
@@ -198,6 +212,9 @@ let build_one ~agent_root ~pkgs_dir (dir_name, pkg) =
   (* Copy templates *)
   pkg.sources.templates |> List.iter (fun entry ->
     copy_source ~agent_root ~pkg_dir ~category:"templates" entry);
+  (* Copy orchestrators (directory tree per declared id) *)
+  pkg.sources.orchestrators |> List.iter (fun entry ->
+    copy_source ~agent_root ~pkg_dir ~category:"orchestrators" entry);
   pkg
 
 (** Compare file content between two paths. Returns list of mismatches. *)
@@ -232,7 +249,9 @@ let rec diff_tree src dst prefix =
           let rel = if prefix = "" then entry else prefix ^ "/" ^ entry in
           if not (Cn_ffi.Fs.exists src_path) then
             add (Printf.sprintf "extra: %s" rel))
-      with _ -> add (Printf.sprintf "error reading: %s" prefix))
+      with exn ->
+        add (Printf.sprintf "error reading: %s: %s"
+          prefix (Printexc.to_string exn)))
     end
   end;
   !mismatches
@@ -255,6 +274,8 @@ let check_one ~agent_root ~pkgs_dir (dir_name, pkg) =
     copy_source ~agent_root ~pkg_dir:tmp_dir ~category:"extensions" entry);
   pkg.sources.templates |> List.iter (fun entry ->
     copy_source ~agent_root ~pkg_dir:tmp_dir ~category:"templates" entry);
+  pkg.sources.orchestrators |> List.iter (fun entry ->
+    copy_source ~agent_root ~pkg_dir:tmp_dir ~category:"orchestrators" entry);
   (* Compare *)
   let mismatches =
     List.concat_map (fun cat ->
@@ -263,7 +284,7 @@ let check_one ~agent_root ~pkgs_dir (dir_name, pkg) =
       if Cn_ffi.Fs.exists tmp_cat || Cn_ffi.Fs.exists pkg_cat then
         diff_tree tmp_cat pkg_cat cat
       else []
-    ) ["doctrine"; "mindsets"; "skills"; "extensions"; "templates"]
+    ) ["doctrine"; "mindsets"; "skills"; "extensions"; "templates"; "orchestrators"]
   in
   rm_tree tmp_dir;
   (pkg.name, mismatches)
@@ -323,13 +344,17 @@ let run_build () =
         let n_skills = List.length pkg.sources.skills in
         let n_extensions = List.length pkg.sources.extensions in
         let n_templates = List.length pkg.sources.templates in
+        let n_orchestrators = List.length pkg.sources.orchestrators in
         let ext_str = if n_extensions > 0
           then Printf.sprintf ", %d extensions" n_extensions else "" in
         let tpl_str = if n_templates > 0
           then Printf.sprintf ", %d templates" n_templates else "" in
+        let orch_str = if n_orchestrators > 0
+          then Printf.sprintf ", %d orchestrators" n_orchestrators else "" in
         print_endline (Cn_fmt.ok (Printf.sprintf
-          "%s@%s: %d doctrine, %d mindsets, %d skills%s%s"
-          pkg.name pkg.version n_doctrine n_mindsets n_skills ext_str tpl_str)));
+          "%s@%s: %d doctrine, %d mindsets, %d skills%s%s%s"
+          pkg.name pkg.version n_doctrine n_mindsets n_skills
+          ext_str tpl_str orch_str)));
       print_endline (Cn_fmt.ok (Printf.sprintf
         "Built %d packages" (List.length packages)))
 

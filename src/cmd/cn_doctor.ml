@@ -1,8 +1,11 @@
 (** cn_doctor.ml — Doctor command entry point.
 
-    Runs the system doctor (Cn_system.run_doctor), then validates the
-    external-command surface (Cn_command.validate), then validates the
-    activation surface (Cn_activation.validate). Trigger conflicts are
+    Runs the system doctor (Cn_system.run_doctor), then validates each
+    user-facing content surface:
+      - Cn_command.validate  — external command integrity
+      - Cn_activation.validate — exposed-skill triggers
+      - Cn_workflow.doctor_issues — orchestrator IR integrity
+    Activation trigger conflicts and any orchestrator issue are
     fail-stop (exit 1); other categories are warnings. *)
 
 let report_commands ~hub_path =
@@ -46,9 +49,26 @@ let report_activation ~hub_path =
              print_endline (Cn_fmt.warn line)));
   any_conflict
 
+let report_orchestrators ~hub_path =
+  let installed = Cn_workflow.discover ~hub_path in
+  let issues = Cn_workflow.doctor_issues ~hub_path in
+  match installed, issues with
+  | [], [] -> false
+  | _ :: _, [] ->
+      print_endline (Cn_fmt.ok
+        (Printf.sprintf "Orchestrators: %d healthy"
+           (List.length installed)));
+      false
+  | _, _ :: _ ->
+      print_endline (Cn_fmt.warn "Orchestrators:");
+      issues |> List.iter (fun msg ->
+        print_endline (Cn_fmt.fail (Printf.sprintf "  %s" msg)));
+      true
+
 let run_doctor ~hub_path =
   Cn_system.run_doctor hub_path;
-  let cmd_failed  = report_commands   ~hub_path in
-  let act_failed  = report_activation ~hub_path in
-  if cmd_failed || act_failed then
+  let cmd_failed  = report_commands      ~hub_path in
+  let act_failed  = report_activation    ~hub_path in
+  let orch_failed = report_orchestrators ~hub_path in
+  if cmd_failed || act_failed || orch_failed then
     Cn_ffi.Process.exit 1
