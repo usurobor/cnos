@@ -22,17 +22,37 @@
 
 | Issue | Title | Type | Design | Impl | Lag |
 |-------|-------|------|--------|------|-----|
-| #173 | Runtime contract activation index | feature | ORCHESTRATORS.md §4 | **shipped** | **none** |
-| #170 | Orchestrator + command provider model | design | shipped | partial (only registry side; execution is future cycle) | low |
+| #173 | Runtime contract: activation index + registries | feature | ORCHESTRATORS.md §4 | **shipped** | **none** |
+| #170 | Orchestrator + command provider model | design | shipped | partial (registry shipped; execution via #174) | low |
 | #172 | ORCHESTRATORS.md CTB/effect-plan doc fix | doc | shipped | shipped | none |
-| #174 | Built-in command migration (daily/weekly/save/release → package commands) | feature | — | not started | new |
-| #175 | Frontmatter inline list form `triggers: [a, b]` | feature | — | not started | new (known debt) |
-| #176 | Pre-existing bare catches in 6 unrelated src/cmd modules | debt | — | not started | new (audit scope) |
+| #174 | Orchestrator IR runtime | feature | ORCHESTRATORS.md §7–8 | not started (next MCA) | growing |
+| #175 | CTB → orchestrator IR compiler | feature | CTB-v4.0.0-VISION.md | not started (depends #174) | growing |
+| #162 | Modular CLI commands | feature | converged | not started | growing |
+| #168 | L8 candidate tracking | process | adhoc thread | observation only | low |
+| #154 | Thread event model P1 | feature | converged | not started | stale |
+| #153 | Thread event model | feature | converged | not started | stale |
+| #100 | Memory as first-class faculty | feature | partial | not started | stale |
+| #94 | cn cdd: mechanize CDD invariants | feature | partial | not started | stale |
 
-**MCI/MCA balance:** balanced. #173 was straight MCA on an
-existing design (ORCHESTRATORS.md §4). No MCI work consumed. Two
-new known-debt issues materialized (#175, #176) as deferred outputs
-from this cycle.
+**MCI/MCA balance:** balanced, approaching freeze. Three issues at
+growing (#174, #175, #162), four stale. #174 is the committed next
+MCA; #175 depends on #174; the growing count reflects planned
+sequencing rather than neglect.
+
+**Rationale:** #170's decomposition established a clear pipeline:
+#173 ships the registries (this release), #174 is the orchestrator
+runtime, #175 compiles CTB to that runtime. No new design work until
+#174 ships.
+
+Two known-debt items surfaced during this cycle but are not yet
+filed as issues — they are recorded as deferred outputs in §7 rather
+than encoding-lag rows:
+
+1. Frontmatter inline list form `triggers: [a, b]` — v1 parser
+   accepts block lists only. File when a package author requests it.
+2. Pre-existing bare `with _ ->` catches in six unrelated `src/cmd/`
+   modules — a v3.32.0 audit gap, not a #173 regression. Schedule
+   as a dedicated audit cycle (`#152 v2`).
 
 ### 3. Process Learning
 
@@ -94,11 +114,13 @@ explicit. The corrective action is at execution time.
 
 ### 4a. CDD Self-Coherence
 
-- **CDD α:** 4/4 — all required artifacts present for #173: README, PLAN, SELF-COHERENCE, GATE under `docs/gamma/cdd/3.35.0/`, plus RUNTIME-CONTRACT-v2.md §4 schema update. CDD Trace rendered in both README and PR #176 body.
+The bootstrap artifacts for the #173 cycle — `README.md`, `PLAN-runtime-activation.md`, `SELF-COHERENCE.md`, `GATE.md` under `docs/gamma/cdd/3.35.0/`, plus the RUNTIME-CONTRACT-v2.md §4 schema update — were authored on the `claude/173-runtime-contract-activation` branch (merged into v3.35.0 via PR #176) **and are off-branch relative to this PR** (this PR is `claude/post-release-3.35.0`, a docs-only follow-up adding the post-release assessment). Rows below reference the merged state of main, not this PR's diff.
+
+- **CDD α:** 4/4 — all required artifacts present on main for v3.35.0: README + PLAN + SELF-COHERENCE + GATE under `docs/gamma/cdd/3.35.0/`, plus RUNTIME-CONTRACT-v2.md §4 schema update. CDD Trace rendered in both README and PR #176 body. Scored against the released state, not against this PR's diff.
 - **CDD β:** 3/4 — one β miss: the R1 `Skills:` markdown header diverged from the JSON `activation_index.skills` nesting. Both surfaces described the same data but used different labels. Fixed in F3.
 - **CDD γ:** 2/4 — the process violation (merge without review) is the γ hit. Without the retro-review pattern, the cycle would have closed with no review surface at all. Retro worked, but that's recovery, not clean execution.
 - **Weakest axis:** γ.
-- **Action:** no skill patch. The corrective is "load the review skill before merging, same as the v3.34.0 corrective about loading skills before writing." Record the pattern in this assessment for the next cycle's bootstrap to pick up as a pre-merge gate.
+- **Action:** no skill patch. The corrective is "load the review skill before merging, same as the v3.34.0 corrective about loading skills before writing." Record the pattern in this assessment for the next cycle's bootstrap to pick up as a pre-merge gate. Workspace-level mitigation (`WORKFLOW_AUTO.md`) was already created alongside the superseded assessment.
 
 ### 4b. §9.1 Cycle Iteration
 
@@ -142,18 +164,29 @@ explicit. The corrective action is at execution time.
 
 ### 7. Next Move
 
-**Next MCA (recommended):** ORCHESTRATORS.md §4.1 additional activation fields (`events`, `tokens`, `paths`, `work_shapes`, `levels`, `requires`, `excludes`) — extend the frontmatter parser and both renderers. Depends on #173 (shipped). Estimated L5.
+**Next MCA:** #174 — Orchestrator IR runtime
+**Owner:** sigma (handoff delegated to Claude Code via §2.5a)
+**Branch:** `claude/174-orchestrator-runtime` (to be created from main)
+**First AC:** AC2 — `cn.orchestrator.v1` JSON schema defined and validated by the runtime
+**MCI frozen until shipped?** Yes — no new design docs until #174 ships. #175 waits on #174.
+**Rationale:** The activation + registry surface (#173) is the prerequisite. Orchestrator runtime is the next concrete capability on the #170 pipeline. Design already exists in ORCHESTRATORS.md §7–8; implementation is the gap. PLAN-174-orchestrator-runtime.md committed at 29eeb29 defines the three stages (content class, execution engine, shipped daily-review orchestrator) and the active-skills list.
 
 **Immediate fixes (executed in this session):**
 - This POST-RELEASE-ASSESSMENT.md.
 - No CHANGELOG TSC row revision — existing scores (A− · A · A− · B+ · L6) are correct per this assessment.
 
 **Deferred outputs (committed concretely):**
-1. **#175 frontmatter inline list form.** The line-based YAML subset parser accepts only block lists (`triggers:\n  - a`). Inline form (`triggers: [a, b]`) is logged and ignored. File as new issue; owner unassigned; branch TBD. Trigger: when a package author requests inline form.
-2. **#176 pre-existing bare catches in unrelated `src/cmd/` modules.** Six modules outside the #173 touch scope still have bare `with _ ->` patterns (grep output in PR #177 body). File as audit cycle; owner unassigned; branch TBD. Trigger: schedule as a dedicated `#152 v2` audit cycle.
-3. **Built-in command migration (daily/weekly/save/release).** Commands content class is shipped but no built-in has been migrated into `packages/cnos.core/commands/`. The next cycle should pick one and demonstrate the path end-to-end. Same deferred output as v3.34.0; still deferred.
-4. **"Load review skill before merging" process gate.** Record in the next cycle's bootstrap template: before clicking merge, the cdd/review skill must have been loaded and the §6 output format produced. Not a skill patch — a CDD bootstrap template change. Tracked as a §9.1 corrective in this assessment; no separate issue filed.
+1. **Frontmatter inline list form** `triggers: [a, b]`. The line-based YAML subset parser accepts only block lists. File as a new issue when a package author requests it; trigger = real demand, not speculative. No number assigned yet.
+2. **Pre-existing bare catches in six unrelated `src/cmd/` modules** (`cn_maintenance`, `cn_logs`, `cn_indicator`, `cn_trace`, `cn_executor`, `cn_context`). A v3.32.0 #152 audit gap, not a #173 regression. Schedule as a dedicated `#152 v2` audit cycle. No issue number yet.
+3. **Built-in command migration** (`daily` / `weekly` / `save` / `release` → `packages/cnos.core/commands/`). Commands content class is shipped (v3.34.0) but no built-in has been migrated. Still deferred from v3.34.0. Pick one in a follow-up cycle after #174 ships.
+4. **"Load review skill before merging" process gate.** Record in the next cycle's bootstrap template: before clicking merge on any substantial PR, the cdd/review skill must have been loaded and the §6 output format produced. Not a skill patch — a CDD bootstrap template change. Tracked as a §9.1 corrective in this assessment; no separate issue filed. Workspace-level mitigation already in place via `WORKFLOW_AUTO.md` per the superseded committed assessment.
 
 **Closure evidence (CDD §10):**
 - Immediate outputs executed: yes (this commit)
 - Deferred outputs committed: yes (four entries above with scope + trigger + owner note)
+
+---
+
+## Supersedes
+
+An earlier assessment was committed at `docs/gamma/cdd/post-release/3.35.0.md` (commit `d2a3e2e`) using the `post-release/<version>.md` path convention. This file at `docs/gamma/cdd/3.35.0/POST-RELEASE-ASSESSMENT.md` follows the per-version directory convention already established by 3.19.0 / 3.28.0, so that old file is removed in the same commit as this one is corrected. The review on PR #178 (round 1) explicitly offered this resolution path. The technical scoring and next-MCA selection in this assessment match the superseded file; earlier drafts of this file carried fabricated issue numbers and a wrong next-MCA (review F1 + F2), which are corrected here.
