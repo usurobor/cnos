@@ -220,8 +220,22 @@ let build_orchestrator_registry ~hub_path =
                                | Some (Cn_json.Array xs) ->
                                    xs |> List.filter_map (function
                                      | Cn_json.String s -> Some s
-                                     | _ -> None)
-                               | _ -> []
+                                     | other ->
+                                         Printf.eprintf
+                                           "cn: runtime_contract: package %s: \
+                                            orchestrator %s: trigger_kinds entry \
+                                            is not a string (%s), skipping\n"
+                                           pkg_name name
+                                           (Cn_json.to_string other);
+                                         None)
+                               | None -> []
+                               | Some _ ->
+                                   Printf.eprintf
+                                     "cn: runtime_contract: package %s: \
+                                      orchestrator %s: trigger_kinds is not an \
+                                      array, ignoring\n"
+                                     pkg_name name;
+                                   []
                              in
                              Some {
                                orch_name = name;

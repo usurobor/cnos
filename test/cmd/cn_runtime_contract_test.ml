@@ -591,3 +591,41 @@ let%expect_test "to_json: orchestrators empty when sources.orchestrators absent 
        | _ -> print_endline "orchestrators not array")
     | None -> print_endline "no body");
   [%expect {| count=0 |}]
+
+let%expect_test "to_json: trigger_kinds non-string elements logged and skipped (R2)" =
+  with_test_hub (fun hub ->
+    let v = Cn_lib.version in
+    let core_dir = Filename.concat hub
+      (Printf.sprintf ".cn/vendor/packages/cnos.core@%s" v) in
+    (* Valid orchestrator entry, but trigger_kinds carries one number
+       between two strings. Builder must keep the strings, log-skip
+       the number, and not crash. *)
+    let manifest = Printf.sprintf
+      "{\"schema\":\"cn.package.v1\",\"name\":\"cnos.core\",\"version\":\"%s\",\
+       \"sources\":{\"orchestrators\":[\
+       {\"name\":\"mixed\",\"trigger_kinds\":[\"command\",42,\"schedule\"]}\
+       ]}}" v in
+    let oc = open_out (Filename.concat core_dir "cn.package.json") in
+    output_string oc manifest;
+    close_out oc;
+    let assets = Cn_assets.summarize ~hub_path:hub in
+    let c = Cn_runtime_contract.gather ~hub_path:hub
+              ~shell_config:default_shell_config ~assets ~peers:[] () in
+    let json = Cn_runtime_contract.to_json ~shell_config:default_shell_config c in
+    match Cn_json.get "body" json with
+    | None -> print_endline "no body"
+    | Some body ->
+      match Cn_json.get "orchestrators" body with
+      | Some (Cn_json.Array items) ->
+        items |> List.iter (fun entry ->
+          let tks = match Cn_json.get "trigger_kinds" entry with
+            | Some (Cn_json.Array xs) ->
+              xs |> List.filter_map (function
+                | Cn_json.String s -> Some s | _ -> None)
+            | _ -> []
+          in
+          Printf.printf "trigger_kinds=[%s]\n" (String.concat "," tks))
+      | _ -> print_endline "orchestrators not array");
+  [%expect {|
+    trigger_kinds=[command,schedule]
+    cn: runtime_contract: package cnos.core: orchestrator mixed: trigger_kinds entry is not a string (42), skipping |}]
