@@ -416,21 +416,23 @@ let%expect_test "to_json: exec_enabled reflects shell_config" =
 (* ============================================================ *)
 
 (** Augment the with_test_hub fixture: declare commands + skills with
-    triggers in the cnos.core manifest, and create a SKILL.md with a
-    triggers frontmatter so the activation index is non-empty. *)
+    triggers + one orchestrator in the cnos.core manifest, and create
+    the backing SKILL.md / command script / orchestrator.json so the
+    activation index, command registry, and orchestrator registry are
+    each non-empty. *)
 let with_activation_hub f =
   with_test_hub (fun hub ->
     let v = Cn_lib.version in
     let core = Printf.sprintf ".cn/vendor/packages/cnos.core@%s" v in
     let core_dir = Filename.concat hub core in
-    (* Override the manifest with one that declares commands +
-       orchestrators + skills (so the activation index has something). *)
+    (* New-schema manifest: orchestrators is a string array of ids;
+       the per-id metadata lives in orchestrators/<id>/orchestrator.json. *)
     let manifest = Printf.sprintf
       "{\"schema\":\"cn.package.v1\",\"name\":\"cnos.core\",\"version\":\"%s\",\
        \"sources\":{\
        \"skills\":[\"reflect\"],\
        \"commands\":{\"daily\":{\"entrypoint\":\"commands/cn-daily\",\"summary\":\"daily\"}},\
-       \"orchestrators\":[{\"name\":\"daily-review\",\"trigger_kinds\":[\"command\",\"schedule\"]}]}}"
+       \"orchestrators\":[\"daily-review\"]}}"
       v in
     let oc = open_out (Filename.concat core_dir "cn.package.json") in
     output_string oc manifest;
@@ -445,6 +447,16 @@ let with_activation_hub f =
     output_string oc "#!/bin/sh\necho daily\n";
     close_out oc;
     Unix.chmod (Filename.concat core_dir "commands/cn-daily") 0o755;
+    Cn_ffi.Fs.ensure_dir
+      (Filename.concat core_dir "orchestrators/daily-review");
+    let oc = open_out
+      (Filename.concat core_dir "orchestrators/daily-review/orchestrator.json") in
+    output_string oc
+      "{\"kind\":\"cn.orchestrator.v1\",\"name\":\"daily-review\",\
+       \"trigger\":{\"kind\":\"command\",\"name\":\"daily\"},\
+       \"permissions\":{\"llm\":false,\"ops\":[],\"external_effects\":false},\
+       \"steps\":[{\"id\":\"done\",\"kind\":\"return\",\"value\":{\"ok\":true}}]}";
+    close_out oc;
     f hub)
 
 let%expect_test "to_json: cognition.activation_index includes exposed skills (#173)" =
@@ -521,24 +533,11 @@ let%expect_test "render_markdown: activation_index nests under skills header (#1
     has_reflect=true
     has_trigger=true |}]
 
-let%expect_test "to_json: orchestrators include declared entries and skip malformed (#173, F4)" =
-  with_test_hub (fun hub ->
-    let v = Cn_lib.version in
-    let core_dir = Filename.concat hub
-      (Printf.sprintf ".cn/vendor/packages/cnos.core@%s" v) in
-    (* Manifest declaring two orchestrators: one well-formed, one
-       missing the required "name" field. Builder must emit the first
-       and log-skip the second. *)
-    let manifest = Printf.sprintf
-      "{\"schema\":\"cn.package.v1\",\"name\":\"cnos.core\",\"version\":\"%s\",\
-       \"sources\":{\"orchestrators\":[\
-       {\"name\":\"daily-review\",\"trigger_kinds\":[\"command\",\"schedule\"]},\
-       {\"trigger_kinds\":[\"command\"]}\
-       ]}}"
-      v in
-    let oc = open_out (Filename.concat core_dir "cn.package.json") in
-    output_string oc manifest;
-    close_out oc;
+let%expect_test "to_json: orchestrators populated from Cn_workflow.discover (#174)" =
+  (* with_activation_hub installs a one-step daily-review orchestrator
+     that parses and validates cleanly. Registry should carry one entry
+     with trigger_kinds derived from the orchestrator's trigger.kind. *)
+  with_activation_hub (fun hub ->
     let assets = Cn_assets.summarize ~hub_path:hub in
     let c = Cn_runtime_contract.gather ~hub_path:hub
               ~shell_config:default_shell_config ~assets ~peers:[] () in
@@ -565,10 +564,9 @@ let%expect_test "to_json: orchestrators include declared entries and skip malfor
       | _ -> print_endline "orchestrators not array");
   [%expect {|
     count=1
-    name=daily-review pkg=cnos.core trigger_kinds=[command,schedule]
-    cn: runtime_contract: package cnos.core: orchestrator entry missing 'name' field, skipping |}]
+    name=daily-review pkg=cnos.core trigger_kinds=[command] |}]
 
-let%expect_test "to_json: orchestrators empty when sources.orchestrators absent (#173, F4)" =
+let%expect_test "to_json: orchestrators empty when sources.orchestrators absent (#174)" =
   with_test_hub (fun hub ->
     let v = Cn_lib.version in
     let core_dir = Filename.concat hub
@@ -592,40 +590,30 @@ let%expect_test "to_json: orchestrators empty when sources.orchestrators absent 
     | None -> print_endline "no body");
   [%expect {| count=0 |}]
 
-let%expect_test "to_json: trigger_kinds non-string elements logged and skipped (R2)" =
+let%expect_test "to_json: orchestrator load failures omitted from registry (#174)" =
+  (* A declared orchestrator with a missing orchestrator.json must
+     not crash the registry build; it is simply omitted (doctor
+     surfaces the gap separately). *)
   with_test_hub (fun hub ->
     let v = Cn_lib.version in
     let core_dir = Filename.concat hub
       (Printf.sprintf ".cn/vendor/packages/cnos.core@%s" v) in
-    (* Valid orchestrator entry, but trigger_kinds carries one number
-       between two strings. Builder must keep the strings, log-skip
-       the number, and not crash. *)
     let manifest = Printf.sprintf
       "{\"schema\":\"cn.package.v1\",\"name\":\"cnos.core\",\"version\":\"%s\",\
-       \"sources\":{\"orchestrators\":[\
-       {\"name\":\"mixed\",\"trigger_kinds\":[\"command\",42,\"schedule\"]}\
-       ]}}" v in
+       \"sources\":{\"orchestrators\":[\"ghost\"]}}" v in
     let oc = open_out (Filename.concat core_dir "cn.package.json") in
     output_string oc manifest;
     close_out oc;
+    (* No orchestrators/ghost/orchestrator.json on disk. *)
     let assets = Cn_assets.summarize ~hub_path:hub in
     let c = Cn_runtime_contract.gather ~hub_path:hub
               ~shell_config:default_shell_config ~assets ~peers:[] () in
     let json = Cn_runtime_contract.to_json ~shell_config:default_shell_config c in
     match Cn_json.get "body" json with
-    | None -> print_endline "no body"
     | Some body ->
-      match Cn_json.get "orchestrators" body with
-      | Some (Cn_json.Array items) ->
-        items |> List.iter (fun entry ->
-          let tks = match Cn_json.get "trigger_kinds" entry with
-            | Some (Cn_json.Array xs) ->
-              xs |> List.filter_map (function
-                | Cn_json.String s -> Some s | _ -> None)
-            | _ -> []
-          in
-          Printf.printf "trigger_kinds=[%s]\n" (String.concat "," tks))
-      | _ -> print_endline "orchestrators not array");
-  [%expect {|
-    trigger_kinds=[command,schedule]
-    cn: runtime_contract: package cnos.core: orchestrator mixed: trigger_kinds entry is not a string (42), skipping |}]
+      (match Cn_json.get "orchestrators" body with
+       | Some (Cn_json.Array xs) ->
+         Printf.printf "count=%d\n" (List.length xs)
+       | _ -> print_endline "orchestrators not array")
+    | None -> print_endline "no body");
+  [%expect {| count=0 |}]

@@ -1,0 +1,44 @@
+{
+  "kind": "cn.orchestrator.v1",
+  "name": "daily-review",
+  "trigger": {
+    "kind": "command",
+    "name": "daily-review"
+  },
+  "inputs": {
+    "requires_hub": true
+  },
+  "permissions": {
+    "llm": true,
+    "ops": ["fs_read", "fs_write"],
+    "external_effects": false
+  },
+  "steps": [
+    {
+      "id": "load-context",
+      "kind": "op",
+      "op": "fs_read",
+      "args": { "path": "threads/reflections/daily/today.md" },
+      "bind": "today"
+    },
+    {
+      "id": "summarize",
+      "kind": "llm",
+      "prompt": "daily-review-v1",
+      "inputs": ["today"],
+      "bind": "summary"
+    },
+    {
+      "id": "write-output",
+      "kind": "op",
+      "op": "fs_write",
+      "args": { "path": "threads/adhoc/daily-summary.md" },
+      "inputs": ["summary"]
+    },
+    {
+      "id": "done",
+      "kind": "return",
+      "value": { "artifact": "threads/adhoc/daily-summary.md" }
+    }
+  ]
+}
