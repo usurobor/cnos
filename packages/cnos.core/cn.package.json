@@ -57,6 +57,9 @@
     "templates": [
       "SOUL.md",
       "USER.md"
+    ],
+    "orchestrators": [
+      "daily-review"
     ]
   }
 }
