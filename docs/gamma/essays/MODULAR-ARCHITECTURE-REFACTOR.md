@@ -200,6 +200,7 @@ Not a one-shot rename. Move logic gradually toward this structure.
 
 ## 6. Related
 
+- #182 — Core refactor umbrella issue (L7)
 - #180 — Doc incoherence: beta claims Git-native transport
 - #181 — gh-pages package source
 - #174 — Orchestrator IR runtime (shipped v3.36.0)
