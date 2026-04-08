@@ -45,7 +45,7 @@ let extract_block lines =
         | l :: tl -> take (l :: acc) tl
       in
       take [] rest
-  | _ -> None
+  | _ -> None  (* no leading "---": file has no frontmatter — not an error *)
 
 (** Split a "key: value" line. Returns [None] if there is no colon at
     the head of an unindented line. *)
@@ -109,7 +109,12 @@ let parse_frontmatter content =
                      Printf.eprintf
                        "cn: activation: inline triggers list not supported, \
                         use block list: %s\n" value
-                 | _ -> ())
+                 | _ ->
+                     (* Unrecognised frontmatter key (artifact_class,
+                        kata_surface, governing_question, ...) —
+                        intentionally ignored; this parser only
+                        consumes name / description / triggers. *)
+                     ())
               end
         end
       ) block;
@@ -137,16 +142,26 @@ type activation_entry = {
 }
 
 (** Read the [sources.skills] string array from a parsed manifest. *)
-let manifest_skill_ids json =
+let manifest_skill_ids ~pkg_name json =
   match Cn_json.get "sources" json with
   | None -> []
   | Some sources ->
       match Cn_json.get "skills" sources with
+      | None -> []
       | Some (Cn_json.Array items) ->
           items |> List.filter_map (function
             | Cn_json.String s -> Some s
-            | _ -> None)
-      | _ -> []
+            | other ->
+                Printf.eprintf
+                  "cn: activation: package %s: sources.skills entry is not a \
+                   string (%s), skipping\n"
+                  pkg_name (Cn_json.to_string other);
+                None)
+      | Some _ ->
+          Printf.eprintf
+            "cn: activation: package %s: sources.skills is not an array, ignoring\n"
+            pkg_name;
+          []
 
 (** Walk every installed package and emit one [activation_entry] per
     declared skill that has a SKILL.md on disk. Skills declared in the
@@ -159,9 +174,13 @@ let build_index ~hub_path =
     if not (Cn_ffi.Fs.exists manifest_path) then []
     else
       match Cn_json.parse (Cn_ffi.Fs.read manifest_path) with
-      | Error _ -> []
+      | Error msg ->
+          Printf.eprintf
+            "cn: activation: package %s: cannot parse %s: %s\n"
+            pkg_name manifest_path msg;
+          []
       | Ok json ->
-          manifest_skill_ids json
+          manifest_skill_ids ~pkg_name json
           |> List.filter_map (fun skill_id ->
             let skill_md = Cn_ffi.Path.join pkg_dir
               (Printf.sprintf "skills/%s/SKILL.md" skill_id) in
@@ -207,9 +226,15 @@ let validate ~hub_path =
     let manifest_path = Cn_ffi.Path.join pkg_dir "cn.package.json" in
     if Cn_ffi.Fs.exists manifest_path then
       match Cn_json.parse (Cn_ffi.Fs.read manifest_path) with
-      | Error _ -> ()
+      | Error msg ->
+          (* cn_deps doctor is the canonical surface for malformed
+             manifests; here we only log for activation-debug context
+             so the validate pass doesn't double-report. *)
+          Printf.eprintf
+            "cn: activation: package %s: cannot parse %s: %s\n"
+            pkg_name manifest_path msg
       | Ok json ->
-          manifest_skill_ids json |> List.iter (fun skill_id ->
+          manifest_skill_ids ~pkg_name json |> List.iter (fun skill_id ->
             let skill_md = Cn_ffi.Path.join pkg_dir
               (Printf.sprintf "skills/%s/SKILL.md" skill_id) in
             if not (Cn_ffi.Fs.exists skill_md) then
