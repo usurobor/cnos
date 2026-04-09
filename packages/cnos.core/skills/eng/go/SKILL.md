@@ -514,6 +514,32 @@ If the change adds concurrency or shared mutable state, also run:
 go test -race ./...
 ```
 
+### 3.9. Smell list
+
+Treat these as review smells:
+
+- `panic` for expected errors
+- `log.Fatal` / `os.Exit` in libraries
+- `context.Context` stored in a struct
+- producer-owned interfaces with one implementation
+- package-level globals or `init()` used for runtime state
+- `map[string]any` as core domain model
+- package `util` / `common`
+- hidden package globals controlling behavior
+- silent empty fallback on parse or IO error
+- goroutines with no cancellation path
+- unwrapped external errors
+- string-matching error messages instead of `errors.Is`
+- missing `defer` for `Close()` or `Unlock()`
+- unstructured `fmt.Printf` or `log.Printf` for system state
+- unstable map iteration in rendered/hashed output
+- non-atomic writes to final targets (no temp → validate → rename)
+- archive extraction without path-traversal validation
+- shell command built by string concatenation
+- precedence logic undocumented or untested
+- command/orchestrator/extension boundaries smeared in one package
+- degraded path invisible outside transient stderr
+
 ### 3.10. Shell and archive safety
 
 When using subprocesses or archives:
@@ -540,32 +566,6 @@ define the precedence clearly and test it.
 
 - ❌ Precedence inferred from code order
 - ✅ Documented and table-tested precedence
-
-### 3.9. Smell list
-
-Treat these as review smells:
-
-- `panic` for expected errors
-- `log.Fatal` / `os.Exit` in libraries
-- `context.Context` stored in a struct
-- producer-owned interfaces with one implementation
-- package-level globals or `init()` used for runtime state
-- `map[string]any` as core domain model
-- package `util` / `common`
-- hidden package globals controlling behavior
-- silent empty fallback on parse or IO error
-- goroutines with no cancellation path
-- unwrapped external errors
-- string-matching error messages instead of `errors.Is`
-- missing `defer` for `Close()` or `Unlock()`
-- unstructured `fmt.Printf` or `log.Printf` for system state
-- unstable map iteration in rendered/hashed output
-- non-atomic writes to final targets (no temp → validate → rename)
-- archive extraction without path-traversal validation
-- shell command built by string concatenation
-- precedence logic undocumented or untested
-- command/orchestrator/extension boundaries smeared in one package
-- degraded path invisible outside transient stderr
 
 ---
 
@@ -644,6 +644,13 @@ Treat these as review smells:
 
 **Governing skills:** go, design, testing
 
+**Inputs:**
+
+- package index fixture
+- checksum fixture
+- tarball fixture
+- malformed checksum/index cases
+
 **Expected artifacts:**
 
 - concrete package types
@@ -664,6 +671,11 @@ Treat these as review smells:
 - panic on malformed metadata
 - missing degraded-path tests
 
+**Reflection:**
+
+- Did the restore path stay mechanical and deterministic?
+- Did every fallback remain explicit and visible?
+
 ### 5.2. Kata B — runtime contract builder
 
 **Scenario:** Extract runtime contract model/rendering out of a large command handler.
@@ -677,6 +689,12 @@ Treat these as review smells:
 into a reusable Go package, leaving command wiring in `cmd/cn`.
 
 **Governing skills:** go, design, writing
+
+**Inputs:**
+
+- one existing command handler with mixed model/render/wiring logic
+- one expected JSON output
+- one expected text output
 
 **Expected artifacts:**
 
@@ -697,9 +715,7 @@ into a reusable Go package, leaving command wiring in `cmd/cn`.
 - inventing interfaces where concrete types suffice
 - leaving rendering behavior untested
 
----
+**Reflection:**
 
-## Reasoning
-
-- **Robust Fallback Evaluation via `errors.Is`:** Because Go 1.13+ relies heavily on error wrapping (`%w`) to preserve stack context, performing simple string matching or naive type assertions will often fail if an error is wrapped by an intermediate layer. Explicitly adding `errors.Is` and `errors.As` into Sections 2.5, 3.4, and the Smell List ensures developers programmatically unpack the chain, providing a highly reliable mechanism to trigger fallback policies without breaking the abstraction boundary.
-- **Struct Injection & Module Hygiene:** Recommending strict dependency injection (Section 2.6) definitively prevents the "global state drift" warning outlined in the original draft. By forcing developers to instantiate side-effects and pass them into domain structs during setup (e.g., inside `cmd/cn`), you naturally enforce the creation of consumer-owned test seams. Additionally, enforcing `go mod tidy` in the Build Rule (Section 3.7) provides a final mechanical check to guarantee reproducible builds across distributed agent machines.
+- Did the extraction reduce command-layer ownership of system truth?
+- Did the new package keep IO at the edge?
