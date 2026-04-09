@@ -23,7 +23,8 @@
       "eng/tool-writing",
       "eng/ux-cli",
       "eng/writing",
-      "eng/go"
+      "eng/go",
+      "eng/typescript"
     ]
   }
 }
