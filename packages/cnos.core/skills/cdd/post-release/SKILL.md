@@ -10,6 +10,12 @@ governing_question: How do we measure what a release actually changed and close 
 
 After every release, assess what shipped, what the system looks like now, and what to do next. This is CDD §9 (Assessment) and §10 (Closure) executed as a concrete procedure.
 
+## Who
+
+**The agent that performed the release (steps 9–10) owns the post-release assessment (steps 11–13).** The release and its assessment are a single responsibility — splitting them across agents or sessions creates a handoff gap where cycle context is lost. If the releasing agent's session ends before the assessment is complete, the assessment is the first task of its next session, not a task for a different agent.
+
+Exception: the operator may explicitly reassign the assessment to another agent. The reassignment must name the target agent and the reason.
+
 ## When
 
 After every `git tag` + `gh release create`. No exceptions — patch, minor, or major.
