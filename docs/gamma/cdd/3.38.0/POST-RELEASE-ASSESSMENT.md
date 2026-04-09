@@ -24,7 +24,7 @@
 |-------|-------|------|--------|------|-----|
 | #182 | Core refactor Move 2 — 3 remaining slices (runtime contract, workflow IR, activation) | feature | CORE-REFACTOR.md §7 | first slice shipped, 3 remaining | low |
 | #180 | Package system doc incoherence (Move 3) | feature | identified | not started | growing |
-| TBD | `llm` step execution + binding substitution | feature | needs design | not started | growing (carried 3 cycles) |
+| #193 | `llm` step execution + binding substitution | feature | needs design | not started | growing (carried 3 cycles) |
 | #175 | CTB → orchestrator IR compiler | feature | CTB-v4.0.0-VISION.md | blocked on `llm` | growing |
 | #162 | Modular CLI commands | feature | Move 1 shipped (#184) | partial | low |
 | #186 | Package restructuring | feature | design thread exists | not started | growing |
