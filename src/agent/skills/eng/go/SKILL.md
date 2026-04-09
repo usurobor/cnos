@@ -23,7 +23,7 @@ Use packages to keep boundaries clear, concrete types to keep intent obvious, an
 ## Algorithm
 
 1. **Define** — name the model, the package boundaries, the failure policy, and the build/test contract.
-2. **Unfold** — design the package layout, types, interfaces, context flow, error flow, and tests.
+2. **Unfold** — design the package layout, types, interfaces, context flow, error flow, resource lifecycle, and tests.
 3. **Rules** — keep the code explicit, small-package, low-magic, and hostile to silent fallback.
 4. **Verify** — build, test, and review the same failure classes across sibling surfaces.
 
@@ -59,6 +59,7 @@ A coherent Go subsystem has:
 - **Interfaces** — small consumer-owned seams
 - **Errors** — explicit outcome channel
 - **Context** — cancellation / deadline propagation
+- **Observability** — structured `log/slog` state emission
 - **Adapters** — file, git, HTTP, process, archive, env
 - **Tests** — table-driven and subtest-based
 - **Build** — `go build` / `go test` / `go mod tidy`, no exotic toolchain
@@ -79,6 +80,8 @@ Go code fails through:
 - **package sprawl** — blurry boundaries, cyclic dependencies, `util` buckets
 - **interface pollution** — interfaces declared before there is a real consumer need
 - **context leaks** — `context` stored in structs or dropped on the floor
+- **resource leaks** — failing to `defer` cleanup for files, network responses, or locks
+- **opaque exhaust** — unstructured `fmt.Printf` or `log.Printf` that hides system reality
 - **panic-driven control flow** — expected failure treated as exceptional collapse
 - **silent fallback** — error ignored, empty value fabricated, caller never told
 - **global state drift** — mutable package globals controlling behavior invisibly
@@ -252,7 +255,49 @@ Rules for adapters:
   - ❌ Parse a package manifest inside the HTTP client
   - ✅ HTTP client returns bytes; parser validates in the domain package
 
-### 2.7. Concurrency
+### 2.7. Resource lifecycles
+
+Resources must explicitly articulate their cleanup immediately after acquisition.
+
+Rules:
+
+- use `defer` for `Close()`, `Unlock()`, or cleanup functions immediately after checking the acquisition error
+- never assume the garbage collector handles OS-level resources
+
+```go
+resp, err := client.Do(req)
+if err != nil {
+    return err
+}
+// ✅ Teardown bonded to acquisition
+defer resp.Body.Close()
+```
+
+- ❌ Acquire a file handle, then close it 50 lines later in a conditional branch
+- ✅ `defer f.Close()` on the line after the nil-error check
+
+### 2.8. Observability
+
+State must be structured and queryable, not opaque text.
+
+Rules:
+
+- use `log/slog` for all runtime logging
+- attach key-value attributes (e.g., `slog.String("pkg", name)`) rather than concatenating strings
+- log degraded paths explicitly when a fallback policy is triggered
+
+```go
+// ✅ Structured state articulation
+slog.WarnContext(ctx, "local override allowed, bypassing missing index",
+    slog.String("package", pkgName),
+    slog.String("fallback_path", localPath),
+)
+```
+
+- ❌ `fmt.Printf("warning: package %s missing, using fallback\n", name)`
+- ✅ `slog.WarnContext(ctx, "package index missing, applying local override policy", slog.String("package", name))`
+
+### 2.9. Concurrency
 
 Do not add goroutines because Go makes them cheap. Add them when they simplify the model or materially improve throughput.
 
@@ -265,7 +310,7 @@ Rules:
   - ❌ Spawn goroutines for every restore step with no backpressure or cancellation
   - ✅ Keep restore sequential until parallelism is justified by real latency/throughput data
 
-### 2.8. Testing
+### 2.10. Testing
 
 Use `go test` as the contract.
 
@@ -295,7 +340,7 @@ Test both:
   - ❌ Only test the happy path
   - ✅ Test both the nominal path and the policy path
 
-### 2.9. Build and shipping
+### 2.11. Build and shipping
 
 Any agent on any machine should be able to build the runtime with the standard Go toolchain.
 
@@ -311,13 +356,14 @@ Prefer stdlib first:
 
 - `encoding/json`
 - `net/http`
+- `log/slog`
 - `archive/tar`
 - `compress/gzip`
 - `crypto/sha256`
 - `os/exec`
 - `path/filepath`
 
-### 2.10. Schema and compatibility
+### 2.12. Schema and compatibility
 
 **Treat manifests, contracts, and IRs as public contracts.**
 
@@ -341,7 +387,7 @@ prefer:
 
 If a compatibility path exists, test it explicitly.
 
-### 2.11. Determinism and reproducibility
+### 2.13. Determinism and reproducibility
 
 Deterministic output matters. For artifacts that are:
 
@@ -360,7 +406,7 @@ ensure:
   - ❌ Range over a map and render the result directly
   - ✅ Sort keys/items before rendering
 
-### 2.12. Idempotence and retry safety
+### 2.14. Idempotence and retry safety
 
 For state-changing operations, define:
 
@@ -371,7 +417,7 @@ For state-changing operations, define:
   - ❌ Write directly to the final target and hope the process completes
   - ✅ Write to temp, validate, then atomically move into place
 
-### 2.13. Traceability and receipts
+### 2.15. Traceability and receipts
 
 For operations like:
 
@@ -390,7 +436,7 @@ decide explicitly:
   - ❌ Degraded path only visible in transient stderr
   - ✅ Degraded path visible in logs and/or structured runtime state
 
-### 2.14. Preserve cnos runtime boundaries
+### 2.16. Preserve cnos runtime boundaries
 
 Keep these boundaries explicit in Go code:
 
@@ -430,9 +476,9 @@ Define interfaces in the consumer package. Return concrete types by default.
 
 Pass `context.Context` explicitly as the first parameter. Do not store it in structs. Do not drop it on the floor.
 
-### 3.4. Error rule
+### 3.4. Error and observability rule
 
-Expected failure returns `error`. Do not panic for policy-level failure. Wrap errors with context (`%w`). Inspect errors carefully with `errors.Is`/`errors.As` before falling back. Do not swallow them.
+Expected failure returns `error`. Do not panic for policy-level failure. Wrap errors with context (`%w`). Inspect errors carefully with `errors.Is`/`errors.As` before falling back. Do not swallow them. Use `log/slog` to articulate fallback state structurally.
 
 ### 3.5. Fallback rule
 
@@ -444,11 +490,15 @@ Every fallback is a policy decision. Allowed only when:
   - ❌ `return nil` on malformed config and continue
   - ✅ `return fmt.Errorf("parse activation index: %w", err)`
 
-### 3.6. Boundary rule
+### 3.6. Resource rule
+
+`defer` must immediately follow the successful acquisition of files, network bodies, and locks. Never defer before the error check.
+
+### 3.7. Boundary rule
 
 Parsing, validation, and planning belong in domain packages. Filesystem, git, HTTP, process, and env access belong in adapters. Dependency injection is required for adapters.
 
-### 3.7. Build rule
+### 3.8. Build rule
 
 Run before push:
 
@@ -464,7 +514,7 @@ If the change adds concurrency or shared mutable state, also run:
 go test -race ./...
 ```
 
-### 3.9. Shell and archive safety
+### 3.10. Shell and archive safety
 
 When using subprocesses or archives:
 
@@ -476,7 +526,7 @@ When using subprocesses or archives:
   - ❌ `sh -c "curl ... $USER_INPUT ..."`
   - ✅ `exec.CommandContext(ctx, "curl", "-fsSL", url)`
 
-### 3.10. Override precedence must be explicit
+### 3.11. Override precedence must be explicit
 
 If behavior may come from:
 
@@ -491,7 +541,7 @@ define the precedence clearly and test it.
 - ❌ Precedence inferred from code order
 - ✅ Documented and table-tested precedence
 
-### 3.8. Smell list
+### 3.9. Smell list
 
 Treat these as review smells:
 
@@ -507,6 +557,8 @@ Treat these as review smells:
 - goroutines with no cancellation path
 - unwrapped external errors
 - string-matching error messages instead of `errors.Is`
+- missing `defer` for `Close()` or `Unlock()`
+- unstructured `fmt.Printf` or `log.Printf` for system state
 - unstable map iteration in rendered/hashed output
 - non-atomic writes to final targets (no temp → validate → rename)
 - archive extraction without path-traversal validation
@@ -531,10 +583,12 @@ Treat these as review smells:
 - Are adapters injected rather than globally accessed?
 - Are adapters separated from parsing/validation/planning?
 
-### 4.3. Error check
+### 4.3. Error, resource, and observability check
 
 - Are all expected failures returned as `error`?
 - Are fallbacks explicit, inspected via `errors.Is`, and justified?
+- Are resources reliably released via `defer`?
+- Is state emitted via `log/slog` (not `fmt.Printf`)?
 
 ### 4.4. Context/concurrency check
 
