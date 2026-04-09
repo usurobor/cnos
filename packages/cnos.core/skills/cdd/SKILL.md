@@ -200,14 +200,18 @@ same branch must produce the same answer.
 3. **CDD Trace in the PR body.** §5.4 of the canonical spec mandates that for L5/L6 cycles the PR body is the primary branch artifact carrying the trace. For L7 cycles the design artifact carries the trace and the PR body links to it.
 4. **Tests reference ACs.** Each AC the cycle promised should have at least one named test or "not applicable, justified" note in the PR body.
 5. **Known debt explicit.** Anything intentionally deferred is named in the PR body so the reviewer doesn't waste a round flagging it.
+6. **Schema/shape audit across test fixtures.** If this PR changes a JSON schema, manifest shape, op envelope, receipt format, or any string-literal contract that test fixtures construct, grep `test/` for the old shape and audit every match. Update each fixture in the same commit. The §2.2.1b sibling-audit discipline (which historically applied to production modules only) is hereby extended to also cover test fixtures when a contract changes — *"R1 fix only touched the file the reviewer named, R2 found the same root cause in a sibling test file"* is the recurring failure mode this check exists to prevent.
 
-This gate exists because the same failure mode (rebase artifact in
-the diff) recurred across consecutive post-release cycles before
-being mechanized here. Each item is a once-per-PR check that closes
-a finding class the reviewer would otherwise have to catch.
+This gate exists because two failure-mode classes (rebase artifact
+in the diff, and fixture-drift across multi-file test families)
+recurred across consecutive review rounds before being mechanized
+here. Each item is a once-per-PR check that closes a finding class
+the reviewer would otherwise have to catch.
 
   - ❌ Open the PR from a branch cut three days ago without checking whether main has moved.
   - ✅ `git fetch origin main && git rebase origin/main` immediately before `gh pr create`.
+  - ❌ R1 finds a stale fixture in `test/cmd/cn_command_test.ml`; you fix only that file; R2 finds the same root cause in `test/cmd/cn_runtime_contract_test.ml`.
+  - ✅ R1 finds a stale fixture; you `grep -rn '<old-shape-substring>' test/`; you fix every file in one commit; R2 is approval.
 
 ### 2.6 Review
 
