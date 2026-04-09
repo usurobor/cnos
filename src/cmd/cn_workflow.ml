@@ -24,22 +24,42 @@
 
     Naming: this module is distinct from the pre-existing
     [Cn_orchestrator] which implements the N-pass LLM bind loop.
-    Two orthogonal orchestration concerns, two modules. *)
+    Two orthogonal orchestration concerns, two modules.
 
-(* === Types === *)
+    v3.40.0 (#182 Move 2 slice 3) note: the 6 pure IR types and 10
+    pure functions (parsers, validator, helpers, result combinator)
+    that used to live in this module were extracted into
+    [src/lib/cn_workflow_ir.ml]. [Cn_workflow_ir] is now the
+    canonical authority for [trigger], [permissions], [step],
+    [orchestrator], [issue_kind], [issue] and their parse/validate
+    surface. This module re-exports each type below via OCaml
+    type-equality syntax and delegates each pure function as a
+    one-line let-binding so existing callers ([cn_workflow_test.ml]
+    plus the IO functions below that pattern-match on step/issue
+    constructors) compile unchanged. [Cn_workflow] retains every
+    IO-side function ([parse_file], [discover], [doctor_issues],
+    [execute_step], [execute], [typed_op_of_op_step], [trace_event],
+    [find_step], [env_get], [as_bool], [as_string]) and the three
+    IO-transit types ([load_outcome], [installed], [outcome]) —
+    these last are pure by shape but only consumed by IO code in
+    this module and in [cn_runtime_contract.ml::build_orchestrator_registry],
+    so per issue #196 option (b) they stay here with their
+    consumers. *)
 
-type trigger = {
+(* === Types (re-exported from Cn_workflow_ir for caller compatibility) === *)
+
+type trigger = Cn_workflow_ir.trigger = {
   trigger_kind : string;       (** "command" | "schedule" | "event" *)
   trigger_name : string;
 }
 
-type permissions = {
+type permissions = Cn_workflow_ir.permissions = {
   llm : bool;
   ops : string list;           (** allowed op kind names *)
   external_effects : bool;
 }
 
-type step =
+type step = Cn_workflow_ir.step =
   | Op_step of {
       id : string;
       op : string;             (** op kind name e.g. "fs_read" *)
@@ -72,7 +92,7 @@ type step =
       message : string;
     }
 
-type orchestrator = {
+type orchestrator = Cn_workflow_ir.orchestrator = {
   kind : string;
   name : string;
   trigger : trigger;
@@ -80,128 +100,38 @@ type orchestrator = {
   steps : step list;
 }
 
-(* === Parser === *)
+type issue_kind = Cn_workflow_ir.issue_kind =
+  | Missing_field of string
+  | Unknown_step_kind of string
+  | Duplicate_step_id of string
+  | Invalid_step_ref of string
+  | Permission_gap of string
+  | Llm_without_permission
+  | Empty_steps
 
-let ( let* ) r f = match r with Ok v -> f v | Error _ as e -> e
+type issue = Cn_workflow_ir.issue = {
+  issue_kind : issue_kind;
+  message : string;
+}
 
-let require_string key json =
-  match Cn_json.get_string key json with
-  | Some s -> Ok s
-  | None -> Error (Printf.sprintf "missing or non-string field '%s'" key)
+(* === Pure helpers delegated to Cn_workflow_ir ===
 
-let parse_string_list key json =
-  match Cn_json.get key json with
-  | None -> []
-  | Some (Cn_json.Array xs) ->
-      xs |> List.filter_map (function
-        | Cn_json.String s -> Some s
-        | _ -> None)
-  | Some _ -> []
+    Note: [let ( let* ) ...] is NOT re-exported here because no IO
+    function in this module uses the result-bind operator after the
+    extraction — all the parsers that used [let*] were moved to
+    [Cn_workflow_ir]. Re-exporting would create a dead binding. *)
 
-let parse_trigger json =
-  match Cn_json.get "trigger" json with
-  | None -> Error "missing 'trigger'"
-  | Some t ->
-      let* tk = require_string "kind" t in
-      let* tn = require_string "name" t in
-      Ok { trigger_kind = tk; trigger_name = tn }
+let require_string = Cn_workflow_ir.require_string
+let parse_string_list = Cn_workflow_ir.parse_string_list
+let parse_trigger = Cn_workflow_ir.parse_trigger
+let parse_permissions = Cn_workflow_ir.parse_permissions
+let parse_step = Cn_workflow_ir.parse_step
+let parse = Cn_workflow_ir.parse
+let step_id = Cn_workflow_ir.step_id
+let validate = Cn_workflow_ir.validate
+let manifest_orchestrator_ids = Cn_workflow_ir.manifest_orchestrator_ids
 
-let parse_permissions json =
-  match Cn_json.get "permissions" json with
-  | None -> Error "missing 'permissions'"
-  | Some p ->
-      let llm = match Cn_json.get "llm" p with
-        | Some (Cn_json.Bool b) -> b
-        | _ -> false in
-      let ops = parse_string_list "ops" p in
-      let external_effects = match Cn_json.get "external_effects" p with
-        | Some (Cn_json.Bool b) -> b
-        | _ -> false in
-      Ok { llm; ops; external_effects }
-
-let parse_step json =
-  let* id = require_string "id" json in
-  let* kind = require_string "kind" json in
-  match kind with
-  | "op" ->
-      let* op = require_string "op" json in
-      let args = match Cn_json.get "args" json with
-        | Some (Cn_json.Object fields) -> fields
-        | _ -> []
-      in
-      let bind = Cn_json.get_string "bind" json in
-      (* Note: the `inputs` field (a string list referencing bound
-         names from prior steps) is accepted by the wire schema
-         (ORCHESTRATORS.md §8) but not yet consumed by the executor.
-         The binding-substitution mechanism is part of the `llm`
-         step design work deferred from this cycle. Once `llm` is
-         wired, `inputs` is re-added to the Op_step record with a
-         resolution pass from the environment into args. For now it
-         is silently accepted at parse time to preserve
-         forward-compatibility at the wire level. *)
-      ignore (parse_string_list "inputs" json);
-      Ok (Op_step { id; op; args; bind })
-  | "llm" ->
-      let* prompt = require_string "prompt" json in
-      (* Same deferral as Op_step: inputs is accepted but not stored. *)
-      ignore (parse_string_list "inputs" json);
-      let bind = Cn_json.get_string "bind" json in
-      Ok (Llm_step { id; prompt; bind })
-  | "if" ->
-      let* cond = require_string "cond" json in
-      let* then_ref = require_string "then" json in
-      let* else_ref = require_string "else" json in
-      Ok (If_step { id; cond; then_ref; else_ref })
-  | "match" ->
-      let* input = require_string "input" json in
-      let cases = match Cn_json.get "cases" json with
-        | Some (Cn_json.Object fields) ->
-            fields |> List.filter_map (function
-              | (k, Cn_json.String v) -> Some (k, v)
-              | _ -> None)
-        | _ -> []
-      in
-      let default = Cn_json.get_string "default" json in
-      Ok (Match_step { id; input; cases; default })
-  | "return" ->
-      let value = match Cn_json.get "value" json with
-        | Some v -> v
-        | None -> Cn_json.Object []
-      in
-      Ok (Return_step { id; value })
-  | "fail" ->
-      let message = Cn_json.get_string "message" json
-        |> Option.value ~default:"" in
-      Ok (Fail_step { id; message })
-  | other ->
-      Error (Printf.sprintf
-        "step '%s': unknown kind '%s' (supported: op, llm, if, match, return, fail)"
-        id other)
-
-let parse json =
-  let* kind = require_string "kind" json in
-  if kind <> "cn.orchestrator.v1" then
-    Error (Printf.sprintf "unsupported schema kind '%s' \
-      (expected 'cn.orchestrator.v1')" kind)
-  else
-    let* name = require_string "name" json in
-    let* trigger = parse_trigger json in
-    let* permissions = parse_permissions json in
-    let* steps =
-      match Cn_json.get "steps" json with
-      | None -> Error "missing 'steps'"
-      | Some (Cn_json.Array items) ->
-          let rec collect acc = function
-            | [] -> Ok (List.rev acc)
-            | s :: rest ->
-                (match parse_step s with
-                 | Ok step -> collect (step :: acc) rest
-                 | Error e -> Error e)
-          in
-          collect [] items
-      | Some _ -> Error "'steps' is not an array"
-    in
-    Ok { kind; name; trigger; permissions; steps }
+(* === IO-side parse_file === *)
 
 let parse_file path =
   if not (Cn_ffi.Fs.exists path) then
@@ -211,86 +141,11 @@ let parse_file path =
     | Error msg -> Error (Printf.sprintf "invalid JSON: %s" msg)
     | Ok json -> parse json
 
-(* === Validation === *)
-
-type issue_kind =
-  | Missing_field of string
-  | Unknown_step_kind of string
-  | Duplicate_step_id of string
-  | Invalid_step_ref of string
-  | Permission_gap of string
-  | Llm_without_permission
-  | Empty_steps
-
-type issue = {
-  issue_kind : issue_kind;
-  message : string;
-}
-
-let step_id = function
-  | Op_step s -> s.id
-  | Llm_step s -> s.id
-  | If_step s -> s.id
-  | Match_step s -> s.id
-  | Return_step s -> s.id
-  | Fail_step s -> s.id
-
-let validate (o : orchestrator) =
-  let issues = ref [] in
-  let add kind message =
-    issues := { issue_kind = kind; message } :: !issues
-  in
-
-  if o.steps = [] then
-    add Empty_steps "orchestrator has no steps"
-  else begin
-    (* Duplicate step ids *)
-    let seen = Hashtbl.create 16 in
-    o.steps |> List.iter (fun s ->
-      let id = step_id s in
-      if Hashtbl.mem seen id then
-        add (Duplicate_step_id id)
-          (Printf.sprintf "duplicate step id: %s" id)
-      else
-        Hashtbl.add seen id ());
-
-    (* Invalid step refs: if/match targets must exist *)
-    let all_ids = Hashtbl.create 16 in
-    o.steps |> List.iter (fun s ->
-      Hashtbl.replace all_ids (step_id s) ());
-    let check_ref target =
-      if not (Hashtbl.mem all_ids target) then
-        add (Invalid_step_ref target)
-          (Printf.sprintf "step ref '%s' does not resolve" target)
-    in
-    o.steps |> List.iter (function
-      | If_step s ->
-          check_ref s.then_ref;
-          check_ref s.else_ref
-      | Match_step s ->
-          List.iter (fun (_, ref) -> check_ref ref) s.cases;
-          (match s.default with
-           | Some ref -> check_ref ref
-           | None -> ())
-      | _ -> ());
-
-    (* Permission gaps *)
-    o.steps |> List.iter (function
-      | Op_step s ->
-          if not (List.mem s.op o.permissions.ops) then
-            add (Permission_gap s.op)
-              (Printf.sprintf "step '%s' uses op '%s' not in permissions.ops"
-                 s.id s.op)
-      | Llm_step s when not o.permissions.llm ->
-          add Llm_without_permission
-            (Printf.sprintf "step '%s' is an llm step but permissions.llm=false"
-               s.id)
-      | _ -> ())
-  end;
-
-  List.rev !issues
-
-(* === Discovery === *)
+(* === Discovery — IO-transit types (kept in cn_workflow.ml per
+   issue #196 option (b): pure by shape but only consumed by IO
+   functions in this module and by cn_runtime_contract.ml, which
+   pattern-matches on Loaded/Load_error — moving them would force
+   caller churn without any pure-consumer benefit) === *)
 
 type load_outcome =
   | Loaded of orchestrator
@@ -302,30 +157,6 @@ type installed = {
   path : string;
   outcome : load_outcome;
 }
-
-(** Read the list of declared orchestrator ids from a package manifest.
-    Returns [] when the field is missing or malformed (cn_deps doctor
-    covers malformed-manifest reporting). *)
-let manifest_orchestrator_ids ~pkg_name json =
-  match Cn_json.get "sources" json with
-  | None -> []
-  | Some sources ->
-      match Cn_json.get "orchestrators" sources with
-      | None -> []
-      | Some (Cn_json.Array items) ->
-          items |> List.filter_map (function
-            | Cn_json.String s -> Some s
-            | other ->
-                Printf.eprintf
-                  "cn: workflow: package %s: sources.orchestrators entry is \
-                   not a string (%s), skipping\n"
-                  pkg_name (Cn_json.to_string other);
-                None)
-      | Some _ ->
-          Printf.eprintf
-            "cn: workflow: package %s: sources.orchestrators is not an array, ignoring\n"
-            pkg_name;
-          []
 
 let discover ~hub_path =
   Cn_assets.list_installed_packages hub_path

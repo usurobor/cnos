@@ -41,3 +41,15 @@
  (libraries cn_lib)
  (inline_tests)
  (preprocess (pps ppx_expect)))
+
+; cn_workflow_ir tests (ppx_expect) — pure orchestrator IR types,
+; parser, validator, and helpers (#182 Move 2 slice 3). Library name
+; `cn_workflow_ir_test` is distinct from the pre-existing
+; `cn_workflow_test` in test/cmd/dune (which covers the executor
+; surface); §2.5b check 7 grep verified before naming.
+(library
+ (name cn_workflow_ir_test)
+ (modules cn_workflow_ir_test)
+ (libraries cn_lib)
+ (inline_tests)
+ (preprocess (pps ppx_expect)))
