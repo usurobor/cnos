@@ -22,7 +22,8 @@
       "eng/testing",
       "eng/tool-writing",
       "eng/ux-cli",
-      "eng/writing"
+      "eng/writing",
+      "eng/go"
     ]
   }
 }
