@@ -10,11 +10,29 @@
     - body: what the runtime can do (capabilities, peers)
     - medium: what world it inhabits (zone-classified paths)
 
-    Body scanning for self-knowledge becomes a contract bug, not normal. *)
+    Body scanning for self-knowledge becomes a contract bug, not normal.
 
-(* === Types === *)
+    v3.39.0 (#182 Move 2 slice 2) note: the 11 pure runtime-contract
+    record types (plus [zone_to_string]) that used to live in this
+    module were extracted into [src/lib/cn_contract.ml]. [Cn_contract]
+    is now the canonical authority for [package_info], [override_info],
+    [zone], [zone_entry], [identity], [extension_contract_info],
+    [command_entry], [orchestrator_entry], [cognition], [body_contract],
+    [runtime_contract] and also for [activation_entry] (extracted from
+    [cn_activation.ml] as a transitive dependency because [cognition]
+    references it). This module re-exports each type below via OCaml
+    type-equality syntax so existing callers ([cn_system], [cn_doctor],
+    [cn_assets], and several test files) continue to resolve
+    [Cn_runtime_contract.package_info] etc. without any caller-side
+    migration. [Cn_runtime_contract] retains every IO-side function:
+    [classify_zones], [list_md_relative], [list_skill_overrides],
+    [extensions_from_registry], [build_command_registry],
+    [build_orchestrator_registry], [gather], [render_markdown],
+    [to_json], [write]. *)
 
-type package_info = {
+(* === Types (re-exported from Cn_contract for caller compatibility) === *)
+
+type package_info = Cn_contract.package_info = {
   name : string;
   version : string;
   sha256 : string option;
@@ -23,31 +41,31 @@ type package_info = {
   skill_count : int;
 }
 
-type override_info = {
+type override_info = Cn_contract.override_info = {
   doctrine : string list;
   mindsets : string list;
   skills : string list;
 }
 
-type zone =
+type zone = Cn_contract.zone =
   | Constitutive_self
   | Memory
   | Private_body
   | Work_medium
   | Projection_surface
 
-type zone_entry = {
+type zone_entry = Cn_contract.zone_entry = {
   path : string;
   zone : zone;
 }
 
-type identity = {
+type identity = Cn_contract.identity = {
   cn_version : string;
   hub_name : string;
   profile : string;
 }
 
-type extension_contract_info = {
+type extension_contract_info = Cn_contract.extension_contract_info = {
   ext_name : string;
   ext_version : string;
   ext_package : string;
@@ -56,28 +74,28 @@ type extension_contract_info = {
   ext_ops : string list;
 }
 
-type command_entry = {
+type command_entry = Cn_contract.command_entry = {
   cmd_name : string;
   cmd_source : string;          (** "repo-local" | "package" *)
   cmd_package : string option;
   cmd_summary : string;
 }
 
-type orchestrator_entry = {
+type orchestrator_entry = Cn_contract.orchestrator_entry = {
   orch_name : string;
   orch_source : string;         (** always "package" in v1 *)
   orch_package : string;
   orch_trigger_kinds : string list;
 }
 
-type cognition = {
+type cognition = Cn_contract.cognition = {
   packages : package_info list;
   overrides : override_info;
   extensions_installed : extension_contract_info list;
-  activation_index : Cn_activation.activation_entry list;
+  activation_index : Cn_contract.activation_entry list;
 }
 
-type body_contract = {
+type body_contract = Cn_contract.body_contract = {
   capabilities_text : string;
   peers : string list;
   extensions_active : extension_contract_info list;
@@ -85,21 +103,16 @@ type body_contract = {
   orchestrators : orchestrator_entry list;
 }
 
-type runtime_contract = {
+type runtime_contract = Cn_contract.runtime_contract = {
   identity : identity;
   cognition : cognition;
   body : body_contract;
   medium : zone_entry list;
 }
 
-(* === Zone helpers === *)
+(* === Zone helper delegated to Cn_contract === *)
 
-let zone_to_string = function
-  | Constitutive_self -> "constitutive_self"
-  | Memory -> "memory"
-  | Private_body -> "private_body"
-  | Work_medium -> "work_medium"
-  | Projection_surface -> "projection_surface"
+let zone_to_string = Cn_contract.zone_to_string
 
 (** Canonical zone classification.
     Each hub-relative path gets a semantic zone based on its relation

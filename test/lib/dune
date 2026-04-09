@@ -29,3 +29,12 @@
  (libraries cn_lib)
  (inline_tests)
  (preprocess (pps ppx_expect)))
+
+; cn_contract tests (ppx_expect) — pure runtime contract types +
+; activation_entry + zone_to_string (#182 Move 2 slice 2)
+(library
+ (name cn_contract_test)
+ (modules cn_contract_test)
+ (libraries cn_lib)
+ (inline_tests)
+ (preprocess (pps ppx_expect)))
