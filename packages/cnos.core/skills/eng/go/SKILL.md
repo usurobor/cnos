@@ -317,6 +317,95 @@ Prefer stdlib first:
 - `os/exec`
 - `path/filepath`
 
+### 2.10. Schema and compatibility
+
+**Treat manifests, contracts, and IRs as public contracts.**
+
+When handling:
+
+- package manifests
+- runtime contract data
+- command/orchestrator registries
+- lockfiles
+- indexes
+- workflow IR
+
+prefer:
+
+- additive evolution
+- explicit version fields
+- strict validation of required fields
+- tolerant handling of unknown fields when forward compatibility matters
+  - ❌ Silently coerce malformed config into defaults
+  - ✅ Reject malformed input with an explicit error and enough context to repair it
+
+If a compatibility path exists, test it explicitly.
+
+### 2.11. Determinism and reproducibility
+
+Deterministic output matters. For artifacts that are:
+
+- hashed
+- compared in tests
+- used in reports
+- stored for later diffing
+- emitted as runtime contracts
+
+ensure:
+
+- stable ordering
+- canonical serialization
+- no dependence on map iteration order
+- no hidden timestamps unless intentionally included
+  - ❌ Range over a map and render the result directly
+  - ✅ Sort keys/items before rendering
+
+### 2.12. Idempotence and retry safety
+
+For state-changing operations, define:
+
+- what happens on interruption
+- whether the operation is idempotent
+- what partial state is left behind
+- how cleanup works
+  - ❌ Write directly to the final target and hope the process completes
+  - ✅ Write to temp, validate, then atomically move into place
+
+### 2.13. Traceability and receipts
+
+For operations like:
+
+- package restore
+- update
+- command registry rebuild
+- orchestrator execution
+- sync / transport handling
+
+decide explicitly:
+
+- what is returned
+- what is logged
+- what is written to status/doctor/runtime contract
+- what receipt or trace event exists
+  - ❌ Degraded path only visible in transient stderr
+  - ✅ Degraded path visible in logs and/or structured runtime state
+
+### 2.14. Preserve cnos runtime boundaries
+
+Keep these boundaries explicit in Go code:
+
+- **skills** choose
+- **commands** dispatch
+- **orchestrators** execute
+- **extensions** provide capability
+
+Do not let core/runtime packages smear these concepts together.
+
+- ❌ A command registry that also decides skill activation logic
+- ✅ Separate registries and clear ownership
+
+The kernel stays minimal. Package-driven commands are preferred over built-ins. Core should not accrete convenience commands casually. Mechanical first, semantic second — the kernel resolves, validates, registers, dispatches, and enforces policy. It does not do hidden interpretation or "smart" inference when explicit metadata should exist.
+
 ---
 
 ## 3. Rules
@@ -375,6 +464,33 @@ If the change adds concurrency or shared mutable state, also run:
 go test -race ./...
 ```
 
+### 3.9. Shell and archive safety
+
+When using subprocesses or archives:
+
+- do not shell-escape by string concatenation
+- prefer argv-based execution (`exec.Command` with separate args)
+- validate destination paths before extraction
+- reject archive entries that escape the target directory
+- never log secrets
+  - ❌ `sh -c "curl ... $USER_INPUT ..."`
+  - ✅ `exec.CommandContext(ctx, "curl", "-fsSL", url)`
+
+### 3.10. Override precedence must be explicit
+
+If behavior may come from:
+
+- flags
+- environment
+- config
+- runtime discovery
+- defaults
+
+define the precedence clearly and test it.
+
+- ❌ Precedence inferred from code order
+- ✅ Documented and table-tested precedence
+
 ### 3.8. Smell list
 
 Treat these as review smells:
@@ -391,6 +507,13 @@ Treat these as review smells:
 - goroutines with no cancellation path
 - unwrapped external errors
 - string-matching error messages instead of `errors.Is`
+- unstable map iteration in rendered/hashed output
+- non-atomic writes to final targets (no temp → validate → rename)
+- archive extraction without path-traversal validation
+- shell command built by string concatenation
+- precedence logic undocumented or untested
+- command/orchestrator/extension boundaries smeared in one package
+- degraded path invisible outside transient stderr
 
 ---
 
@@ -418,7 +541,31 @@ Treat these as review smells:
 - Does context flow correctly?
 - Are goroutines owned, bounded, and cancellable?
 
-### 4.5. Build/test check
+### 4.5. Schema/compatibility check
+
+- Are manifests and contracts validated strictly on required fields?
+- Are unknown fields tolerated where forward compatibility matters?
+- Is schema version checked explicitly?
+
+### 4.6. Determinism check
+
+- Is output ordering stable (sorted, not map-iteration-dependent)?
+- Are hashes computed over canonical content?
+
+### 4.7. Safety check
+
+- Are subprocesses argv-based (no string concatenation)?
+- Are archive extractions path-validated?
+- Are secrets excluded from logs?
+- Is override precedence documented and tested?
+
+### 4.8. cnos boundary check
+
+- Are command/orchestrator/extension/skill boundaries preserved?
+- Is the kernel minimal (no casual built-in accretion)?
+- Are degraded paths visible in structured state, not just stderr?
+
+### 4.9. Build/test check
 
 - `go mod tidy`
 - `go test ./...`
