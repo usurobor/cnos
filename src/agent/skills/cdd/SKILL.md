@@ -55,6 +55,24 @@ CDD fails through pipeline without selection or release without closure. Typical
 
 ---
 
+### 1.4 Roles
+
+CDD requires **at least two agents**. A single agent cannot both author and review its own work.
+
+| Role | Steps | Identity constraint |
+|------|-------|---------------------|
+| **Author** | 0–7a | Selects gap, builds implementation, passes pre-review gate |
+| **Reviewer** | 8 | **Different agent/identity than the author** |
+| **Releaser** | 9–10 | May be author or reviewer |
+| **Assessor** | 11–13 | **Must be the releasing agent** |
+
+The author may delegate implementation to a third agent (step 6f) but retains cycle ownership. The operator may reassign any role explicitly. Implicit role drift is not permitted — if the reviewer identifies a fix, they request changes; the author executes.
+
+See CDD.md §1.4 for the full role specification.
+
+  - ❌ One agent authors, reviews, and approves its own PR.
+  - ✅ Author builds and self-checks; a different agent reviews; releasing agent assesses.
+
 ## 2. Unfold
 
 ### 2.0 Observe and select
