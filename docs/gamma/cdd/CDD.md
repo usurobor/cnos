@@ -321,10 +321,10 @@ CDD is artifact-driven. For substantial changes, each lifecycle step must leave 
 | 8 | Review | review | review artifact / PR review / comment link | review/SKILL.md output format | review surface | reviewer | always | review |
 | 9 | Gate | release | gate result / release-readiness evidence | `docs/gamma/cdd/GATE-TEMPLATE.md` | release or review surface | mechanical + reviewer | always | release |
 | 10 | Release | release | CHANGELOG row, tag, release note | CHANGELOG.md ledger + release/SKILL.md | release surface | agent + mechanical | always | release, writing |
-| 11 | Observe | close | post-release observation result | post-release/SKILL.md | post-release assessment | agent | always | post-release |
-| 12 | Assess | close | POST-RELEASE-ASSESSMENT.md | post-release/SKILL.md output template | version directory | agent | always | post-release |
-| 12a | Skill patch | close | skill/spec patches for recurring failure modes identified in §3; synced across all surfaces (src/agent, packages/cnos.core, CDD.md) | post-release/SKILL.md §3 + cdd/SKILL.md §3.3/§3.3a | same commit as assessment | agent | when §3 identifies recurring failure or skill gap | post-release, cdd |
-| 13 | Close | close | immediate outputs executed (incl. 12a patches) + deferred committed | post-release/SKILL.md §6 CDD Closeout | post-release assessment | agent | always | post-release |
+| 11 | Observe | close | post-release observation result | post-release/SKILL.md | post-release assessment | releasing agent | always | post-release |
+| 12 | Assess | close | POST-RELEASE-ASSESSMENT.md | post-release/SKILL.md output template | version directory | releasing agent | always | post-release |
+| 12a | Skill patch | close | skill/spec patches for recurring failure modes identified in §3; synced across all surfaces (src/agent, packages/cnos.core, CDD.md) | post-release/SKILL.md §3 + cdd/SKILL.md §3.3/§3.3a | same commit as assessment | releasing agent | when §3 identifies recurring failure or skill gap | post-release, cdd |
+| 13 | Close | close | immediate outputs executed (incl. 12a patches) + deferred committed | post-release/SKILL.md §6 CDD Closeout | post-release assessment | releasing agent | always | post-release |
 
 **Primary branch artifact:** the PR body (`.github/PULL_REQUEST_TEMPLATE.md`) for L5/L6 changes, or the design artifact (design/SKILL.md §3.1) for larger changes.
 
