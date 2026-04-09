@@ -201,17 +201,24 @@ same branch must produce the same answer.
 4. **Tests reference ACs.** Each AC the cycle promised should have at least one named test or "not applicable, justified" note in the PR body.
 5. **Known debt explicit.** Anything intentionally deferred is named in the PR body so the reviewer doesn't waste a round flagging it.
 6. **Schema/shape audit across test fixtures.** If this PR changes a JSON schema, manifest shape, op envelope, receipt format, or any string-literal contract that test fixtures construct, grep `test/` for the old shape and audit every match. Update each fixture in the same commit. The §2.2.1b sibling-audit discipline (which historically applied to production modules only) is hereby extended to also cover test fixtures when a contract changes — *"R1 fix only touched the file the reviewer named, R2 found the same root cause in a sibling test file"* is the recurring failure mode this check exists to prevent.
+7. **Workspace-global library-name uniqueness.** If this PR adds a new `(library (name X))` stanza to any dune file, grep the entire workspace for existing `(name X)` entries first: `grep -rn "(name X)" src/ test/`. Two libraries cannot share a workspace-global name — dune rejects duplicates at build time. The grep is a once-per-new-library check; rename proactively if there is any collision (e.g. `cn_contract_test` → `cn_contract_pure_test` when a same-named library already exists in a sibling directory). This check exists because a library name collision in `test/lib/dune` reached CI red in PR #195 (v3.39.0) — the §2.5b check set held every semantic check but had no lane for "workspace-global namespace collision", and the no-local-OCaml authoring constraint meant `dune build` was not available to catch it before push.
+8. **CI green on the head commit before requesting review.** Before requesting review — `gh pr create` for a new PR, marking a draft PR as "ready for review," or posting a review-request comment — the latest CI run on the head commit must be green. If CI is red (including on initial push), fix the failure and push before requesting review. A red CI state is a mechanical failure the author must resolve; asking the reviewer to act as a compiler wastes their time and review rounds. **Mechanism**: when a local build/test toolchain is unavailable, open the PR as **draft**, wait for CI, then mark ready-for-review. Draft PRs exist specifically for this flow. Do not "just open and hope" — any environmental constraint that prevents local verification (no OCaml toolchain in the sandbox, cross-compilation targets the author cannot exercise, etc.) is absorbed by the draft-until-green pattern rather than leaked into review rounds. This check was added in v3.40.0 after two consecutive cycles (#195 F1 library name collision, #197 F1 expect-test stderr mismatch) where mechanical failures reached the reviewer because the author had no way to verify locally — both would have been caught by a single `dune runtest` that was structurally unavailable.
 
-This gate exists because two failure-mode classes (rebase artifact
-in the diff, and fixture-drift across multi-file test families)
-recurred across consecutive review rounds before being mechanized
-here. Each item is a once-per-PR check that closes a finding class
-the reviewer would otherwise have to catch.
+This gate exists because four failure-mode classes (rebase artifact
+in the diff, fixture-drift across multi-file test families,
+workspace-global library-name collisions, and mechanical CI failures
+reaching the reviewer) recurred across consecutive review rounds
+before being mechanized here. Each item is a once-per-PR check that
+closes a finding class the reviewer would otherwise have to catch.
 
   - ❌ Open the PR from a branch cut three days ago without checking whether main has moved.
   - ✅ `git fetch origin main && git rebase origin/main` immediately before `gh pr create`.
   - ❌ R1 finds a stale fixture in `test/cmd/cn_command_test.ml`; you fix only that file; R2 finds the same root cause in `test/cmd/cn_runtime_contract_test.ml`.
   - ✅ R1 finds a stale fixture; you `grep -rn '<old-shape-substring>' test/`; you fix every file in one commit; R2 is approval.
+  - ❌ Add `(library (name cn_contract_test) ...)` to `test/lib/dune` without checking `test/cmd/dune`; CI red on dune duplicate-name error.
+  - ✅ Before committing, `grep -rn "(name cn_contract_test)" src/ test/` → collision found; rename to `cn_contract_pure_test` in dune stanza + file + library name; commit once.
+  - ❌ Open a PR with red CI and wait for the reviewer to report the mechanical failure.
+  - ✅ Open the PR as draft; wait for CI green; then mark ready-for-review. The reviewer only sees judgment-level review.
 
 ### 2.6 Review
 
