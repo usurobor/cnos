@@ -134,7 +134,17 @@ let read_skill_frontmatter path =
 
 (* === Activation index === *)
 
-type activation_entry = {
+(** v3.39.0 (#182 Move 2 slice 2): the [activation_entry] type was
+    extracted into [src/lib/cn_contract.ml] as a transitive dependency
+    of the runtime-contract pure model (the [cognition] record's
+    [activation_index] field references it). The canonical definition
+    now lives in [Cn_contract.activation_entry]; this is a
+    type-equality re-export so existing callers of
+    [Cn_activation.activation_entry] compile unchanged. The IO-side
+    of this module — [build_index], the frontmatter parser, the
+    package manifest walk — is unchanged and is a future Move 2
+    slice 4 candidate. *)
+type activation_entry = Cn_contract.activation_entry = {
   skill_id : string;
   package : string;
   summary : string;
