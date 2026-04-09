@@ -144,7 +144,9 @@ No PATH-wide discovery in v1.
 
 Most non-bootstrap commands can leave core over time.
 
-**Likely built-in forever:** help, init, setup, deps, build, doctor, status, update
+**Likely built-in forever:** help, install, deps, build, doctor, status, update
+
+`init` and `setup` are retired — agent creation moves to `cn agent create` (from the `cnos.agent` package). The binary is a package manager + command dispatcher; the agent lifecycle is a package.
 
 **Likely package/repo-local:** daily, weekly, save, commit, push, gtd, adhoc, release wrappers, project-specific workflows
 
@@ -298,8 +300,7 @@ src/
     transport/
   builtins/                # minimal bootstrap command set
     help/
-    init/
-    setup/
+    install/
     deps/
     build/
     doctor/
@@ -473,7 +474,7 @@ This refactor does not:
 
 The full design is the north star. These three moves execute first:
 
-**Move 1 — Command pipeline symmetry.** Remove the biggest structural exception: commands become ordinary package content, authored in `src/agent/commands/` and flowing through `cn build` like every other content class. Built-in kernel shrinks to: help, init, setup, deps, build, doctor, status, update. First migrations: daily, weekly, save. Leave commit and push built-in for one more cycle until the package-command path proves clean. Runtime extensions and low-level A2A transport remain untouched in this slice.
+**Move 1 — Command pipeline symmetry.** Remove the biggest structural exception: commands become ordinary package content, authored in `src/agent/commands/` and flowing through `cn build` like every other content class. Built-in kernel shrinks to: help, install, deps, build, doctor, status, update. Agent creation moves to `cnos.agent` package (`cn agent create`). First migrations: daily, weekly, save. Leave commit and push built-in for one more cycle until the package-command path proves clean. Runtime extensions and low-level A2A transport remain untouched in this slice.
 
 **Move 2 — Pure-model gravity into `src/lib/`.** Do not create `src/core/`. Widen the existing `src/lib/` with pure types and validators extracted from `src/cmd/`. Candidates: package manifest types (from `cn_deps.ml`), runtime contract record types (from `cn_runtime_contract.ml`), workflow IR types/parser/validator (from `cn_workflow.ml`), activation types/evaluator (from `cn_activation.ml`). Discipline: no filesystem / git / process / HTTP / LLM code may move into `src/lib/`.
 
