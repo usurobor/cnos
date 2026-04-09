@@ -414,4 +414,10 @@ let%expect_test "M2 manifest_orchestrator_ids malformed entries" =
     | Ok j -> j | Error _ -> failwith "json" in
   let ids = Cn_workflow_ir.manifest_orchestrator_ids ~pkg_name:"cnos.core" json in
   Printf.printf "count=%d ids=%s\n" (List.length ids) (String.concat "," ids);
-  [%expect {| count=2 ids=good,also-good |}]
+  (* ppx_expect captures stdout AND stderr. The int 42 triggers an
+     unconditional Printf.eprintf warning in manifest_orchestrator_ids;
+     the warning is part of the diagnostic surface this test locks in
+     along with the filtered result. *)
+  [%expect {|
+    cn: workflow: package cnos.core: sources.orchestrators entry is not a string (42), skipping
+    count=2 ids=good,also-good |}]
