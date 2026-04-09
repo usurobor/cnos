@@ -1,5 +1,5 @@
 (** cn_activation.ml — Skill activation index built from installed
-    packages.
+    packages (IO plane).
 
     Each installed package's [cn.package.json] declares which skills it
     exposes via [sources.skills]. For every exposed skill, this module
@@ -8,118 +8,76 @@
     fields. The result is a flat list of activation entries that the
     runtime contract can render as cognition state.
 
-    The frontmatter parser is a small line-based YAML subset:
-      - [---] markers delimit the frontmatter block
-      - [key: value] sets a scalar
-      - [key:] followed by indented [- item] lines builds a block list
-      - inline lists ([key: \[a, b\]]) are NOT supported in v1
-    Anything malformed is logged once on stderr and skipped; the parser
-    never raises. *)
+    v3.41.0 (#182 Move 2 slice 4 — final slice) note: the pure
+    frontmatter parser and activation validation types that used to
+    live in this module were extracted into [src/lib/cn_frontmatter.ml].
+    [Cn_frontmatter] is now the canonical authority for:
+    - [frontmatter] record + [empty_frontmatter]
+    - Line-level YAML-subset helpers: [split_lines], [extract_block],
+      [parse_key_value], [is_list_item], [list_item_value]
+    - [parse_frontmatter] (the main parser)
+    - [manifest_skill_ids]
+    - [issue_kind] (3-variant) + [issue] + [issue_kind_label]
 
-(* === Frontmatter === *)
+    This module re-exports each type below via OCaml type-equality
+    syntax and delegates each pure function as a one-line let-binding
+    so existing callers ([cn_doctor.ml], [test/cmd/cn_activation_test.ml])
+    compile unchanged. [Cn_activation] retains the IO-side functions:
+    [read_skill_frontmatter], [build_index], [validate].
 
-type frontmatter = {
+    The [activation_entry] re-export chain from Move 2 slice 2 (v3.39.0)
+    stays untouched: [activation_entry] lives in [Cn_contract] as
+    canonical, and this module re-exports it via type-equality.
+
+    Slice 4 closes Move 2. Every pure type and parser in the codebase
+    now lives in [src/lib/]; every IO function lives in [src/cmd/]. *)
+
+(* === Types (re-exported from Cn_frontmatter for caller compatibility) === *)
+
+type frontmatter = Cn_frontmatter.frontmatter = {
   fm_name : string option;
   fm_description : string option;
   fm_triggers : string list;
 }
 
-let empty_frontmatter = {
-  fm_name = None;
-  fm_description = None;
-  fm_triggers = [];
+type issue_kind = Cn_frontmatter.issue_kind =
+  | Missing_skill
+  | Empty_triggers
+  | Trigger_conflict
+
+type issue = Cn_frontmatter.issue = {
+  kind : issue_kind;
+  message : string;
 }
 
-let split_lines s = String.split_on_char '\n' s
+(* === Pure helpers delegated to Cn_frontmatter === *)
 
-(** Take the lines that lie between the first and second [---] marker.
-    Returns [None] if either marker is missing. The marker lines must
-    appear on their own (after trimming). *)
-let extract_block lines =
-  let is_marker l = String.trim l = "---" in
-  match lines with
-  | first :: rest when is_marker first ->
-      let rec take acc = function
-        | [] -> None  (* unterminated *)
-        | l :: _ when is_marker l -> Some (List.rev acc)
-        | l :: tl -> take (l :: acc) tl
-      in
-      take [] rest
-  | _ -> None  (* no leading "---": file has no frontmatter — not an error *)
+let empty_frontmatter = Cn_frontmatter.empty_frontmatter
+let split_lines = Cn_frontmatter.split_lines
+let extract_block = Cn_frontmatter.extract_block
+let parse_key_value = Cn_frontmatter.parse_key_value
+let is_list_item = Cn_frontmatter.is_list_item
+let list_item_value = Cn_frontmatter.list_item_value
+let parse_frontmatter = Cn_frontmatter.parse_frontmatter
+let manifest_skill_ids = Cn_frontmatter.manifest_skill_ids
+let issue_kind_label = Cn_frontmatter.issue_kind_label
 
-(** Split a "key: value" line. Returns [None] if there is no colon at
-    the head of an unindented line. *)
-let parse_key_value line =
-  match String.index_opt line ':' with
-  | None -> None
-  | Some i ->
-      let key = String.sub line 0 i |> String.trim in
-      let value =
-        let rest = String.sub line (i + 1) (String.length line - i - 1) in
-        String.trim rest
-      in
-      if key = "" then None else Some (key, value)
+(* === activation_entry re-export from slice 2 (unchanged) ===
+    v3.39.0 (#182 Move 2 slice 2): the [activation_entry] type was
+    extracted into [src/lib/cn_contract.ml] as a transitive dependency
+    of the runtime-contract pure model (the [cognition] record's
+    [activation_index] field references it). The canonical definition
+    lives in [Cn_contract.activation_entry]; this is a type-equality
+    re-export so existing callers of [Cn_activation.activation_entry]
+    compile unchanged. *)
+type activation_entry = Cn_contract.activation_entry = {
+  skill_id : string;
+  package : string;
+  summary : string;
+  triggers : string list;
+}
 
-(** True iff a line is an indented YAML list item ("  - item"). *)
-let is_list_item line =
-  let trimmed = String.trim line in
-  String.length trimmed >= 2
-  && String.sub trimmed 0 2 = "- "
-
-let list_item_value line =
-  let trimmed = String.trim line in
-  String.sub trimmed 2 (String.length trimmed - 2) |> String.trim
-
-(** Parse a SKILL.md frontmatter into a [frontmatter] record. Always
-    succeeds; missing or malformed input yields [empty_frontmatter] or
-    a partially populated record. *)
-let parse_frontmatter content =
-  match extract_block (split_lines content) with
-  | None -> empty_frontmatter
-  | Some block ->
-      let fm = ref empty_frontmatter in
-      let pending_list_key = ref None in
-      let triggers_acc = ref [] in
-      let flush_list () =
-        match !pending_list_key with
-        | Some "triggers" ->
-            fm := { !fm with fm_triggers = List.rev !triggers_acc }
-        | Some _ | None -> ()
-        ; pending_list_key := None
-        ; triggers_acc := []
-      in
-      List.iter (fun line ->
-        if String.trim line = "" then ()
-        else if is_list_item line && !pending_list_key <> None then
-          triggers_acc := list_item_value line :: !triggers_acc
-        else begin
-          flush_list ();
-          match parse_key_value line with
-          | None ->
-              Printf.eprintf "cn: activation: skipping malformed line: %s\n" line
-          | Some (key, value) ->
-              if value = "" then
-                pending_list_key := Some key
-              else begin
-                (match key with
-                 | "name" -> fm := { !fm with fm_name = Some value }
-                 | "description" -> fm := { !fm with fm_description = Some value }
-                 | "triggers" ->
-                     (* Inline form not supported; warn and ignore. *)
-                     Printf.eprintf
-                       "cn: activation: inline triggers list not supported, \
-                        use block list: %s\n" value
-                 | _ ->
-                     (* Unrecognised frontmatter key (artifact_class,
-                        kata_surface, governing_question, ...) —
-                        intentionally ignored; this parser only
-                        consumes name / description / triggers. *)
-                     ())
-              end
-        end
-      ) block;
-      flush_list ();
-      !fm
+(* === IO-side: read_skill_frontmatter === *)
 
 (** Read a SKILL.md file from disk and parse its frontmatter. Returns
     [None] if the file is missing or unreadable. *)
@@ -132,46 +90,7 @@ let read_skill_frontmatter path =
         path (Printexc.to_string exn);
       None
 
-(* === Activation index === *)
-
-(** v3.39.0 (#182 Move 2 slice 2): the [activation_entry] type was
-    extracted into [src/lib/cn_contract.ml] as a transitive dependency
-    of the runtime-contract pure model (the [cognition] record's
-    [activation_index] field references it). The canonical definition
-    now lives in [Cn_contract.activation_entry]; this is a
-    type-equality re-export so existing callers of
-    [Cn_activation.activation_entry] compile unchanged. The IO-side
-    of this module — [build_index], the frontmatter parser, the
-    package manifest walk — is unchanged and is a future Move 2
-    slice 4 candidate. *)
-type activation_entry = Cn_contract.activation_entry = {
-  skill_id : string;
-  package : string;
-  summary : string;
-  triggers : string list;
-}
-
-(** Read the [sources.skills] string array from a parsed manifest. *)
-let manifest_skill_ids ~pkg_name json =
-  match Cn_json.get "sources" json with
-  | None -> []
-  | Some sources ->
-      match Cn_json.get "skills" sources with
-      | None -> []
-      | Some (Cn_json.Array items) ->
-          items |> List.filter_map (function
-            | Cn_json.String s -> Some s
-            | other ->
-                Printf.eprintf
-                  "cn: activation: package %s: sources.skills entry is not a \
-                   string (%s), skipping\n"
-                  pkg_name (Cn_json.to_string other);
-                None)
-      | Some _ ->
-          Printf.eprintf
-            "cn: activation: package %s: sources.skills is not an array, ignoring\n"
-            pkg_name;
-          []
+(* === IO-side: build_index === *)
 
 (** Walk every installed package and emit one [activation_entry] per
     declared skill that has a SKILL.md on disk. Skills declared in the
@@ -204,17 +123,7 @@ let build_index ~hub_path =
                   triggers = fm.fm_triggers;
                 }))
 
-(* === Doctor validation === *)
-
-type issue_kind =
-  | Missing_skill
-  | Empty_triggers
-  | Trigger_conflict
-
-type issue = {
-  kind : issue_kind;
-  message : string;
-}
+(* === IO-side: validate (doctor) === *)
 
 (** Doctor sweep across the activation surface. Returns one [issue] per
     distinct problem found:
@@ -281,8 +190,3 @@ let validate ~hub_path =
   ) by_trigger;
 
   List.rev !issues
-
-let issue_kind_label = function
-  | Missing_skill -> "missing"
-  | Empty_triggers -> "empty"
-  | Trigger_conflict -> "conflict"
