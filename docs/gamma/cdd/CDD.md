@@ -66,6 +66,23 @@ In development terms:
 
 CDD exists to close that gap through coherent action.
 
+### 1.4 Roles
+
+CDD requires **at least two agents** with distinct roles. A single agent cannot both author and review its own work — that collapses the coherence check into self-confirmation.
+
+| Role | Steps owned | Responsibility | Identity constraint |
+|------|-------------|----------------|---------------------|
+| **Author** | 0–7a (observe → pre-review) | Select the gap, design the fix, build the implementation, write tests, produce self-coherence report, pass pre-review gate | — |
+| **Reviewer** | 8 (review) | Verify the change closes its declared gap without creating larger incoherence. Every verdict traces to evidence in the diff and surrounding contract. | **Must be a different agent/identity than the author.** Same-identity review degrades to comments and is unenforceable (review skill §7.1). |
+| **Releaser** | 9–10 (gate → release) | Verify readiness, bump version, write changelog + release notes, tag, push, validate deployment. | May be the author or the reviewer. |
+| **Assessor** | 11–13 (observe → assess → close) | Post-release assessment: measure what shipped, score coherence, identify skill gaps, execute immediate fixes, commit deferred outputs. | **Must be the releasing agent** (post-release skill §Who). The release and its assessment are a single responsibility. |
+
+**Minimum configuration:** two agents — one authors, the other reviews. The author may also release and assess. The reviewer may also release and assess. But authoring and reviewing the same change must never be the same agent.
+
+**Delegated implementation (step 6f):** The author may delegate implementation to a third agent. The delegator writes the handoff spec (ACs, active skills, test requirements). The implementer builds and self-verifies. The author remains responsible for the cycle — delegation does not transfer ownership of steps 0–7a.
+
+**Operator override:** The operator may reassign any role explicitly. The reassignment must name the target agent and the reason. Implicit role drift (e.g., reviewer starts authoring fixes mid-review) is not permitted — if the reviewer identifies a fix, they request changes; the author executes.
+
 ---
 
 ## 2. Inputs
