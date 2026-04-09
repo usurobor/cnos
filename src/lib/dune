@@ -1,8 +1,12 @@
 ; cn library (pure functions, testable)
+;
+; Discipline: no filesystem, git, process exec, HTTP, or LLM code in
+; this library. Pure types, validators, parsers, and lookups only.
+; See docs/alpha/agent-runtime/CORE-REFACTOR.md §7 Move 2.
 (library
  (name cn_lib)
  (wrapped false)
- (modules cn_lib cn_json cn_sha256 cn_build_info cn_version cn_repo_info)
+ (modules cn_lib cn_json cn_sha256 cn_package cn_build_info cn_version cn_repo_info)
  (libraries inbox_lib))
 
 (rule
