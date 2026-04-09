@@ -20,3 +20,12 @@
  (libraries cn_lib)
  (inline_tests)
  (preprocess (pps ppx_expect)))
+
+; cn_package tests (ppx_expect) — pure package manifest / lockfile /
+; index types + JSON round-trips + lookup + is_first_party (#182 Move 2)
+(library
+ (name cn_package_test)
+ (modules cn_package_test)
+ (libraries cn_lib)
+ (inline_tests)
+ (preprocess (pps ppx_expect)))

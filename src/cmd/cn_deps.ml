@@ -1,4 +1,5 @@
-(** cn_deps.ml — Package manifest, lockfile, and package restore.
+(** cn_deps.ml — Package manifest, lockfile, and package restore
+    (IO plane).
 
     Handles .cn/deps.json (manifest) and .cn/deps.lock.json (lockfile).
 
@@ -11,7 +12,20 @@
     verify -> tar -xzf into .cn/vendor/packages/<name>@<version>/
     -> validate cn.package.json. When running inside a cnos checkout,
     first-party packages are copied from the local source tree instead,
-    after a freshness check against src/agent/. *)
+    after a freshness check against src/agent/.
+
+    v3.38.0 (#182 Move 2 first slice) note: the pure types and pure
+    helpers that used to live in this module were extracted into
+    [src/lib/cn_package.ml]. [Cn_package] is now the canonical
+    authority for [manifest_dep], [locked_dep], [manifest], [lockfile],
+    [index_entry], [package_index] and their JSON serialisation +
+    [parse_package_index] + [lookup_index] + [is_first_party]. This
+    module re-exports each type below via OCaml type-equality syntax
+    so existing callers (cn_runtime_contract, cn_system, and several
+    test files) continue to resolve [Cn_deps.locked_dep] etc. without
+    any caller-side migration. [Cn_deps] retains only the IO-side
+    functions: read/write, download, extract, validate, restore,
+    doctor, lockfile_for_manifest, run_*. *)
 
 (* === Constants === *)
 
@@ -22,61 +36,60 @@ let package_index_url () =
     "https://raw.githubusercontent.com/%s/main/packages/index.json"
     Cn_lib.cnos_repo
 
-(* === Types === *)
+(* === Types (re-exported from Cn_package for caller compatibility) === *)
 
 (** Manifest entry: what the operator wants. *)
-type manifest_dep = {
+type manifest_dep = Cn_package.manifest_dep = {
   name : string;
   version : string;
 }
 
 (** Lockfile entry: name + version + tarball sha256. *)
-type locked_dep = {
+type locked_dep = Cn_package.locked_dep = {
   name : string;
   version : string;
   sha256 : string;
 }
 
-type manifest = {
+type manifest = Cn_package.manifest = {
   schema : string;
   profile : string;
   packages : manifest_dep list;
 }
 
-type lockfile = {
+type lockfile = Cn_package.lockfile = {
   schema : string;
   packages : locked_dep list;
 }
 
 (** Package index entry. *)
-type index_entry = {
+type index_entry = Cn_package.index_entry = {
   ie_url : string;
   ie_sha256 : string;
 }
 
 (** Parsed package index: (name, version) -> entry. *)
-type package_index = {
+type package_index = Cn_package.package_index = {
   index_schema : string;
   index_entries : ((string * string) * index_entry) list;
 }
+
+(* === Pure helpers delegated to Cn_package === *)
+
+let manifest_dep_to_json = Cn_package.manifest_dep_to_json
+let parse_manifest_dep = Cn_package.parse_manifest_dep
+let locked_dep_to_json = Cn_package.locked_dep_to_json
+let parse_locked_dep = Cn_package.parse_locked_dep
+let parse_package_index = Cn_package.parse_package_index
+let lookup_index = Cn_package.lookup_index
+let is_first_party = Cn_package.is_first_party
 
 (* === Paths === *)
 
 let manifest_path hub_path = Cn_ffi.Path.join hub_path ".cn/deps.json"
 let lockfile_path hub_path = Cn_ffi.Path.join hub_path ".cn/deps.lock.json"
 
-(* === JSON: manifest === *)
-
-let manifest_dep_to_json (d : manifest_dep) =
-  Cn_json.Object [
-    "name", Cn_json.String d.name;
-    "version", Cn_json.String d.version;
-  ]
-
-let parse_manifest_dep json =
-  match Cn_json.get_string "name" json, Cn_json.get_string "version" json with
-  | Some name, Some version -> Some { name; version }
-  | _ -> None
+(* === JSON: manifest I/O === *)
 
 let read_manifest ~hub_path =
   let path = manifest_path hub_path in
@@ -103,21 +116,7 @@ let write_manifest ~hub_path (m : manifest) =
   ] in
   Cn_ffi.Fs.write (manifest_path hub_path) (Cn_json.to_string json ^ "\n")
 
-(* === JSON: lockfile === *)
-
-let locked_dep_to_json (d : locked_dep) =
-  Cn_json.Object [
-    "name", Cn_json.String d.name;
-    "version", Cn_json.String d.version;
-    "sha256", Cn_json.String d.sha256;
-  ]
-
-let parse_locked_dep json =
-  match Cn_json.get_string "name" json,
-        Cn_json.get_string "version" json,
-        Cn_json.get_string "sha256" json with
-  | Some name, Some version, Some sha256 -> Some { name; version; sha256 }
-  | _ -> None
+(* === JSON: lockfile I/O === *)
 
 let read_lockfile ~hub_path =
   let path = lockfile_path hub_path in
@@ -141,30 +140,7 @@ let write_lockfile ~hub_path (l : lockfile) =
   ] in
   Cn_ffi.Fs.write (lockfile_path hub_path) (Cn_json.to_string json ^ "\n")
 
-(* === Package index === *)
-
-(** Parse a cn.package-index.v1 JSON document. *)
-let parse_package_index json =
-  let schema = Cn_json.get_string "schema" json
-    |> Option.value ~default:"cn.package-index.v1" in
-  let entries = match Cn_json.get "packages" json with
-    | Some (Cn_json.Object pkgs) ->
-        pkgs |> List.concat_map (fun (name, versions_json) ->
-          match versions_json with
-          | Cn_json.Object versions ->
-              versions |> List.filter_map (fun (version, entry_json) ->
-                match Cn_json.get_string "url" entry_json,
-                      Cn_json.get_string "sha256" entry_json with
-                | Some url, Some sha256 ->
-                    Some ((name, version), { ie_url = url; ie_sha256 = sha256 })
-                | _ -> None)
-          | _ -> [])
-    | _ -> []
-  in
-  { index_schema = schema; index_entries = entries }
-
-let lookup_index (idx : package_index) ~name ~version =
-  List.assoc_opt (name, version) idx.index_entries
+(* === Package index I/O === *)
 
 (** Walk up from cwd looking for a packages/index.json (development mode). *)
 let find_local_index_path () =
@@ -222,9 +198,6 @@ let rm_tree path =
     ignore (Cn_ffi.Process.exec_args ~prog:"rm" ~args:["-rf"; path] ())
 
 (* === First-party local source resolution (development) === *)
-
-let is_first_party name =
-  String.length name >= 5 && String.sub name 0 5 = "cnos."
 
 let find_local_package_source pkg_name =
   let rec walk dir =
