@@ -23,7 +23,7 @@
 
 Applied to this branch:
 
-1. **Branch rebased onto current `main`.** Branch `claude/182-move2-workflow-ir` was cut from `8b04e30` (current `main` at cycle-start, which is eng/go skill v2 on top of #195 merge). Rebase will be executed as `git fetch origin main && git rebase origin/main` immediately before `gh pr create`; expected to be a no-op or trivial because main has not moved since the branch was cut.
+1. **Branch rebased onto current `main`.** Branch `claude/182-move2-workflow-ir` was originally cut from `8b04e30` (eng/go skill v2 on top of #195 merge). During Stage H pre-commit verification, `git fetch origin main` showed main had advanced 3 eng/go-skill commits — the branch was rebased onto `d1badee` (the new tip). Rebase was clean; no conflicts because the eng/go skill commits touch a disjoint file set from the workflow IR extraction. **Post-rebase parent: `d1badee`** (the state CI actually sees and the state PR #197 reports).
 2. **Self-coherence artifact present.** Yes — `docs/gamma/cdd/3.40.0/SELF-COHERENCE.md` with all 5 sections (α, β, γ, triadic check, pointers + exit criteria).
 3. **CDD Trace in PR body.** To include verbatim from `README.md` §"CDD Trace" at PR open time: steps 0–7a per `docs/gamma/cdd/CDD.md` §5.3.
 4. **Tests reference ACs.** Yes — every test family is named for the AC it covers (enumerated in the SELF-COHERENCE §Gamma table): T1–T4 / S1–S6 / IK1 / P1–P6 / V1–V6 / M1–M2 all map to AC1 (the 6 types + 10 pure functions) + AC5 (test coverage) + AC6 (dune wiring).
