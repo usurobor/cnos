@@ -71,6 +71,11 @@ let install_package ~hub ~name ~version ~cmds =
   let pkg_dir = Filename.concat hub
     (Printf.sprintf ".cn/vendor/packages/%s@%s" name version) in
   ensure_dir pkg_dir;
+  let cmd_ids =
+    cmds |> List.map (fun (cmd_name, _, _) ->
+      Printf.sprintf "\"%s\"" cmd_name)
+    |> String.concat ", "
+  in
   let cmds_json =
     cmds |> List.map (fun (cmd_name, entrypoint, summary) ->
       Printf.sprintf
@@ -78,15 +83,24 @@ let install_package ~hub ~name ~version ~cmds =
         cmd_name entrypoint summary)
     |> String.concat ",\n"
   in
+  (* Post-v3.37.0 (#184) manifest shape:
+       sources.commands = string array of ids (for cn build)
+       top-level commands = object map {id -> {entrypoint, summary}}
+                            (for Cn_command.parse_package_commands +
+                             Cn_command.validate)
+     This test only exercises the runtime reader; sources.commands is
+     included for symmetry with the production manifest so cn doctor's
+     drift check does not flag the fixture as malformed. *)
   let manifest = Printf.sprintf
     "{\n\
     \  \"schema\": \"cn.package.v1\",\n\
     \  \"name\": \"%s\",\n\
     \  \"version\": \"%s\",\n\
     \  \"sources\": {\n\
-    \    \"commands\": {\n%s\n    }\n\
-    \  }\n\
-    }\n" name version cmds_json
+    \    \"commands\": [%s]\n\
+    \  },\n\
+    \  \"commands\": {\n%s\n  }\n\
+    }\n" name version cmd_ids cmds_json
   in
   write_file (Filename.concat pkg_dir "cn.package.json") manifest;
   cmds |> List.iter (fun (_, ep, _) ->
@@ -156,10 +170,13 @@ let%expect_test "T4 validate missing entrypoint" =
     let pkg_dir = Filename.concat hub
       ".cn/vendor/packages/cnos.demo@1.0.0" in
     ensure_dir pkg_dir;
+    (* v3.37.0 (#184) shape: commands object at top level,
+       sources.commands as string-id array. *)
     write_file (Filename.concat pkg_dir "cn.package.json")
       "{\"schema\":\"cn.package.v1\",\"name\":\"cnos.demo\",\"version\":\"1.0.0\",\
-       \"sources\":{\"commands\":{\
-       \"ghost\":{\"entrypoint\":\"commands/cn-ghost\",\"summary\":\"missing\"}}}}";
+       \"sources\":{\"commands\":[\"ghost\"]},\
+       \"commands\":{\
+       \"ghost\":{\"entrypoint\":\"commands/cn-ghost\",\"summary\":\"missing\"}}}";
     let issues = Cn_command.validate ~hub_path:hub in
     Printf.printf "count=%d\n" (List.length issues);
     let mentions s sub =
@@ -183,10 +200,13 @@ let%expect_test "T5 validate non-executable" =
     let pkg_dir = Filename.concat hub
       ".cn/vendor/packages/cnos.demo@1.0.0" in
     ensure_dir pkg_dir;
+    (* v3.37.0 (#184) shape: commands object at top level,
+       sources.commands as string-id array. *)
     write_file (Filename.concat pkg_dir "cn.package.json")
       "{\"schema\":\"cn.package.v1\",\"name\":\"cnos.demo\",\"version\":\"1.0.0\",\
-       \"sources\":{\"commands\":{\
-       \"plain\":{\"entrypoint\":\"commands/cn-plain\",\"summary\":\"not exec\"}}}}";
+       \"sources\":{\"commands\":[\"plain\"]},\
+       \"commands\":{\
+       \"plain\":{\"entrypoint\":\"commands/cn-plain\",\"summary\":\"not exec\"}}}";
     write_file (Filename.concat pkg_dir "commands/cn-plain") "#!/bin/sh\n";
     Unix.chmod (Filename.concat pkg_dir "commands/cn-plain") 0o644;
     let issues = Cn_command.validate ~hub_path:hub in

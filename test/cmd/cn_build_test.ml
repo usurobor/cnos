@@ -515,3 +515,129 @@ let%expect_test "e2e: init fallback to stubs when cnos.core not installed" =
   [%expect {|
     soul: # Stub SOUL
   |}]
+
+(* === Commands content class (#184) === *)
+
+(** Set up a repo with a commands content class declared.
+
+    Uses a fresh temp root (not with_test_repo) so the manifest
+    shape can include `sources.commands` + the top-level `commands`
+    object, and the src/agent/commands/<id>/cn-<id> files can be
+    created before cn build runs. *)
+let with_commands_repo f =
+  let root = mk_temp_dir "cn-build-cmds-test" in
+  touch root "dune-project" "(lang dune 3.8)";
+  let agent = Filename.concat root "src/agent" in
+  (* src/agent/commands/<id>/cn-<id> shell scripts *)
+  let daily_dir = Filename.concat agent "commands/daily" in
+  touch daily_dir "cn-daily" "#!/bin/sh\necho daily stub\n";
+  Unix.chmod (Filename.concat daily_dir "cn-daily") 0o755;
+  let weekly_dir = Filename.concat agent "commands/weekly" in
+  touch weekly_dir "cn-weekly" "#!/bin/sh\necho weekly stub\n";
+  Unix.chmod (Filename.concat weekly_dir "cn-weekly") 0o755;
+  (* Package manifest declaring sources.commands as a string array,
+     matching the orchestrators / skills pattern. *)
+  let core_dir = Filename.concat root "packages/cnos.core" in
+  touch core_dir "cn.package.json"
+    {|{
+  "schema": "cn.package.v1",
+  "name": "cnos.core",
+  "version": "1.0.0",
+  "kind": "package",
+  "engines": { "cnos": ">=3.4.0 <4.0.0" },
+  "sources": {
+    "commands": ["daily", "weekly"]
+  },
+  "commands": {
+    "daily": { "entrypoint": "commands/daily/cn-daily", "summary": "Daily reflection" },
+    "weekly": { "entrypoint": "commands/weekly/cn-weekly", "summary": "Weekly reflection" }
+  }
+}|};
+  Fun.protect ~finally:(fun () -> rm_tree root) (fun () -> f root)
+
+(* AC1: build copies commands directory + preserves executable bit *)
+let%expect_test "build_one copies commands directory (AC1)" =
+  with_commands_repo (fun root ->
+    let agent_root = Filename.concat root "src/agent" in
+    let pkgs_dir = Filename.concat root "packages" in
+    let packages = Cn_build.discover_packages root in
+    (match packages with
+     | [] -> print_endline "no packages"
+     | (dir_name, pkg) :: _ ->
+         let _ = Cn_build.build_one ~agent_root ~pkgs_dir (dir_name, pkg) in
+         let daily_path = Filename.concat pkgs_dir
+           "cnos.core/commands/daily/cn-daily" in
+         let weekly_path = Filename.concat pkgs_dir
+           "cnos.core/commands/weekly/cn-weekly" in
+         Printf.printf "daily_exists=%b\n" (Sys.file_exists daily_path);
+         Printf.printf "weekly_exists=%b\n" (Sys.file_exists weekly_path);
+         (* Executable bit preserved *)
+         let exec_ok p =
+           try Unix.access p [Unix.X_OK]; true
+           with Unix.Unix_error _ -> false
+         in
+         Printf.printf "daily_exec=%b\n" (exec_ok daily_path);
+         Printf.printf "weekly_exec=%b\n" (exec_ok weekly_path)));
+  [%expect {|
+    daily_exists=true
+    weekly_exists=true
+    daily_exec=true
+    weekly_exec=true |}]
+
+(* AC1: clean removes commands directory *)
+let%expect_test "clean removes commands directory (AC1)" =
+  with_commands_repo (fun root ->
+    let agent_root = Filename.concat root "src/agent" in
+    let pkgs_dir = Filename.concat root "packages" in
+    let packages = Cn_build.discover_packages root in
+    (match packages with
+     | [] -> print_endline "no packages"
+     | (dir_name, pkg) :: _ ->
+         let _ = Cn_build.build_one ~agent_root ~pkgs_dir (dir_name, pkg) in
+         let cmd_dir = Filename.concat pkgs_dir "cnos.core/commands" in
+         Printf.printf "before: %b\n" (Sys.file_exists cmd_dir);
+         Cn_build.clean_package_dir (Filename.concat pkgs_dir "cnos.core");
+         Printf.printf "after: %b\n" (Sys.file_exists cmd_dir)));
+  [%expect {|
+    before: true
+    after: false |}]
+
+(* AC1: check detects drift in commands content class *)
+let%expect_test "check detects command drift (AC1)" =
+  with_commands_repo (fun root ->
+    let agent_root = Filename.concat root "src/agent" in
+    let pkgs_dir = Filename.concat root "packages" in
+    let packages = Cn_build.discover_packages root in
+    (match packages with
+     | [] -> print_endline "no packages"
+     | (dir_name, pkg) :: _ ->
+         (* Build once so packages/ is in sync *)
+         let _ = Cn_build.build_one ~agent_root ~pkgs_dir (dir_name, pkg) in
+         (* Modify the source to create drift *)
+         touch (Filename.concat agent_root "commands/daily")
+           "cn-daily" "#!/bin/sh\necho DRIFTED\n";
+         (* Re-run check_one and inspect mismatches *)
+         let (_, mismatches) = Cn_build.check_one
+           ~agent_root ~pkgs_dir (dir_name, pkg) in
+         let has_drift = List.exists (fun m ->
+           let len = String.length m in
+           len > 0 &&
+           (try String.sub m 0 7 = "differs" with _ -> false)
+         ) mismatches in
+         Printf.printf "drift_detected=%b\n" has_drift));
+  [%expect {| drift_detected=true |}]
+
+(* AC4: parse_command no longer recognizes daily / weekly / save *)
+let%expect_test "parse_command: daily/weekly/save no longer built-in (AC4)" =
+  let cases = [["daily"]; ["weekly"]; ["save"]; ["save"; "my"; "msg"]] in
+  cases |> List.iter (fun args ->
+    match Cn_lib.parse_command args with
+    | None -> Printf.printf "%s: None\n" (String.concat " " args)
+    | Some c -> Printf.printf "%s: Some %s\n"
+                  (String.concat " " args) (Cn_lib.string_of_command c));
+  [%expect {|
+    daily: None
+    weekly: None
+    save: None
+    save my msg: None
+  |}]

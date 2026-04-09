@@ -425,14 +425,22 @@ let with_activation_hub f =
     let v = Cn_lib.version in
     let core = Printf.sprintf ".cn/vendor/packages/cnos.core@%s" v in
     let core_dir = Filename.concat hub core in
-    (* New-schema manifest: orchestrators is a string array of ids;
-       the per-id metadata lives in orchestrators/<id>/orchestrator.json. *)
+    (* v3.37.0 (#184) manifest shape:
+         sources.commands     = string array of ids (for cn build)
+         sources.orchestrators = string array of ids (for cn build)
+         top-level commands    = object map {id -> {entrypoint, summary}}
+                                 (for Cn_command.parse_package_commands +
+                                  Cn_command.validate)
+       Per-orchestrator metadata still lives in the orchestrator.json
+       file itself, not in the manifest. *)
     let manifest = Printf.sprintf
       "{\"schema\":\"cn.package.v1\",\"name\":\"cnos.core\",\"version\":\"%s\",\
        \"sources\":{\
        \"skills\":[\"reflect\"],\
-       \"commands\":{\"daily\":{\"entrypoint\":\"commands/cn-daily\",\"summary\":\"daily\"}},\
-       \"orchestrators\":[\"daily-review\"]}}"
+       \"commands\":[\"daily\"],\
+       \"orchestrators\":[\"daily-review\"]},\
+       \"commands\":{\
+       \"daily\":{\"entrypoint\":\"commands/cn-daily\",\"summary\":\"daily\"}}}"
       v in
     let oc = open_out (Filename.concat core_dir "cn.package.json") in
     output_string oc manifest;

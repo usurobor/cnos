@@ -15,12 +15,13 @@
 
 (** Parsed source declaration from cn.package.json.
     Maps asset categories to paths relative to src/agent/<category>/.
-    Commands are authored directly under packages/<name>/commands/
-    and are not assembled by cn build; they are consumed by
-    Cn_command during dispatch and are ignored here.
-    Orchestrators follow the same on-disk layout: authored under
-    src/agent/orchestrators/<id>/orchestrator.json and copied
-    mechanically to packages/<name>/orchestrators/<id>/. *)
+    All seven content classes flow through the same source → build →
+    install pipeline: authored under src/agent/<class>/, copied
+    mechanically to packages/<name>/<class>/ by cn build, installed
+    to .cn/vendor/packages/<name>@<version>/<class>/ by cn deps
+    restore. Commands follow the same shape as skills and
+    orchestrators — a string list of declared ids, each resolved
+    under src/agent/commands/<id>/ as a directory tree. *)
 type source_decl = {
   doctrine : string list;
   mindsets : string list;
@@ -28,6 +29,7 @@ type source_decl = {
   extensions : string list;
   templates : string list;
   orchestrators : string list;
+  commands : string list;
 }
 
 type package_manifest = {
@@ -73,6 +75,7 @@ let parse_sources json =
         extensions = parse_string_array src_json "extensions";
         templates = parse_string_array src_json "templates";
         orchestrators = parse_string_array src_json "orchestrators";
+        commands = parse_string_array src_json "commands";
       }
 
 let parse_package_json path =
@@ -164,13 +167,12 @@ let copy_source ~agent_root ~pkg_dir ~category entry =
 (** Clean built content from a package directory. Removes every
     content-class subdirectory that cn build assembles from
     src/agent/: doctrine, mindsets, skills, extensions, templates,
-    orchestrators. Preserves cn.package.json and any hand-authored
-    subdirectories such as commands/. *)
+    orchestrators, commands. Preserves cn.package.json. *)
 let clean_package_dir pkg_dir =
   List.iter (fun sub ->
     let path = Cn_ffi.Path.join pkg_dir sub in
     if Cn_ffi.Fs.exists path then rm_tree path
-  ) ["doctrine"; "mindsets"; "skills"; "extensions"; "templates"; "orchestrators"]
+  ) ["doctrine"; "mindsets"; "skills"; "extensions"; "templates"; "orchestrators"; "commands"]
 
 (* === Build === *)
 
@@ -215,6 +217,24 @@ let build_one ~agent_root ~pkgs_dir (dir_name, pkg) =
   (* Copy orchestrators (directory tree per declared id) *)
   pkg.sources.orchestrators |> List.iter (fun entry ->
     copy_source ~agent_root ~pkg_dir ~category:"orchestrators" entry);
+  (* Copy commands (directory tree per declared id). Command
+     entrypoints are shell scripts that need the executable bit
+     preserved — copy_tree does not preserve mode, so chmod +x any
+     file whose basename starts with "cn-" after the copy. *)
+  pkg.sources.commands |> List.iter (fun entry ->
+    copy_source ~agent_root ~pkg_dir ~category:"commands" entry;
+    let dst_dir = Cn_ffi.Path.join pkg_dir
+      (Printf.sprintf "commands/%s" entry) in
+    if Cn_ffi.Fs.exists dst_dir then
+      (try
+        Cn_ffi.Fs.readdir dst_dir |> List.iter (fun f ->
+          if String.length f >= 3 && String.sub f 0 3 = "cn-" then
+            let p = Cn_ffi.Path.join dst_dir f in
+            if not (Sys.is_directory p) then
+              Unix.chmod p 0o755)
+      with exn ->
+        Printf.eprintf "cn: build: cannot chmod command entrypoints in %s: %s\n"
+          dst_dir (Printexc.to_string exn)));
   pkg
 
 (** Compare file content between two paths. Returns list of mismatches. *)
@@ -276,6 +296,8 @@ let check_one ~agent_root ~pkgs_dir (dir_name, pkg) =
     copy_source ~agent_root ~pkg_dir:tmp_dir ~category:"templates" entry);
   pkg.sources.orchestrators |> List.iter (fun entry ->
     copy_source ~agent_root ~pkg_dir:tmp_dir ~category:"orchestrators" entry);
+  pkg.sources.commands |> List.iter (fun entry ->
+    copy_source ~agent_root ~pkg_dir:tmp_dir ~category:"commands" entry);
   (* Compare *)
   let mismatches =
     List.concat_map (fun cat ->
@@ -284,7 +306,7 @@ let check_one ~agent_root ~pkgs_dir (dir_name, pkg) =
       if Cn_ffi.Fs.exists tmp_cat || Cn_ffi.Fs.exists pkg_cat then
         diff_tree tmp_cat pkg_cat cat
       else []
-    ) ["doctrine"; "mindsets"; "skills"; "extensions"; "templates"; "orchestrators"]
+    ) ["doctrine"; "mindsets"; "skills"; "extensions"; "templates"; "orchestrators"; "commands"]
   in
   rm_tree tmp_dir;
   (pkg.name, mismatches)
@@ -345,16 +367,19 @@ let run_build () =
         let n_extensions = List.length pkg.sources.extensions in
         let n_templates = List.length pkg.sources.templates in
         let n_orchestrators = List.length pkg.sources.orchestrators in
+        let n_commands = List.length pkg.sources.commands in
         let ext_str = if n_extensions > 0
           then Printf.sprintf ", %d extensions" n_extensions else "" in
         let tpl_str = if n_templates > 0
           then Printf.sprintf ", %d templates" n_templates else "" in
         let orch_str = if n_orchestrators > 0
           then Printf.sprintf ", %d orchestrators" n_orchestrators else "" in
+        let cmd_str = if n_commands > 0
+          then Printf.sprintf ", %d commands" n_commands else "" in
         print_endline (Cn_fmt.ok (Printf.sprintf
-          "%s@%s: %d doctrine, %d mindsets, %d skills%s%s%s"
+          "%s@%s: %d doctrine, %d mindsets, %d skills%s%s%s%s"
           pkg.name pkg.version n_doctrine n_mindsets n_skills
-          ext_str tpl_str orch_str)));
+          ext_str tpl_str orch_str cmd_str)));
       print_endline (Cn_fmt.ok (Printf.sprintf
         "Built %d packages" (List.length packages)))
 

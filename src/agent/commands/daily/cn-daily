@@ -1,0 +1,50 @@
+#!/bin/sh
+# cn-daily — create or show today's daily reflection thread.
+#
+# Package command for cnos.core (migrated from built-in in
+# v3.37.0 per #184 command pipeline symmetry).
+#
+# Environment:
+#   CN_HUB_PATH       exported by Cn_command.dispatch — hub root
+#   CN_PACKAGE_ROOT   exported by Cn_command.dispatch — package dir
+#   CN_COMMAND_NAME   exported by Cn_command.dispatch — "daily"
+
+set -eu
+
+: "${CN_HUB_PATH:?cn-daily: CN_HUB_PATH not set (expected via cn dispatch)}"
+
+today="$(date +%Y%m%d)"
+dir="${CN_HUB_PATH}/threads/reflections/daily"
+file="${dir}/${today}.md"
+
+mkdir -p "${dir}"
+
+if [ -f "${file}" ]; then
+  echo "Daily exists: ${file}"
+  cat "${file}"
+  exit 0
+fi
+
+ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+cat > "${file}" <<EOF
+---
+date: ${ts}
+type: daily
+---
+
+# Daily Reflection
+
+## Done
+
+## In Progress
+
+## Blocked
+
+## α (What did I do?)
+
+## β (What would I do differently?)
+
+## γ (What did I learn?)
+EOF
+
+echo "Created: ${file}"

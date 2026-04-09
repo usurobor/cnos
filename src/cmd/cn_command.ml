@@ -61,19 +61,26 @@ let discover_repo_local ~hub_path =
 (* === Package command discovery === *)
 
 (** Parse the commands object from a package manifest.
-    Returns the list of (name, entrypoint, summary). *)
+    Returns the list of (name, entrypoint, summary).
+
+    Since v3.37.0 (#184 command pipeline symmetry), per-command
+    metadata lives at the **top level** of `cn.package.json` as a
+    `commands` object, not under `sources.commands`. The
+    `sources.commands` field (if present) is a string list of
+    declared command ids that `cn build` uses to copy from
+    `src/agent/commands/<id>/` into `packages/<name>/commands/<id>/`
+    — symmetric with `sources.skills` and `sources.orchestrators`.
+    The runtime metadata (entrypoint, summary) is orthogonal and
+    reads from the top-level field. *)
 let parse_package_commands manifest_json =
-  match Cn_json.get "sources" manifest_json with
-  | None -> []
-  | Some sources ->
-      match Cn_json.get "commands" sources with
-      | Some (Cn_json.Object fields) ->
-          fields |> List.filter_map (fun (name, entry) ->
-            match Cn_json.get_string "entrypoint" entry,
-                  Cn_json.get_string "summary" entry with
-            | Some ep, Some sm -> Some (name, ep, sm)
-            | _ -> None)
-      | _ -> []
+  match Cn_json.get "commands" manifest_json with
+  | Some (Cn_json.Object fields) ->
+      fields |> List.filter_map (fun (name, entry) ->
+        match Cn_json.get_string "entrypoint" entry,
+              Cn_json.get_string "summary" entry with
+        | Some ep, Some sm -> Some (name, ep, sm)
+        | _ -> None)
+  | _ -> []
 
 (** Discover package commands by walking .cn/vendor/packages/<name>@<ver>/
     manifests. *)
@@ -194,39 +201,39 @@ let validate ~hub_path =
              | Ok json ->
                  let pkg_name = Cn_json.get_string "name" json
                    |> Option.value ~default:dir_name in
-                 (match Cn_json.get "sources" json with
+                 (* Per v3.37.0 (#184), per-command metadata lives at
+                    the top-level `commands` field, not under
+                    `sources.commands`. See parse_package_commands. *)
+                 (match Cn_json.get "commands" json with
                   | None -> ()
-                  | Some sources ->
-                      match Cn_json.get "commands" sources with
-                      | None -> ()
-                      | Some (Cn_json.Object fields) ->
-                          fields |> List.iter (fun (cmd_name, entry_json) ->
-                            match Cn_json.get_string "entrypoint" entry_json,
-                                  Cn_json.get_string "summary" entry_json with
-                            | None, _ ->
-                                add (Printf.sprintf
-                                  "package %s: command %s missing entrypoint field"
-                                  pkg_name cmd_name)
-                            | _, None ->
-                                add (Printf.sprintf
-                                  "package %s: command %s missing summary field"
-                                  pkg_name cmd_name)
-                            | Some ep, Some _ ->
-                                let full = Cn_ffi.Path.join pkg_dir ep in
-                                if not (Sys.file_exists full) then
-                                  add (Printf.sprintf
-                                    "package %s: command %s entrypoint missing: %s"
-                                    pkg_name cmd_name ep)
-                                else
-                                  (try Unix.access full [Unix.X_OK]
-                                   with Unix.Unix_error _ ->
-                                     add (Printf.sprintf
-                                       "package %s: command %s not executable: %s"
-                                       pkg_name cmd_name ep)))
-                      | Some _ ->
-                          add (Printf.sprintf
-                            "package %s: commands field is not an object"
-                            pkg_name)))
+                  | Some (Cn_json.Object fields) ->
+                      fields |> List.iter (fun (cmd_name, entry_json) ->
+                        match Cn_json.get_string "entrypoint" entry_json,
+                              Cn_json.get_string "summary" entry_json with
+                        | None, _ ->
+                            add (Printf.sprintf
+                              "package %s: command %s missing entrypoint field"
+                              pkg_name cmd_name)
+                        | _, None ->
+                            add (Printf.sprintf
+                              "package %s: command %s missing summary field"
+                              pkg_name cmd_name)
+                        | Some ep, Some _ ->
+                            let full = Cn_ffi.Path.join pkg_dir ep in
+                            if not (Sys.file_exists full) then
+                              add (Printf.sprintf
+                                "package %s: command %s entrypoint missing: %s"
+                                pkg_name cmd_name ep)
+                            else
+                              (try Unix.access full [Unix.X_OK]
+                               with Unix.Unix_error _ ->
+                                 add (Printf.sprintf
+                                   "package %s: command %s not executable: %s"
+                                   pkg_name cmd_name ep)))
+                  | Some _ ->
+                      add (Printf.sprintf
+                        "package %s: commands field is not an object"
+                        pkg_name)))
      with exn ->
        Printf.eprintf "cn: command validation: cannot read %s: %s\n"
          pkg_root (Printexc.to_string exn))

@@ -116,8 +116,10 @@ let threads_in hub = Cn_ffi.Path.join hub "threads/in"
 let threads_mail_inbox hub = Cn_ffi.Path.join hub "threads/mail/inbox"
 let threads_mail_outbox hub = Cn_ffi.Path.join hub "threads/mail/outbox"
 let threads_mail_sent hub = Cn_ffi.Path.join hub "threads/mail/sent"
-let threads_reflections_daily hub = Cn_ffi.Path.join hub "threads/reflections/daily"
-let threads_reflections_weekly hub = Cn_ffi.Path.join hub "threads/reflections/weekly"
+(* threads_reflections_daily / _weekly removed in v3.37.0 (#184) —
+   the daily/weekly reflection file layout is now owned by the
+   package command shell scripts at
+   src/agent/commands/{daily,weekly}/cn-<id>. *)
 let threads_adhoc hub = Cn_ffi.Path.join hub "threads/adhoc"
 let mca_dir hub = Cn_ffi.Path.join hub "state/mca"
 
