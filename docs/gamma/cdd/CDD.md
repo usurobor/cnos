@@ -68,7 +68,7 @@ CDD exists to close that gap through coherent action.
 
 ### 1.4 Roles
 
-CDD requires **at least two agents** with distinct roles. A single agent cannot both author and review its own work — that collapses the coherence check into self-confirmation.
+For **substantial cycles**, CDD requires **at least two agents** with distinct roles. A single agent cannot both author and review its own work — that collapses the coherence check into self-confirmation.
 
 | Role | Steps owned | Responsibility | Identity constraint |
 |------|-------------|----------------|---------------------|
@@ -76,8 +76,21 @@ CDD requires **at least two agents** with distinct roles. A single agent cannot 
 | **Reviewer** | 8 (review) | Verify the change closes its declared gap without creating larger incoherence. Every verdict traces to evidence in the diff and surrounding contract. | **Must be a different agent/identity than the author.** Same-identity review degrades to comments and is unenforceable (review skill §7.1). |
 | **Releaser** | 9–10 (gate → release) | Verify readiness, bump version, write changelog + release notes, tag, push, validate deployment. | May be the author or the reviewer. |
 | **Assessor** | 11–13 (observe → assess → close) | Post-release assessment: measure what shipped, score coherence, identify skill gaps, execute immediate fixes, commit deferred outputs. | **Must be the releasing agent** (post-release skill §Who). The release and its assessment are a single responsibility. |
+| **Implementer** *(optional, delegated)* | 6f | Build the delegated slice, follow the handoff constraints, produce the self-verification report, return the result to the author. | May be a third agent. Ownership of the cycle remains with the author. |
 
-**Minimum configuration:** two agents — one authors, the other reviews. The author may also release and assess. The reviewer may also release and assess. But authoring and reviewing the same change must never be the same agent.
+**Minimum configuration:** two agents — one authors, the other reviews. The author may also release and assess. The reviewer may also release and assess. But authoring and reviewing the same substantial change must never be the same agent.
+
+**Small-change exception:** A small-change cycle (§1.2) may be completed by one agent when:
+
+- the change qualifies under §1.2,
+- no independent reviewer is available or warranted,
+- and no claim of independent review is made.
+
+In that case:
+
+- the author still owes a named incoherence and explicit scope,
+- the artifact must state that the cycle used the small-change path,
+- and any direct-to-main commit still triggers the retro-review rule in §3.7 of the executable skill.
 
 **Delegated implementation (step 6f):** The author may delegate implementation to a third agent. The delegator writes the handoff spec (ACs, active skills, test requirements). The implementer builds and self-verifies. The author remains responsible for the cycle — delegation does not transfer ownership of steps 0–7a.
 
