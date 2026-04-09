@@ -42,18 +42,30 @@ knows how to copy from `src/agent/<class>/` into `packages/<name>/<class>/`.
 | skills | directory trees | `src/agent/skills/` | `"skills": ["path/to/skill"]` | Keyword-scored, bounded |
 | extensions | directory trees | `src/agent/extensions/` | `"extensions": ["ext.name"]` | Runtime capability providers |
 | templates | named files | `src/agent/templates/` | `"templates": ["FILE.md"]` | Identity/config scaffolding for new hubs |
-| commands | declared entries | `packages/<name>/commands/` | `"commands": { "<name>": { ... } }` | Operator-facing CLI commands |
+| commands | directory trees | `src/agent/commands/` | `"commands": ["id", ...]` | Operator-facing CLI commands (dispatched by `Cn_command`) |
 | orchestrators | directory trees | `src/agent/orchestrators/` | `"orchestrators": ["id", ...]` | Mechanical workflows executed by the `cn.orchestrator.v1` runtime |
 | (metadata) | implicit | `packages/<name>/` | `cn.package.json` | Package identity, version, engine constraint |
 
-Most content classes are copied from `src/agent/<class>/` by `cn build`.
-The `commands` class is the exception: command files are authored
-directly under `packages/<name>/commands/<file>` and ship with the
-package tree. The manifest entry for a command is a JSON object
-mapping the command name to `{ entrypoint, summary }`, where
-`entrypoint` is a file path relative to the package root
-(e.g. `commands/cn-daily`) and `summary` is a one-line description
-shown by `cn help`.
+All seven content classes flow through the same source → build →
+install pipeline: authored under `src/agent/<class>/`, copied
+mechanically to `packages/<name>/<class>/` by `cn build`, and
+installed to `.cn/vendor/packages/<name>@<version>/<class>/` by
+`cn deps restore`. There is no longer any content class that
+bypasses `cn build` (this was the #184 / v3.37.0 cleanup — before
+that release, `commands` was authored directly under `packages/`
+as the lone exception).
+
+The `commands` class has the same on-disk layout as `skills` and
+`orchestrators`: each declared id in `sources.commands` points at
+`src/agent/commands/<id>/`, which `cn build` copies tree-wise to
+`packages/<name>/commands/<id>/`. Inside each command directory,
+a file named `cn-<id>` is the entrypoint script (executable bit
+preserved across the copy). Per-command metadata — entrypoint path
+and summary — lives at the **top level** of `cn.package.json`
+under a `commands` object (not under `sources.commands`, which is
+only the string-id list for `cn build`). This split mirrors how
+`sources.orchestrators` declares ids while each orchestrator's
+metadata lives inside the per-orchestrator `orchestrator.json`.
 
 The `orchestrators` class follows the same on-disk layout as skills:
 each declared id in `sources.orchestrators` points at
