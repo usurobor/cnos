@@ -57,39 +57,36 @@ CDD fails through pipeline without selection or release without closure. Typical
 
 ### 1.4 Roles
 
-For **substantial cycles**, CDD requires **at least two agents**. A single agent cannot both author and review its own work.
+CDD is triadic at the role level:
+
+- **α** produces
+- **γ** judges
+- **β** integrates and assesses
 
 | Role | Axis | What they own | Identity constraint |
 |------|------|---------------|---------------------|
-| **α (Implementor)** | α | Produces code, tests, fixes findings | Separate from γ |
-| **β (Integrator)** | β | Merges, tags, deploys, release mechanics, post-release verification | Separate from α |
-| **γ (Reviewer)** | γ | Reviews, decides: **RC** (Request Changes) or **A** (Approved) | Separate from α and β |
-
-α produces. β integrates. γ judges.
+| **α (Implementor)** | α | Code, tests, fixes, self-coherence, pre-review readiness | Must be separate from γ |
+| **β (Integrator)** | β | Merge, tag, deploy, release mechanics, post-release verification | Must be separate from α |
+| **γ (Reviewer)** | γ | Review, **RC** / **A** decision, independent judgment | Must be separate from α |
 
 #### Flow
 
 ```
-α (code) → γ (review) → RC → back to α (fix)
-                       → A  → forward to β (merge, tag, deploy)
+α (code) → γ (review) → RC → α (fix)
+                       → A  → β (merge, tag, deploy, assess)
 ```
 
-γ's verdict is the gate. **RC** sends straight back to α — not to β. **A** sends forward to β to integrate and ship.
+#### Minimum configuration
 
-#### Role separation rules
+Two agents: one for α, one for γ. When only two agents are available, **γ may also serve as β**. The sequence becomes: α → γ (review) → γ (release + assess).
 
-- **α does not merge or review.** Produces code, fixes findings, marks ready.
-- **β does not write code or review.** Merges on γ's approval, tags, deploys, runs release mechanics.
-- **γ does not write code or merge.** Reviews and decides. RC or A. That's the entire job.
-- **γ's judgment stays independent** because they never touch code or release machinery.
+#### Why triadic
 
-#### Why three roles
+Review judgment and release/assessment are different coherence functions:
 
-Two-agent (author + reviewer) conflates review judgment with release execution. Three-role separation maps each role to the coherence axis it naturally owns:
-
-- **α** owns code/architecture coherence — their output is what α scores
-- **β** owns integration coherence — their merge/deploy execution is what β scores
-- **γ** owns process/method coherence — their review judgment is what γ scores
+- **α** owns the artifact — their output is what α scores
+- **β** owns what the system actually becomes after integration — what β scores
+- **γ** owns independent judgment — what γ scores
 
 #### Operator override
 
@@ -100,8 +97,8 @@ The operator may reassign any role explicitly. Implicit role drift is not permit
 See CDD.md §1.4 for the full role specification.
 
   - ❌ One agent authors, reviews, merges, and assesses its own substantial change.
-  - ❌ The same agent that approved also runs `git tag && git push`.
-  - ✅ α codes → γ reviews (RC/A) → β ships on γ's approval.
+  - ❌ Author self-approves and self-releases under the guise of triadic roles.
+  - ✅ α produces → γ judges (RC/A) → β integrates and assesses.
 
 ## 2. Unfold
 
