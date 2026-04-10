@@ -2,31 +2,37 @@
 
 ## Outcome
 
-Coherence delta: C_Σ A (`α A`, `β A`, `γ A`) · **Level:** `L7`
+Coherence delta: C_Σ A (`α A+`, `β A`, `γ A`) · **Level:** `L6`
 
-First Go code in cnos. The runtime kernel rewrite begins with package restore — the most self-contained subsystem, proving the Go approach before touching command dispatch or orchestration.
+Go purity boundary corrected. Three eng skills converged. Two architecture design docs shipped.
 
 ## Why it matters
 
-The OCaml toolchain has been an environmental constraint for 9+ authoring cycles. The Go kernel rewrite (#192) was blocked on Move 2 (pure type extraction) and #180 (doc authority convergence) — both now shipped. This release proves that Go can faithfully reimplement the package restore path against the `src/lib/` type spec, with structural parity in installed output.
+v3.43.0 introduced the first Go code but left a β gap: `internal/pkg/` claimed "no IO" but contained `ReadLockfile`/`ReadPackageIndex`. That's now fixed — the Go module mirrors the OCaml `src/lib/` vs `src/cmd/` purity split exactly. The boundary discipline that Move 2 established in OCaml now carries into Go.
 
-A new system boundary exists: Go module alongside OCaml. The kernel transitions; the content classes stay language-agnostic.
+The command architecture design (GO-KERNEL-COMMANDS.md) converged through 3 review iterations to a clean model: one runtime descriptor, one registry, three source forms. The kernel is a real `cn.package.v1` manifest — the platform is an instance of its own model.
+
+## Fixed
+
+- **Go purity boundary** (#207, PR #208): `ReadLockfile`/`ReadPackageIndex` moved from `internal/pkg/` to `internal/restore/`. `pkg` now exports `Parse*` (pure, `[]byte`); `restore` wraps with `Read*` (IO, path). `ValidatePackageManifest` → `ValidatePackageManifestData` follows same split. Zero `os` imports in `internal/pkg/`.
+- **HTTP timeout** (F2): `httpClient` with 300s timeout, matching OCaml curl `--connect-timeout 10 --max-time 300`.
+- **Traversal hardening** (F3): `filepath.Separator` appended to destDir before prefix check.
+- **Test cleanup** (F1): `contains`/`containsAt` replaced with `strings.Contains`. Live index test no longer hardcodes specific version.
 
 ## Added
 
-- **Go kernel Phase 1** (#205, #192 umbrella): `go/` subtree with `internal/pkg/` (pure types mirroring `src/lib/cn_package.ml`) and `internal/restore/` (HTTP restore mirroring `src/cmd/cn_deps.ml`). Module: `github.com/usurobor/cnos/go`, Go 1.22, stdlib-only, zero external deps. 13 tests covering index lookup, lockfile round-trip, end-to-end restore with httptest, SHA-256 mismatch rejection, manifest validation, already-installed skip.
-- **Go CI workflow** (`.github/workflows/go.yml`): `go build`, `go test`, `go vet` on `go/**` path changes. Telegram notifications.
+- **OCaml skill v2**: full L6 rewrite — frontmatter, determinism/reproducibility, idempotence/receipts, cnos runtime boundaries, two kata. All 3 eng skills (Go, TypeScript, OCaml) at same standard.
+- **GO-KERNEL-COMMANDS.md** (v1.2): the kernel is a package. `CommandSpec` runtime descriptor, `Invocation` with IO streams, `Command` interface (`Spec()` + `Run()`), 3-tier precedence, `Available(hasHub)` filtering. Kernel manifest is real `cn.package.v1`. Prior art: Git subcommands, Cargo, kubectl, npm bin.
+- **HYBRID-LLM-ROUTING.md** (v0.1): body-plane routing matrix for local/remote/escalation model selection. Thresholds (8k/12k tokens, depth, file count, task class), mandatory receipts, no silent provider swap. Implementation deferred.
 
 ## Validation
 
-- CI green on all 4 checks (ocaml, I1, I2/I3, go) — first push, zero draft iterations
-- `TestRestoreEndToEnd`: httptest server → download → SHA-256 verify → extract → validate manifest → same vendor path as OCaml
-- `TestReadPackageIndex`: parses live `packages/index.json` from repo
-- Directory traversal protection in `extractTarGz`
-- OCaml CI unaffected (Go workflow triggers only on `go/**` paths)
+- CI green: go ✅ ocaml ✅ I2/I3 ✅
+- I1 drift resolved by this release (packages/index.json updated)
+- `internal/pkg/` imports: `encoding/json`, `fmt` only — verified by grep
+- All 13 Go tests pass
 
 ## Known Issues
 
-- F2: `http.DefaultClient` has no timeout (OCaml: curl `--connect-timeout 10 --max-time 300`) — follow-up
-- F3: Traversal check should append `filepath.Separator` to destDir — security hardening follow-up
-- F4: `ReadLockfile`/`ReadPackageIndex` do IO in the "pure" `pkg` package — should move to `internal/restore/` to mirror `src/lib/` vs `src/cmd/` purity boundary — follow-up
+- #209 (Go kernel Phase 2: CLI dispatch) — next implementation target
+- HYBRID-LLM-ROUTING.md — design only, implementation deferred
