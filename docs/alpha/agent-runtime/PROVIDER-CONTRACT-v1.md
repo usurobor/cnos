@@ -312,14 +312,15 @@ the kernel rejects it and emits `extension.rejected`.
 }
 ```
 
-**Rule:** The provider description must be consistent with the extension manifest. If they disagree on:
+**Rule:** The provider description must be consistent with the extension manifest. The runtime compares:
 
 - name
-- protocol
+- interface / protocol
+- version (if strict version match is enabled)
+- capabilities (when present in the manifest)
 - ops
-- or capability family
 
-the kernel rejects the provider.
+If they disagree, the kernel rejects the provider. **Manifest declares. Provider confirms. Kernel decides.**
 
 ---
 
@@ -526,7 +527,7 @@ Providers are shipped inside packages.
 
 ```text
 src/agent/extensions/<provider-name>/
-  cn.extension.json
+  cn.extension.json       ← cn.extension.v1 manifest with capabilities field
   host/...
   docs/...
   schemas/...
@@ -551,6 +552,8 @@ packages/<pkg>/extensions/<provider-name>/
   docs/...
   schemas/...
 ```
+
+There is no separate provider manifest. The `cn.extension.v1` manifest with `capabilities` is the single declaration surface.
 
 The package is the distribution unit. The provider is the executable runtime surface.
 
