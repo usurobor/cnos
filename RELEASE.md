@@ -2,36 +2,38 @@
 
 ## Outcome
 
-Coherence delta: C_Σ A (`α A`, `β A+`, `γ A`) · **Level:** L6
+Coherence delta: C_Σ A (`α A+`, `β A+`, `γ A+`) · **Level:** L7
 
-Go kernel gains `doctor` command — hub health validation. Architecture design frontier advances: git-cn package shape, package restructuring target, capabilities field in extension manifests.
+Go kernel gains `build` command — package assembly from source trees with tarball distribution. Architectural invariants are now a first-class validated surface across the full CDD lifecycle: author loads, handoff names, reviewer verifies, assessor confirms.
 
 ## Why it matters
 
-The kernel now validates its own health: prerequisites, hub structure, package drift, runtime contract integrity, git remote. This is the foundation for self-diagnosis before `cn update` or `cn build` become available. The design docs make the full target shape explicit — package restructuring, polyglot provider packages, and the first Rust transport package.
+This cycle closes two gaps: (1) the kernel can now build packages, completing Slice C of Phase 3, and (2) the architectural constraints that were previously implicit are now explicit, documented, and validated at every CDD touchpoint. The eng/go skill now has concrete rules for the purity boundary and dispatch boundary, both deriving from INVARIANTS.md — prevention at coding time, not just detection at review.
 
 ## Added
 
-- **Go kernel `doctor` command** (#212 Slice B, PR #217): 15+ checks across 5 categories — prerequisites, hub structure, package system, runtime contract, git remote. Advisory ✓ for optional files, actionable ✗ with fix suggestions for failures.
-- **git-cn package design** (#218): `cnos.transport.git` — command form for operators, provider form for runtime, Rust implementation.
-- **Package restructuring target** (#186): lean `cnos.core` + domain-aligned packages (cnos.agent, cnos.cdd, cnos.hub, cnos.net.http).
-- **`capabilities` field** in `cn.extension.v1`: high-level capability families for policy/doctor/runtime-contract. No new manifest type — one field addition.
-- **Kernel command migration issue** (#216): non-bootstrap commands (status, doctor, build, setup) should migrate to `cnos.core` packages post-Phase 4.
+- **Go kernel `build` command** (#219, PR #220): three modes — `cn build` (assemble tarballs + index + checksums), `cn build --check` (CI drift verification), `cn build clean` (remove artifacts). Pure/IO split: `ParseManifestData` pure, `ReadManifest` IO wrapper.
+- **Architectural invariants doc** (`INVARIANTS.md`): 6 active invariants (one package substrate, language-neutral metadata, distinct runtime surfaces, kernel-owned policy, protocol above transport, hub state ≠ source), 5 transition constraints, 3 process constraints. Validated each CDD cycle.
+- **CDD invariants lifecycle**: project invariants loaded at §2.4 (pre-coding), §2.5a item 5 (handoff), review §2.2.13 (verification), post-release §6a (confirmation).
+- **eng/go §2.17**: Parse/Read purity boundary — derives from INVARIANTS.md T-004.
+- **eng/go §2.18**: cli/ dispatch boundary — derives from INVARIANTS.md T-002.
+- **Build-and-Distribution design doc**: independent package versioning (`package version ≠ binary version`), `src/packages/` → `dist/packages/` → `.cn/vendor/`, plain tarballs as artifact format.
+- **cli/ extraction issue** (#221): dispatch boundary enforcement — domain logic must leave `cli/`.
 
 ## Changed
 
-- **cn.extension.v1** gains optional `capabilities` field (RUNTIME-EXTENSIONS.md §5.1a).
-- **Provider Contract v1** updated: uses `cn.extension.v1` manifest (not a separate `cn.provider.v1`). Stricter describe matching rule.
-- **Polyglot Packages doc** aligned to `cn.extension.v1` with `capabilities`.
+- **CDD review §2.2.13**: generic project design constraints check (any project with INVARIANTS.md gets the gate).
+- **CDD §2.5**: pre-coding gate — load engineering skills AND project invariants before writing code.
 
 ## Validation
 
-- Go binary builds: `cn help` lists 5 kernel commands (help, init, deps, status, doctor).
-- `cn doctor` validates hub health on VPS.
-- All 30 Go tests pass. CI green on all checks.
+- Go binary builds: `cn help` lists 6 kernel commands (help, init, deps, status, doctor, build).
+- 35 Go tests pass. CI green on all checks.
+- `cn build --check` validates packages on VPS.
 
 ## Known Issues
 
-- #193 — encoding lag (growing, 10 cycles)
-- #186 — encoding lag (growing, design doc now shipped)
+- #221 — cli/ extraction (dispatch boundary enforcement, filed this cycle)
+- #193 — encoding lag (growing, 11 cycles)
+- #186 — encoding lag (design doc shipped)
 - #175 — encoding lag (growing)
