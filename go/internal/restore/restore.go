@@ -27,6 +27,22 @@ import (
 	"github.com/usurobor/cnos/go/internal/pkg"
 )
 
+// FindIndexPath walks up from hubPath looking for packages/index.json.
+func FindIndexPath(hubPath string) string {
+	dir := hubPath
+	for {
+		candidate := filepath.Join(dir, "packages", "index.json")
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return filepath.Join(hubPath, "packages", "index.json")
+		}
+		dir = parent
+	}
+}
+
 // --- IO wrappers for pure parsers (mirrors OCaml src/cmd/ vs src/lib/ split) ---
 
 // ReadLockfile reads and parses a lockfile from disk.
