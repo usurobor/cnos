@@ -17,7 +17,8 @@ func (c *BuildCmd) Spec() CommandSpec {
 		Summary:  "Build packages from source",
 		Source:   SourceKernel,
 		Tier:     TierKernel,
-		NeedsHub: true,
+		NeedsHub: false, // build operates on repo root (.git), not hub (.cn/)
+
 	}
 }
 

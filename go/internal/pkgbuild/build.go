@@ -38,20 +38,28 @@ type PackageManifest struct {
 	Version string `json:"version"`
 }
 
-// ParseManifest reads and parses a cn.package.json file.
-func ParseManifest(path string) (*PackageManifest, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
+// ParseManifestData parses cn.package.json from raw bytes.
+// Pure — no IO. Mirrors the Parse* (pure) vs Read* (IO) pattern
+// from internal/pkg/.
+func ParseManifestData(data []byte) (*PackageManifest, error) {
 	var m PackageManifest
 	if err := json.Unmarshal(data, &m); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
+		return nil, fmt.Errorf("parse manifest: %w", err)
 	}
 	if m.Name == "" || m.Version == "" {
-		return nil, fmt.Errorf("%s: missing name or version", path)
+		return nil, fmt.Errorf("manifest missing name or version")
 	}
 	return &m, nil
+}
+
+// ReadManifest reads and parses a cn.package.json file from disk.
+// IO wrapper around ParseManifestData.
+func ReadManifest(path string) (*PackageManifest, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", path, err)
+	}
+	return ParseManifestData(data)
 }
 
 // FindRepoRoot walks up from cwd looking for .git.
@@ -96,7 +104,7 @@ func DiscoverPackages(repoRoot string) ([]DiscoveredPackage, error) {
 			continue
 		}
 		manifestPath := filepath.Join(srcPkgsDir, e.Name(), "cn.package.json")
-		m, err := ParseManifest(manifestPath)
+		m, err := ReadManifest(manifestPath)
 		if err != nil {
 			continue
 		}
@@ -207,10 +215,17 @@ func createTarGz(dest, srcDir string) (string, error) {
 		return nil
 	})
 
-	// Close in order: tar → gzip → file (flushes all buffers).
-	tw.Close()
-	gw.Close()
-	f.Close()
+	// Close in order: tar → gzip → file. Check errors — gzip
+	// finalization writes the footer; a flush failure means a corrupt tarball.
+	if err := tw.Close(); err != nil {
+		return "", fmt.Errorf("finalize tar: %w", err)
+	}
+	if err := gw.Close(); err != nil {
+		return "", fmt.Errorf("finalize gzip: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		return "", fmt.Errorf("close file: %w", err)
+	}
 
 	if err != nil {
 		return "", fmt.Errorf("walk %s: %w", srcDir, err)
