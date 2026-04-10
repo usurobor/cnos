@@ -3,8 +3,6 @@ package cli
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 
 	"github.com/usurobor/cnos/go/internal/restore"
 )
@@ -41,7 +39,7 @@ func (c *DepsCmd) Run(ctx context.Context, inv Invocation) error {
 }
 
 func (c *DepsCmd) runRestore(ctx context.Context, inv Invocation) error {
-	indexPath := FindIndexPath(inv.HubPath)
+	indexPath := restore.FindIndexPath(inv.HubPath)
 
 	results, err := restore.Restore(ctx, inv.HubPath, indexPath)
 	if err != nil {
@@ -66,21 +64,4 @@ func (c *DepsCmd) runRestore(ctx context.Context, inv Invocation) error {
 	}
 	fmt.Fprintf(inv.Stderr, "\n%d restored, %d failed\n", ok, len(errs))
 	return fmt.Errorf("deps restore: %d package(s) failed", len(errs))
-}
-
-// FindIndexPath walks up from hubPath looking for packages/index.json.
-// Used by deps restore to locate the package index in the repo tree.
-func FindIndexPath(hubPath string) string {
-	dir := hubPath
-	for {
-		candidate := filepath.Join(dir, "packages", "index.json")
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return filepath.Join(hubPath, "packages", "index.json")
-		}
-		dir = parent
-	}
 }
