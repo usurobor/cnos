@@ -143,6 +143,13 @@ Failure mode: version drift — tag says X, binary says Y, agent reports Z. Or: 
   - ❌ Tag without RELEASE.md (CI auto-generates sparse notes)
   - ✅ Commit (with RELEASE.md), tag (bare), push in sequence; verify release CI starts
 
+2.6a. **Delete merged branches**
+  - After push, delete remote branches that were merged into this release
+  - `git branch -r --merged origin/main | grep -v main | grep -v HEAD | sed 's/origin\///' | xargs -I{} git push origin --delete {}`
+  - This is mechanical cleanup, not judgment — if it's merged, it's dead
+  - ❌ Leave merged branches accumulating ("someone might need them")
+  - ✅ Clean up immediately after release push; history is in main
+
 2.7. **Wait for release CI**
   - Release workflow builds binaries (linux-x64, macos-x64, macos-arm64)
   - Wait for completion before deploying
