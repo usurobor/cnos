@@ -36,6 +36,15 @@ func (c *InitCmd) Run(ctx context.Context, inv Invocation) error {
 		hubName = filepath.Base(cwd)
 	}
 
+	// Validate hub name: bare names only (alphanumeric, hyphens,
+	// underscores, dots). Reject path separators, "..", or empty
+	// to prevent directory traversal or unexpected paths.
+	if !validHubName(hubName) {
+		fmt.Fprintf(inv.Stderr, "✗ Invalid hub name: %q\n\n", hubName)
+		fmt.Fprintf(inv.Stderr, "Hub names must contain only letters, digits, hyphens, underscores, or dots.\n")
+		return fmt.Errorf("init: invalid hub name %q", hubName)
+	}
+
 	// Hub directory uses the "cn-" prefix convention, matching OCaml
 	// cn_system.ml::run_init. This is the standard cnos hub naming:
 	// cn-<agent-name> (e.g., cn-sigma, cn-omega).
@@ -133,4 +142,19 @@ Add entries in the form:
 
 	fmt.Fprintf(inv.Stdout, "✓ Hub initialized at %s\n", hubDir)
 	return nil
+}
+
+// validHubName returns true iff name is a bare name suitable for use
+// as a directory component: non-empty, contains only alphanumeric
+// characters, hyphens, underscores, and dots.
+func validHubName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for _, r := range name {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.') {
+			return false
+		}
+	}
+	return true
 }
