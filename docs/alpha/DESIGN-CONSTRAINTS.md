@@ -1,237 +1,249 @@
 # cnos Design Constraints
 
-**Version:** 1.0.0
+**Version:** 1.1.0
 **Status:** Active
 **Doc-Class:** constitutive
-
-This document defines the structural invariants of cnos. These constraints cannot be broken and must be validated each CDD cycle.
-
----
-
-## 1. Kernel Constraints
-
-### 1.1 The kernel is small and trusted
-
-The kernel is the embedded bootstrap binary. It owns:
-
-- package restore/install
-- command registry + dispatch
-- provider registry
-- runtime contract
-- doctor/status/help/update
-- trust and precedence policy
-- protocol semantics
-
-The kernel does NOT own:
-
-- every command implementation
-- every provider implementation
-- skill content
-- doctrine content
-
-**Invariant:** The kernel must remain small enough that one engineer can audit the entire binary in a single session.
-
-### 1.2 The kernel is a package
-
-`cnos.kernel` has an embedded `cn.package.v1`-compatible manifest. The platform is an instance of its own model. The kernel manifest uses the same schema and parser as normal packages.
-
-**Invariant:** The kernel must parse its own manifest with the same code that parses any package manifest.
-
-### 1.3 Kernel language is Go
-
-The kernel is monolingual Go. No CGo, no embedded interpreters, no dynamic loading.
-
-**Invariant:** `go build ./cmd/cn` must produce a single static binary with zero non-Go dependencies.
+**Canonical-Path:** `docs/alpha/DESIGN-CONSTRAINTS.md`
+**Owns:** architectural invariants and transition constraints that CDD must validate
+**Does-Not-Own:** implementation tactics, coding-style heuristics, release notes, or detailed migration plans
 
 ---
 
-## 2. Package Constraints
+## 0. Purpose
 
-### 2.1 One package substrate
+This document defines the constraints that keep cnos one coherent system. CDD must validate these constraints in every substantial cycle.
 
-There is exactly one package system. Every distributable unit — skills, commands, orchestrators, templates, doctrine, mindsets, extensions — is a package.
+This document distinguishes two kinds of constraints:
 
-**Invariant:** No second distribution mechanism may exist alongside `cn.package.v1`.
+- **Active invariants** — already in force; a cycle must not violate them
+- **Transition constraints** — target-state architecture decisions; until fully landed, a cycle must not move the system away from them
 
-### 2.2 The package is the unit of distribution
-
-The implementation language inside a package is an implementation detail. The package boundary is the correct place for polyglot behavior.
-
-**Invariant:** Package metadata is always language-neutral. The package system must never assume the language of a command binary, provider binary, or helper executable.
-
-### 2.3 Independent package versioning
-
-Each package has its own semantic version. The cnos binary has its own version. Compatibility is expressed via `engines.cnos` in `cn.package.json`.
-
-**Invariant:** `package version ≠ cnos binary version`. No lockstep versioning between packages and the kernel.
-
-### 2.4 Source → Artifact → Installed
-
-```
-src/packages/<name>/                    → authored source (single source of truth)
-dist/packages/<name>-<version>.tar.gz   → distributable artifact
-.cn/vendor/packages/<name>/             → installed active state
-```
-
-**Invariant:** `src/packages/` is the only authored source of truth. `dist/` is derived. `.cn/vendor/` is derived. Neither may be manually edited.
-
-### 2.5 Content classes are fixed
-
-The 7 content classes are: doctrine, mindsets, skills, extensions, templates, orchestrators, commands.
-
-All 7 flow through the same pipeline: authored under `src/packages/<name>/<class>/`, built to `dist/packages/`, installed to `.cn/vendor/packages/<name>/<class>/`.
-
-**Invariant:** Every content class uses the same source → build → install pipeline. No content class gets a special path.
+The distinction matters because some parts of the architecture are already canonical, while others are still active transition work.
 
 ---
 
-## 3. Command Constraints
+## 1. Active invariants
 
-### 3.1 One command model
+### INV-001 — One package substrate
 
-Every command, regardless of source, is normalized into one runtime descriptor model (`CommandSpec` + `Command` interface + `Invocation`).
+There is exactly one package system. Every distributable unit — doctrine, mindsets, skills, commands, orchestrators, templates, extensions — is distributed through `cn.package.v1` and the package restore/install flow.
 
-**Invariant:** Source forms differ (kernel/repo-local/package). The runtime model is one.
+**Validation:**
 
-### 3.2 Tier precedence
-
-```
-kernel > repo-local > package
-```
-
-**Invariant:** A kernel command always wins over a repo-local or package command with the same name.
-
-### 3.3 Commands are not providers
-
-Commands are exact-dispatch operator actions. Providers are executable capability surfaces invoked by the runtime. They may live in the same package but do not become the same runtime thing.
-
-**Invariant:** The command registry and provider registry are separate. No command is automatically a provider. No provider is automatically a command.
+- no second package manifest family
+- no second restore/install path
+- no separate command/plugin package ecosystem
 
 ---
 
-## 4. Provider Constraints
+### INV-002 — Package metadata is language-neutral
 
-### 4.1 One manifest type
+The package boundary is the correct place for polyglot behavior. Package metadata does not assume the implementation language of:
 
-Providers are declared via `cn.extension.v1` with a `capabilities` field. There is no separate provider manifest.
+- a command
+- a provider
+- a helper executable
 
-**Invariant:** `cn.extension.v1` is the single manifest schema for all extensions and providers.
+**Validation:**
 
-### 4.2 Subprocess by default
-
-The kernel launches providers as subprocesses and speaks a versioned protocol to them (`cn.ext.v1`). No reflection. No in-process plugin loading. No classloader model.
-
-**Invariant:** stdout is machine-only protocol (NDJSON). Human/debug output goes to stderr. Providers must never emit unframed output on stdout.
-
-### 4.3 Kernel decides
-
-The provider may declare what it implements and what it needs. The kernel decides whether it is enabled, active, what permissions it gets, and whether it is invoked at all.
-
-**Invariant:** Providers do not define policy. The kernel is the single policy decision point.
+- manifests and package index do not branch on language
+- compatibility is expressed through metadata and runtime contracts, not language-specific package formats
 
 ---
 
-## 5. Purity Constraints
+### INV-003 — Commands, providers, orchestrators, and skills remain distinct
 
-### 5.1 Parse vs Read boundary
+- **skills** choose
+- **commands** dispatch
+- **orchestrators** execute
+- **providers** provide capability
 
-Pure functions operate on bytes/data. IO functions operate on paths/network.
+These runtime surfaces may live in the same package. They do not become the same runtime thing.
 
-```
-Parse*([]byte) → pure, no IO, no os imports
-Read*(string)  → IO wrapper around Parse*
-```
+**Validation:**
 
-This mirrors the OCaml `src/lib/` (pure) vs `src/cmd/` (IO) discipline.
-
-**Invariant:** `internal/pkg/` must have zero `os` imports. All IO enters through explicit IO wrapper functions.
-
-### 5.2 cli/ owns dispatch, domain packages own logic
-
-`cli/` contains: types, registry, thin command wrappers (≤30 lines of logic each).
-
-Domain packages (`doctor/`, `pkgbuild/`, `restore/`, `hubinit/`, `hubstatus/`) contain the actual logic.
-
-**Invariant:** No `cmd_*.go` file in `cli/` may exceed 30 lines of domain logic. If it does, the logic must be extracted to a domain package.
+- command registry and provider registry are separate
+- provider contracts are not reused as command contracts
+- orchestrators are not treated as skills
+- command dispatch is not keyword activation
 
 ---
 
-## 6. Hub Constraints
+### INV-004 — Kernel owns policy
 
-### 6.1 Hub structure is fixed
+The kernel may load or invoke commands, orchestrators, and providers. The kernel alone decides:
 
-```
-.cn/
-  config.json (or config.yaml)
-  deps.json
-  deps.lock.json
-  vendor/packages/
-spec/
-  SOUL.md
-state/
-  peers.md
-  runtime-contract.json
-agent/
-threads/
-```
+- precedence
+- activation
+- enable/disable state
+- permissions
+- routing
+- protocol acceptance
 
-**Invariant:** `cn doctor` must validate this structure. Any deviation is a reportable issue.
+Packages may declare what they provide. They do not define policy.
 
-### 6.2 Hub is not source
+**Validation:**
 
-`.cn/` is active runtime state. It is not part of the source tree. It only exists in a working hub.
-
-**Invariant:** `.cn/` must never be committed to the source repository.
+- package/provider code cannot widen its own authority
+- routing/permission/preference rules live in the kernel, not in package payloads
 
 ---
 
-## 7. CDD Process Constraints
+### INV-005 — Protocol semantics stay above transport/provider implementations
 
-### 7.1 Two-agent minimum
+Envelope rules, receipts, routing invariants, rejection policy, and dedupe semantics remain kernel-owned. Concrete transport/provider implementations may vary. Protocol meaning does not.
 
-Every code change requires at least two agents in the CDD cycle: one implements, one reviews.
+**Validation:**
 
-**Invariant:** No PR may merge without a review from an agent other than the author.
-
-### 7.2 Findings before merge
-
-All review findings (A/B/C/D severity) must be resolved on-branch before merge. No "approved with follow-up."
-
-**Invariant:** The only exception is design-scope deferral explicitly named by the reviewer, with the author filing an issue before merge.
-
-### 7.3 Hub memory at cycle close
-
-Every CDD cycle must produce a daily reflection and update relevant adhoc threads before the cycle closes.
-
-**Invariant:** Post-release assessment §8 (Hub Memory) must reference committed hub artifacts.
+- providers implement transport/capabilities
+- providers do not redefine protocol truth
 
 ---
 
-## 8. Validation
+### INV-006 — Hub runtime state is not source
 
-These constraints must be validated each CDD cycle:
+`.cn/` is active runtime state for a working hub. It is not the authored source tree.
 
-| # | Constraint | Validated by |
-|---|-----------|-------------|
-| 1.1 | Kernel is small | Post-release assessment: binary size, command count |
-| 1.2 | Kernel is a package | `cn build --check` validates kernel manifest |
-| 1.3 | Kernel is pure Go | CI: `go build` with no CGo |
-| 2.1 | One package substrate | Review: no second distribution mechanism |
-| 2.4 | Source → Artifact → Installed | `cn build --check` (I1 CI) |
-| 2.5 | Content class pipeline | `cn build --check` (I1 CI) |
-| 3.1 | One command model | Review: all commands implement `Command` interface |
-| 3.2 | Tier precedence | Tests in `cli/` |
-| 4.1 | One manifest type | Review: no `cn.provider.v1` |
-| 4.3 | Kernel decides | Review: no policy in provider code |
-| 5.1 | Parse vs Read boundary | CI: `go vet` + review of `internal/pkg/` imports |
-| 5.2 | cli/ dispatch only | Review: no `cmd_*.go` exceeds 30 lines of logic |
-| 6.1 | Hub structure | `cn doctor` |
-| 7.1 | Two-agent minimum | PR review comments |
-| 7.2 | Findings before merge | PR review trail |
-| 7.3 | Hub memory at close | Post-release assessment §8 |
+**Validation:**
+
+- `.cn/` is not treated as authored package source
+- doctor validates `.cn/` as runtime state, not source content
 
 ---
 
-## 9. Amendment
+## 2. Transition constraints
 
-This document may change only through explicit proposal and confirmation, with evidence justifying the change. Convenience does not justify weakening a constraint. Evidence of persistent friction may justify restructuring one.
+These are target-state architectural decisions already accepted by design, but not all of them may yet be fully implemented everywhere. Until they are fully landed, cycles must move the system toward them, not away from them.
+
+### T-001 — The kernel is a package-compatible kernel
+
+`cnos.kernel` is an embedded `cn.package.v1`-compatible manifest. The platform is an instance of its own package/command model.
+
+**Validation:**
+
+- kernel manifest uses the same schema/parser family as normal packages
+- kernel commands normalize into the same runtime command descriptor model as other commands
+
+---
+
+### T-002 — The kernel remains minimal and trusted
+
+The kernel owns bootstrap, registries, policy, protocol semantics, and runtime surfaces. It does not own every command, every provider, or all intelligence-bearing content.
+
+**Validation:**
+
+- convenience behavior moves to packages when it does not need to be built-in
+- built-in surface trends toward the bootstrap kernel, not toward accretion
+
+---
+
+### T-003 — Go is the kernel implementation language
+
+The trusted kernel is monolingual Go. No CGo. No embedded interpreters. No dynamic loading.
+
+**Validation:**
+
+- kernel build remains pure-Go
+- non-Go behavior lives at package/provider boundaries, not inside kernel internals
+
+---
+
+### T-004 — Source → artifact → installed is explicit
+
+The package lifecycle must have one explicit authored source, one explicit distributable artifact, and one explicit installed state.
+
+Current target shape:
+
+- authored source
+- distributable artifact
+- installed active package state
+
+The exact on-disk paths may evolve during the transition, but the distinction must remain explicit.
+
+**Validation:**
+
+- source, artifact, and installed state are not conflated
+- derived layers are not edited as if they were source
+
+---
+
+### T-005 — Content classes are explicit and finite
+
+The package content-class set is explicit and finite at any given version. New content classes require explicit design, not ad hoc exceptions.
+
+**Validation:**
+
+- no hidden special-case content pipelines
+- command/orchestrator/extension behavior uses the declared content classes
+- adding a new content class requires an explicit design update
+
+---
+
+## 3. Process constraints
+
+### P-001 — Two-agent minimum applies to substantial cycles
+
+For substantial CDD cycles, one agent authors and a different agent reviews. Small-change cycles may use the documented single-agent exception.
+
+**Validation:**
+
+- substantial cycles show distinct author/reviewer identities
+- small-change path is declared explicitly when used
+
+---
+
+### P-002 — Findings before merge
+
+Review findings must be resolved before merge, except for explicit, reviewer-declared design-scope deferrals that are filed before merge.
+
+**Validation:**
+
+- PR/review trail shows closure or explicit issue-backed deferral
+
+---
+
+### P-003 — Hub memory closes substantial release cycles
+
+For release/post-release closure, the cycle must update:
+
+- daily reflection
+- relevant adhoc thread(s)
+
+This requirement applies to the post-release closeout of substantial release cycles, not to every tiny code edit.
+
+**Validation:**
+
+- post-release assessment §Hub Memory references committed hub artifacts
+
+---
+
+## 4. Validation model
+
+Constraints are validated by owner surface and cadence.
+
+| Constraint | Owner surface | Cadence |
+|---|---|---|
+| INV-001 One package substrate | design + review | every substantial cycle touching packaging/runtime boundaries |
+| INV-002 Language-neutral package metadata | design + review | every substantial cycle touching package/provider model |
+| INV-003 Commands/providers/orchestrators/skills distinct | design + review | every substantial cycle touching runtime registries or package content classes |
+| INV-004 Kernel owns policy | design + review | every substantial cycle touching routing, permissions, or provider activation |
+| INV-005 Protocol above transport | design + review + post-release | every substantial cycle touching transport/providers; confirmed in release/assessment when applicable |
+| INV-006 Hub runtime state is not source | doctor + review | continuous + every cycle touching source/build/runtime boundaries |
+| T-001 Kernel is package-compatible | build/check + review | every kernel/package model cycle |
+| T-002 Kernel remains minimal | review + post-release | every kernel/built-in command cycle |
+| T-003 Go kernel | CI/build | every Go-kernel cycle |
+| T-004 Source/artifact/installed explicit | build/check + review | every package/build/restore cycle |
+| T-005 Content classes explicit and finite | design + review | every cycle touching package content classes |
+| P-001 Two-agent minimum | PR/review trail | every substantial cycle |
+| P-002 Findings before merge | PR/review trail | every substantial cycle |
+| P-003 Hub memory closes release cycle | post-release assessment | every substantial release cycle |
+
+### Rule
+
+A substantial cycle touching one of these areas must include a constraints section in the design artifact and the reviewer must confirm the affected constraints are preserved, tightened, or explicitly revised.
+
+---
+
+## 5. Amendment rule
+
+This document may change only through explicit proposal and confirmation with evidence. Convenience is not enough to weaken a constraint. Persistent friction may justify restructuring one, but the restructuring must be explicit and justified.
