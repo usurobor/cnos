@@ -199,25 +199,73 @@ The package declares compatibility. The runtime enforces it.
 
 ## Migration from current layout
 
-Current state:
+### Current state (on main today)
 
-- `packages/` is both source and build output (mixed)
-- `scripts/build-packages.sh` handles tarball creation
-- Package versions are locked to binary version
+- `src/agent/<class>/` — authored skill/doctrine/template content
+- `packages/<name>/cn.package.json` — manifests (source) + copied content (derived)
+- `packages/` is both source (manifests) and build output (copied content from `src/agent/`)
+- Manual sync required: edit in `src/agent/`, copy to `packages/`, update manifest if new
+- I1 CI check (`cn build --check`) catches drift after the fact
+- `scripts/build-packages.sh` handles tarball creation for releases
+- Package versions locked to binary version
 
-Target state:
+### Why this breaks
 
-- `src/packages/` is source only
-- `dist/packages/` is build output only
+The manual sync is a reliability leak. Every skill edit requires copying to the right package directory. Humans forget. I1 catches it, but after the push. The `packages/` directory mixes authored manifests with derived content — you can't tell what's source and what's build output by looking at it.
+
+### Target state
+
+- `src/packages/<name>/cn.package.json` — manifest (source)
+- `src/packages/<name>/<class>/` — content (source, authored here, not copied)
+- `dist/packages/<name>-<version>.tar.gz` — tarball (build output)
+- `dist/packages/index.json` — package index (build output)
+- `dist/packages/checksums.txt` — checksums (build output)
+- No `packages/` directory at all
+- No manual sync step
+- No drift possible — content is authored in `src/packages/`, not copied from elsewhere
 - Each package has its own version
-- `cn build` replaces `scripts/build-packages.sh`
 - `engines.cnos` declares compatibility range
 
-Migration order:
+### What disappears
 
-1. Move `packages/` → `src/packages/` (source separation)
-2. Create `dist/` output directory
-3. Implement `cn build` targeting new layout
-4. Update CI to use `cn build --check` for I1
-5. Update release workflow to use `cn build` for artifact production
-6. Decouple package versions from binary version
+- The `packages/` directory
+- The `src/agent/` → `packages/` copy step
+- The entire manual sync problem (and the I1 failure class that catches it)
+- `scripts/build-packages.sh` (replaced by `cn build`)
+- Version lockstep between packages and binary
+
+### Migration steps
+
+1. **Merge manifests and content into `src/packages/`**
+   - For each package, move `packages/<name>/cn.package.json` to `src/packages/<name>/cn.package.json`
+   - Move content from `src/agent/<class>/<id>/` into `src/packages/<name>/<class>/<id>/` per the manifest's `sources` declarations
+   - Remove the `sources` field from manifests (content is now co-located, not referenced from elsewhere)
+   - Delete `packages/` directory
+   - Delete `src/agent/` (content now lives in `src/packages/`)
+
+2. **Add `dist/` to `.gitignore`**
+   - `dist/` is build output, never committed
+
+3. **Update `cn build` to target new layout**
+   - Read from `src/packages/<name>/cn.package.json`
+   - Package content from `src/packages/<name>/<class>/`
+   - Produce tarballs in `dist/packages/`
+   - Generate `dist/packages/index.json` and `dist/packages/checksums.txt`
+
+4. **Update CI**
+   - I1: `cn build --check` validates `src/packages/` structure and manifest completeness
+   - Release: `cn build` produces `dist/packages/` tarballs, uploads to GitHub release
+
+5. **Update `cn deps restore`**
+   - Reads package index (from dist or remote URL)
+   - Downloads tarballs
+   - Extracts to `.cn/vendor/packages/<name>/`
+
+6. **Decouple package versions from binary version**
+   - Each `cn.package.json` gets its own `version`
+   - `engines.cnos` declares compatible kernel range
+   - `scripts/stamp-versions.sh` no longer forces all packages to the binary version
+
+### Sequencing
+
+Steps 1–2 can land as one PR (the big layout move). Steps 3–4 depend on the Go `cn build` being updated. Steps 5–6 follow naturally. The whole migration is #186.
