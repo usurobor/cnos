@@ -5,12 +5,15 @@
 // types + JSON + pure helpers. The types and field names match the
 // OCaml definitions so Go and OCaml produce structurally identical
 // JSON for the same data.
+//
+// Discipline: this package imports only encoding/json and fmt.
+// No os, no net, no io — file reading lives in internal/restore/,
+// mirroring the OCaml split (src/lib/ = pure, src/cmd/ = IO).
 package pkg
 
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 )
 
 // --- Manifest (deps.json) ---
@@ -43,19 +46,6 @@ type Lockfile struct {
 	Packages []LockedDep `json:"packages"`
 }
 
-// ReadLockfile reads and parses a lockfile from disk.
-func ReadLockfile(path string) (*Lockfile, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read lockfile %s: %w", path, err)
-	}
-	var lf Lockfile
-	if err := json.Unmarshal(data, &lf); err != nil {
-		return nil, fmt.Errorf("parse lockfile %s: %w", path, err)
-	}
-	return &lf, nil
-}
-
 // --- Package Index (packages/index.json) ---
 
 // IndexEntry maps a package version to its download URL and expected SHA-256.
@@ -67,19 +57,24 @@ type IndexEntry struct {
 // PackageIndex is the parsed packages/index.json.
 // Schema: cn.package-index.v1.
 type PackageIndex struct {
-	Schema   string                                `json:"schema"`
+	Schema   string                           `json:"schema"`
 	Packages map[string]map[string]IndexEntry `json:"packages"`
 }
 
-// ReadPackageIndex reads and parses a package index from disk.
-func ReadPackageIndex(path string) (*PackageIndex, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read package index %s: %w", path, err)
+// ParseLockfile parses a lockfile from raw JSON bytes.
+func ParseLockfile(data []byte) (*Lockfile, error) {
+	var lf Lockfile
+	if err := json.Unmarshal(data, &lf); err != nil {
+		return nil, fmt.Errorf("parse lockfile: %w", err)
 	}
+	return &lf, nil
+}
+
+// ParsePackageIndex parses a package index from raw JSON bytes.
+func ParsePackageIndex(data []byte) (*PackageIndex, error) {
 	var idx PackageIndex
 	if err := json.Unmarshal(data, &idx); err != nil {
-		return nil, fmt.Errorf("parse package index %s: %w", path, err)
+		return nil, fmt.Errorf("parse package index: %w", err)
 	}
 	return &idx, nil
 }
@@ -113,14 +108,11 @@ type PackageManifest struct {
 	Name string `json:"name"`
 }
 
-// ValidatePackageManifest checks that cn.package.json exists in
-// pkgDir, parses as JSON, and declares a name matching expectedName.
-func ValidatePackageManifest(pkgDir, expectedName string) error {
-	path := pkgDir + "/cn.package.json"
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("missing cn.package.json: %w", err)
-	}
+// ValidatePackageManifestData checks that raw cn.package.json bytes
+// parse as JSON and declare a name matching expectedName. The caller
+// is responsible for reading the file from disk (IO lives in
+// internal/restore/, not here).
+func ValidatePackageManifestData(data []byte, expectedName string) error {
 	var m PackageManifest
 	if err := json.Unmarshal(data, &m); err != nil {
 		return fmt.Errorf("invalid cn.package.json: %w", err)

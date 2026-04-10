@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/usurobor/cnos/go/internal/pkg"
@@ -153,7 +154,7 @@ func TestRestoreSHA256Mismatch(t *testing.T) {
 		t.Fatal("expected SHA-256 mismatch error")
 	}
 	errMsg := results[0].Err.Error()
-	if !contains(errMsg, "sha256 mismatch") {
+	if !strings.Contains(errMsg, "sha256 mismatch") {
 		t.Errorf("expected 'sha256 mismatch' in error, got: %s", errMsg)
 	}
 
@@ -232,7 +233,7 @@ func TestRestoreNotInIndex(t *testing.T) {
 	if !HasErrors(results) {
 		t.Fatal("expected error for package not in index")
 	}
-	if !contains(results[0].Err.Error(), "not in index") {
+	if !strings.Contains(results[0].Err.Error(), "not in index") {
 		t.Errorf("expected 'not in index' error, got: %v", results[0].Err)
 	}
 }
@@ -267,15 +268,3 @@ func writeJSON(t *testing.T, path string, v any) {
 	}
 }
 
-func contains(s, sub string) bool {
-	return len(s) >= len(sub) && (s == sub || len(s) > 0 && containsAt(s, sub))
-}
-
-func containsAt(s, sub string) bool {
-	for i := 0; i <= len(s)-len(sub); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
-}
