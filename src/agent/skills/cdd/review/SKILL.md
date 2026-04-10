@@ -281,6 +281,17 @@ Check whether the change creates obligations on code it did not touch.
   - ❌ "More governance is always safer"
   - ✅ "This new step catches stale artifact references, but the check is mechanical and should move to CI/lint"
 
+2.2.13. **Project design constraints check**
+  - If the project maintains a design constraints document (e.g. `DESIGN-CONSTRAINTS.md`), load it before reviewing any substantial cycle.
+  - For each constraint area touched by the diff, verify the change preserves, tightens, or explicitly revises the affected constraint.
+  - Active invariants must not be violated. Transition constraints must not be moved away from. Process constraints must be followed.
+  - If the diff violates a constraint without revising it, that is a D-level finding.
+  - If the diff implicitly revises a constraint without naming the revision, that is a C-level finding.
+  - If no project constraints document exists, skip this check.
+  - ❌ "Diff looks correct" (adds a second package manifest type, violating a one-substrate invariant)
+  - ✅ "Diff adds `cn.provider.v1` manifest — INV-001 (one package substrate) would be violated. Either use `cn.extension.v1` or explicitly revise the constraint. D finding."
+  - ✅ "Diff moves doctor logic inline into cli/ — T boundary (cli/ owns dispatch) not yet a hard invariant but transition direction is away. C finding."
+
 ---
 
 ### 2.3. Verdict — the judgment
