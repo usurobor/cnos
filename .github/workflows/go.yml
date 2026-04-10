@@ -36,6 +36,24 @@ jobs:
         working-directory: go
         run: go vet ./...
 
+      - name: Dispatch boundary check (INVARIANTS.md T-002)
+        working-directory: go
+        run: |
+          VIOLATIONS=""
+          for f in internal/cli/cmd_*.go; do
+            [ -f "$f" ] || continue
+            case "$f" in *_test.go) continue;; esac
+            if grep -qE "^\s*\"(os|net/http|encoding/json|archive/|compress/|crypto/|path/filepath)\"" "$f"; then
+              VIOLATIONS="$VIOLATIONS\n  $f"
+            fi
+          done
+          if [ -n "$VIOLATIONS" ]; then
+            echo "❌ Dispatch boundary violation (INVARIANTS.md T-002, eng/go §2.18)"
+            echo -e "   Violations:$VIOLATIONS"
+            exit 1
+          fi
+          echo "✓ Dispatch boundary: all cmd_*.go files are thin wrappers"
+
   notify:
     needs: [go]
     if: always()
