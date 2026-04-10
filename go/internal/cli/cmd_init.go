@@ -36,6 +36,9 @@ func (c *InitCmd) Run(ctx context.Context, inv Invocation) error {
 		hubName = filepath.Base(cwd)
 	}
 
+	// Hub directory uses the "cn-" prefix convention, matching OCaml
+	// cn_system.ml::run_init. This is the standard cnos hub naming:
+	// cn-<agent-name> (e.g., cn-sigma, cn-omega).
 	hubDir := "cn-" + hubName
 
 	// Check if directory already exists.
@@ -84,14 +87,16 @@ func (c *InitCmd) Run(ctx context.Context, inv Invocation) error {
 		return fmt.Errorf("init: write config: %w", err)
 	}
 
-	// Write state/peers.md.
+	// Write state/peers.md — minimal scaffold. Operators add peers
+	// manually; no hardcoded template peers that may not exist.
 	peersContent := `# Peers
 
 Agents and repos this hub communicates with.
+Add entries in the form:
 
-- name: cn-agent
-  hub: https://github.com/usurobor/cn-agent.git
-  kind: template
+  - name: <agent-name>
+    hub: <repo-url>
+    kind: peer
 `
 	peersPath := filepath.Join(hubDir, "state", "peers.md")
 	if err := os.WriteFile(peersPath, []byte(peersContent), 0644); err != nil {

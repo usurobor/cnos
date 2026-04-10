@@ -32,6 +32,10 @@ func (c *StatusCmd) Run(_ context.Context, inv Invocation) error {
 	fmt.Fprintf(inv.Stdout, "path.................... ✓ %s\n", inv.HubPath)
 
 	// List installed packages with version drift detection.
+	// Note: drift detection assumes all installed packages are first-party
+	// (version should match the binary version). This matches OCaml behavior
+	// in cn_system.ml::run_status. Third-party packages would need their
+	// own version authority — not yet supported.
 	vendorDir := filepath.Join(inv.HubPath, ".cn", "vendor", "packages")
 	entries, err := os.ReadDir(vendorDir)
 	if err != nil {

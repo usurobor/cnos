@@ -10,10 +10,13 @@ import (
 
 func TestInitCreatesHub(t *testing.T) {
 	// Run init in a temp dir.
+	// Note: os.Chdir mutates global state and is not parallel-safe.
+	// These tests must not use t.Parallel(). Acceptable because init
+	// is inherently a cwd-relative operation.
 	tmp := t.TempDir()
 	origDir, _ := os.Getwd()
+	t.Cleanup(func() { os.Chdir(origDir) })
 	os.Chdir(tmp)
-	defer os.Chdir(origDir)
 
 	var stdout, stderr bytes.Buffer
 	inv := Invocation{
@@ -64,8 +67,8 @@ func TestInitCreatesHub(t *testing.T) {
 func TestInitAlreadyExists(t *testing.T) {
 	tmp := t.TempDir()
 	origDir, _ := os.Getwd()
+	t.Cleanup(func() { os.Chdir(origDir) })
 	os.Chdir(tmp)
-	defer os.Chdir(origDir)
 
 	// Pre-create the directory.
 	os.MkdirAll(filepath.Join(tmp, "cn-existing"), 0755)
