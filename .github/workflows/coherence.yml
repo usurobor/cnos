@@ -21,6 +21,8 @@ jobs:
       - name: Install dependencies
         run: |
           opam install dune ppx_expect ppxlib mdx --yes
+        env:
+          OPAMRETRIES: "3"
 
       - name: Build cn binary
         run: |
@@ -46,6 +48,8 @@ jobs:
       - name: Install dependencies
         run: |
           opam install dune ppx_expect ppxlib mdx --yes
+        env:
+          OPAMRETRIES: "3"
 
       - name: Check contract copy matches source
         run: diff docs/alpha/schemas/protocol-contract.json test/cmd/protocol-contract.json

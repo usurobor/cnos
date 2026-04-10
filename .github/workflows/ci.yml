@@ -20,6 +20,8 @@ jobs:
       - name: Install dependencies
         run: |
           opam install dune ppx_expect ppxlib mdx --yes
+        env:
+          OPAMRETRIES: "3"
 
       - name: Build native binary
         run: |
