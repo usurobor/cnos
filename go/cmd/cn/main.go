@@ -29,6 +29,7 @@ func main() {
 	reg.Register(&cli.DepsCmd{})
 	reg.Register(&cli.StatusCmd{Version: version})
 	reg.Register(&cli.DoctorCmd{Version: version})
+	reg.Register(&cli.BuildCmd{})
 
 	// Discover hub: walk up from cwd to find .cn/.
 	hubPath := discoverHub()
