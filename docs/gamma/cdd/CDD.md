@@ -408,6 +408,7 @@ Rules:
 - build-sync source asset changes before commit
 - enumerate affected files before implementation begins
 - every AC must map to evidence before review
+- **all review findings must be resolved before merge** — the author fixes every finding (A/B/C/D) on the branch before merge. No "approved with follow-up." The only exception is a finding requiring a design decision outside the issue's scope, which the reviewer must explicitly name as "deferred by design scope" and the author must file as an issue before merge. See review skill §7.0.
 
 ### 5.6 Frozen snapshot rule
 
