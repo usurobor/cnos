@@ -167,6 +167,8 @@ Use `src/agent/skills/eng/README.md` § "Default active skills by work shape and
 
 **Read each SKILL.md file before beginning any work step.** Naming a skill without reading it is not loading it. All others are reference only. Fewer constraints deeply applied > many constraints lightly checked. (CDD §4.4)
 
+**Load project invariants.** If the project maintains an architectural invariants document (e.g. `INVARIANTS.md`), load it and identify which active invariants and transition constraints are touched by this change. Name them explicitly. The reviewer will verify them (review §2.2.13).
+
 ### 2.5 Build artifacts in order
 
 For substantial changes:
@@ -191,6 +193,7 @@ The handoff must include:
 2. **Test requirements per module** — which new modules need tests, what coverage shape (unit, integration, expect-test), and what invariants the tests must prove. "Run dune runtest" is a gate, not a test spec.
 3. **Engineering conventions from prior cycles** — any relevant precedent that the implementer would not know. Examples: "v3.32.0 removed all bare `with _ ->` catches — do not reintroduce them," "lockfile types live in cn_deps.ml, not cn_lib.ml."
 4. **Artifact order** — the handoff must specify tests-before-code (§2.5) or explicitly justify inversion. A prompt that describes only code stages implicitly inverts the pipeline.
+5. **Affected project invariants** — if the project maintains an architectural invariants document, name the specific invariants this change touches. The implementer must not violate active invariants or move away from transition constraints. The reviewer will verify (review §2.2.13).
 
 **Why this is mechanical, not judgment:** a checklist on the handoff, not a review finding after the fact. Two agents writing the same handoff should produce the same constraints. Review catching convention violations that the handoff should have prevented is a process bug — the gap is in the handoff, not the review.
 
