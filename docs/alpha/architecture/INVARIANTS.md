@@ -152,18 +152,25 @@ The trusted kernel is monolingual Go. No CGo. No embedded interpreters. No dynam
 
 The package lifecycle must have one explicit authored source, one explicit distributable artifact, and one explicit installed state.
 
-Current target shape:
+**Current layout** (on main today):
 
-- authored source
-- distributable artifact
-- installed active package state
+- `src/agent/<class>/` → authored source
+- `packages/<name>/<class>/` → built package (mixed: also contains manifests)
+- `.cn/vendor/packages/<name>@<version>/` → installed active state
 
-The exact on-disk paths may evolve during the transition, but the distinction must remain explicit.
+**Target layout** (per BUILD-AND-DIST.md):
+
+- `src/packages/<name>/` → authored source (single source of truth)
+- `dist/packages/<name>-<version>.tar.gz` → distributable artifact
+- `.cn/vendor/packages/<name>/` → installed active state
+
+The transition is in progress. Cycles must move toward the target layout, not away from it. Neither layout may be written as if the other does not exist.
 
 **Validation:**
 
 - source, artifact, and installed state are not conflated
 - derived layers are not edited as if they were source
+- docs that describe the layout must say which layout they describe (current or target)
 
 ---
 
