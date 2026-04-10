@@ -363,6 +363,14 @@ Prefer stdlib first:
 - `os/exec`
 - `path/filepath`
 
+**Do not reimplement stdlib functions.** Before writing any helper, check whether the standard library already provides it. This is a recurring review finding:
+
+- ❌ Hand-rolled `contains(s, sub string) bool` → ✅ `strings.Contains`
+- ❌ Hand-rolled `joinArgs(args []string) string` → ✅ `strings.Join`
+- ❌ Hand-rolled `envMap()` copying `os.Environ()` → ✅ `os.Getenv` at point of use
+
+If you write a utility function, verify it doesn't exist in `strings`, `slices`, `maps`, `path/filepath`, `sort`, `bytes`, `fmt`, or `os` first.
+
 ### 2.12. Schema and compatibility
 
 **Treat manifests, contracts, and IRs as public contracts.**
