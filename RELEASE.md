@@ -2,33 +2,40 @@
 
 ## Outcome
 
-Coherence delta: C_Σ A+ (`α A+`, `β A`, `γ A+`) · **Level:** L5
+Coherence delta: C_Σ A+ (`α A+`, `β A+`, `γ A+`) · **Level:** L7
 
-Dispatch boundary enforced: cli/ is now dispatch-only with CI enforcement. Domain logic extracted to dedicated packages. INVARIANTS.md T-002 is mechanical — a `cmd_*.go` file importing `os`, `encoding/json`, or `path/filepath` fails CI.
+**Go kernel Phase 3 complete.** All 8 kernel commands implemented. The kernel can now bootstrap, manage, diagnose, build, and update itself. Design principles are a mechanical review gate, not just advice.
 
 ## Why it matters
 
-This is the first architectural invariant enforced by machine, not just by reviewers. The leak class that produced #221 (doctor logic inline in cli/) is now impossible to reintroduce without CI failure. The CDD invariants chain (author loads → handoff names → reviewer verifies → assessor confirms → CI enforces) is complete for this constraint.
+This release completes the Go kernel's command surface — every command from the OCaml runtime has a Go equivalent. `cn update` enables self-updating binaries with SHA-256 verification. `cn setup` makes hubs wake-ready. The design-principles skill and architecture review gate (§2.2.14) turn architectural coherence from human judgment into a structured, gateable check.
+
+## Added
+
+- **Go kernel `update` command** (#212 Slice D, PR #225): fetches latest GitHub release, compares version + commit, downloads platform binary, SHA-256 verifies against checksums.txt, atomic rename install. `--check` for dry run. Same-version patch detection (mirrors OCaml).
+- **Go kernel `setup` command** (#212 Slice D, PR #225): creates .cn/, agent/, default deps.json (engineer profile), .gitignore entry. Idempotent. Does not run restore — keeps setup scoped to "prepare the hub."
+- **eng/design-principles skill** (L6): architectural decomposition — Parnas (information hiding), Martin (dependency direction), Liskov (truthful substitutability), plus cnos-specific rules for runtime surfaces, registries, source/artifact/install discipline.
+- **CDD review §2.2.14**: architecture check with 7 structured questions (reason to change, policy above detail, truthful interfaces, registry normalization, source/artifact/installed clarity, surface separation, degraded-path visibility).
+- **CDD review §2.3.5**: verdict gate — any "no" in architecture check blocks approval.
+- **BUILD-AND-DIST migration steps**: explicit current → target path for #224.
+- **T-004 fix**: current vs target layout both named explicitly (design-principles §3.8 transition honesty).
 
 ## Changed
 
-- **cli/ extraction** (#221, PR #222): domain logic extracted from `cli/` into dedicated packages:
-  - `cmd_doctor.go` 238→44 lines → `internal/doctor/`
-  - `cmd_init.go` 131→27 lines → `internal/hubinit/`
-  - `cmd_status.go` 76→27 lines → `internal/hubstatus/`
-  - `FindIndexPath` → `internal/restore/`
-  - `cmd_deps.go` and `cmd_build.go` already correct (unchanged)
-- **CI dispatch boundary check** (`.github/workflows/go.yml`): greps `cmd_*.go` for prohibited imports. T-002 is now mechanical.
-- **INVARIANTS.md v1.2.0**: title normalized to "Architectural Invariants", stale `DESIGN-CONSTRAINTS.md` reference removed from review skill.
+- **INVARIANTS.md v1.2.0**: title normalized, stale references cleaned.
+- **cnos.eng manifest**: eng/design-principles added (caught by I1 — first real coherence CI catch on main).
 
 ## Validation
 
-- Go binary builds: `cn help` lists 6 kernel commands (help, init, deps, status, doctor, build).
-- All Go tests pass (35 tests across 6 packages: cli, pkg, restore, pkgbuild, doctor, hubinit, hubstatus).
-- CI dispatch boundary check passes — no `cmd_*.go` imports prohibited packages.
+- Go binary builds: `cn help` lists 8 kernel commands (help, init, setup, deps, status, doctor, build, update).
+- All 63 Go tests pass across 8 packages.
+- `cn update --check` reports version status.
+- `cn setup` creates hub structure with default deps.json.
+- CI dispatch boundary check passes.
 
 ## Known Issues
 
+- #224 — src/packages layout migration (filed this session)
 - #193 — encoding lag (growing, 12 cycles)
 - #186 — encoding lag (design doc shipped)
 - #175 — encoding lag (growing)
