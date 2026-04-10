@@ -10,9 +10,11 @@
     "skills": [
       "eng/architecture-evolution",
       "eng/coding",
+      "eng/design-principles",
       "eng/documenting",
       "eng/follow-up",
       "eng/functional",
+      "eng/go",
       "eng/ocaml",
       "eng/performance-reliability",
       "eng/process-economics",
@@ -21,10 +23,9 @@
       "eng/skill",
       "eng/testing",
       "eng/tool-writing",
+      "eng/typescript",
       "eng/ux-cli",
-      "eng/writing",
-      "eng/go",
-      "eng/typescript"
+      "eng/writing"
     ]
   }
 }
