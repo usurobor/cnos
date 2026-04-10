@@ -137,16 +137,21 @@ The source forms differ. The runtime descriptor is the same.
 
 ### 2.5. The kernel package
 
-`cnos.kernel` remains a package-shaped descriptor embedded in the binary. Its embedded manifest is the source of truth for:
+`cnos.kernel` is a `cn.package.v1`-compatible manifest embedded in the binary. It uses the same schema, the same `commands` object, and the same `sources.commands` array as any vendored package. It is not installable through the package index, but it is manifest-compatible with the package model — the same parser that reads `cnos.core/cn.package.json` can read the kernel manifest.
+
+The embedded manifest is the source of truth for:
 
 - command names
 - summaries
-- metadata (`NeedsHub`, `Dangerous`)
+- metadata (`needs_hub`, `dangerous`)
+- the `sources.commands` list (which commands this package provides)
 
 ```json
 {
+  "schema": "cn.package.v1",
   "name": "cnos.kernel",
   "version": "3.43.0",
+  "kind": "kernel",
   "description": "cnos bootstrap kernel — commands that exist before any packages are installed",
   "commands": {
     "help":   { "summary": "Show available commands", "needs_hub": false },
@@ -156,10 +161,20 @@ The source forms differ. The runtime descriptor is the same.
     "build":  { "summary": "Build packages from source" },
     "doctor": { "summary": "Validate hub health" },
     "status": { "summary": "Show hub status" },
-    "update": { "summary": "Update cnos binary" }
+    "update": { "summary": "Update cnos binary", "needs_hub": false }
+  },
+  "sources": {
+    "commands": ["help", "init", "setup", "deps", "build", "doctor", "status", "update"]
   }
 }
 ```
+
+Notes:
+- `schema: cn.package.v1` — real package schema, not a custom kernel format
+- `kind: kernel` — distinguishes from installable packages without breaking schema compatibility
+- `sources.commands` — same split as other packages (ids in sources, metadata in top-level `commands`)
+- No `engines` field — the kernel does not depend on itself
+- Not in `packages/index.json` — not installable, but inspectable with standard package tooling
 
 Its constructor map is the source of truth for implementation binding:
 
