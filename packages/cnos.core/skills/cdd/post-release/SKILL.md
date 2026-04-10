@@ -96,6 +96,10 @@ The assessment produces one artifact with the following sections:
 
 **Immediate fixes** (executed in this session):
 - ...
+
+### 8. Hub Memory
+- **Daily reflection:** [path] — committed at [sha]
+- **Adhoc thread(s) updated:** [path(s)] — committed at [sha]
 ```
 
 ## Procedure
@@ -237,6 +241,19 @@ This turns the assessment into an executable handoff, not just reflection.
 - Everything larger → becomes the next cycle's work via the commitment above
 - Do not attempt to execute a large MCA inside the post-release assessment itself
 
+### Step 7: Hub memory
+
+Every release changes something worth remembering across sessions. Write both:
+
+1. **Daily reflection** — what happened this cycle, scoring, MCI freeze status, what's next. This is the operational state that the next session loads to orient.
+2. **Adhoc thread update** — which ongoing thread(s) this release advances. Every release connects to at least one active thread (refactor progress, skill convergence, process evolution, etc.). Update the relevant thread with what shipped and what it means for the thread's arc. If the release doesn't connect to any existing thread, that's a signal worth noting — start one or name why.
+
+Both writes happen **before** the cycle is considered closed. The assessment artifact lives in the repo; the hub memory is what makes it findable and contextual across sessions.
+
+**Why mandatory:** Sessions are stateless. Without hub memory, the next session must re-derive cycle context from git log and assessment files. The daily reflection is the index; the adhoc thread is the narrative. Skipping either creates a compaction gap — proven by v3.41.0 where the assessment was written but hub memory was not, and the next session lost context.
+
+Anti-pattern: ❌ "I'll write the reflection later" (compaction or session end erases the intent).
+
 ## Pre-publish gate
 
 Before committing the assessment, verify mechanically:
@@ -254,6 +271,8 @@ Before committing the assessment, verify mechanically:
 - [ ] §7 has all 6 fields: Next MCA, Owner, Branch, **First AC**, MCI frozen?, Rationale
 - [ ] §7 Closure evidence: immediate outputs listed with links, deferred outputs with issue/owner
 - [ ] CHANGELOG TSC row added or updated to match assessment scores
+- [ ] §8 Hub memory: daily reflection written and pushed to hub repo
+- [ ] §8 Hub memory: at least one adhoc thread updated (or explicit note why none applies)
 
 This gate is mechanical. Two agents checking the same template must find the same missing fields.
 
