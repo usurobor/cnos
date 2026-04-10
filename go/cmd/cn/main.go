@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/usurobor/cnos/go/internal/cli"
 )
@@ -50,7 +51,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Fix by running:\n")
 		fmt.Fprintf(os.Stderr, "  1) cn init    (to create a new hub)\n")
 		fmt.Fprintf(os.Stderr, "  2) cd <hub>   (to enter an existing hub)\n\n")
-		fmt.Fprintf(os.Stderr, "Then rerun: cn %s %s\n", cmdName, joinArgs(args))
+		fmt.Fprintf(os.Stderr, "Then rerun: cn %s %s\n", cmdName, strings.Join(args, " "))
 		os.Exit(1)
 	}
 
@@ -88,30 +89,7 @@ func makeInvocation(hubPath string, args []string) cli.Invocation {
 		Stdin:   os.Stdin,
 		Stdout:  os.Stdout,
 		Stderr:  os.Stderr,
-		Env:     envMap(),
+		// Env left nil — commands use os.Getenv directly when needed.
+		// Copying the entire env on every invocation was wasteful (F2).
 	}
-}
-
-func envMap() map[string]string {
-	m := make(map[string]string)
-	for _, e := range os.Environ() {
-		for i := 0; i < len(e); i++ {
-			if e[i] == '=' {
-				m[e[:i]] = e[i+1:]
-				break
-			}
-		}
-	}
-	return m
-}
-
-func joinArgs(args []string) string {
-	s := ""
-	for i, a := range args {
-		if i > 0 {
-			s += " "
-		}
-		s += a
-	}
-	return s
 }
