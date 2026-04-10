@@ -59,22 +59,38 @@ CDD fails through pipeline without selection or release without closure. Typical
 
 For **substantial cycles**, CDD requires **at least two agents**. A single agent cannot both author and review its own work.
 
-| Role | Steps | Identity constraint |
-|------|-------|---------------------|
-| **Author** | 0–7a | Selects gap, builds implementation, passes pre-review gate |
-| **Reviewer** | 8 | **Different agent/identity than the author** |
-| **Releaser** | 9–10 | May be author or reviewer. **Default: reviewer** (carries independent evaluation into assessment) |
-| **Assessor** | 11–13 | **Must be the releasing agent** |
-| **Implementer** *(optional, delegated)* | 6f | May be a third agent; ownership remains with the author |
+| Role | Steps | What they own | Identity constraint |
+|------|-------|---------------|---------------------|
+| **Coordinator** | 0–5, 8, 11–13 | Selects gap, files issues, writes handoffs, reviews, directs merge/release, assesses | Separate from implementor |
+| **Implementor** | 6–7a | Codes, tests, fixes review findings, passes pre-review gate | Separate from coordinator |
+| **Releaser** | 9–10 | Merges, tags, changelog, deploys, runs post-release verification | May be a third agent. **Default: delegated by coordinator** |
 
-The author may delegate implementation to a third agent (step 6f) but retains cycle ownership. The operator may reassign any role explicitly. Implicit role drift is not permitted — if the reviewer identifies a fix, they request changes; the author executes.
+#### Role separation rules
+
+- **Coordinator does not write code.** Files issues, reviews PRs, directs. Does not touch implementation files.
+- **Implementor does not merge.** Produces code, fixes findings, marks ready. Does not merge, tag, or release.
+- **Releaser executes release mechanics.** Merges on coordinator instruction, tags, updates changelog, deploys. Does not review or approve.
+- **Coordinator's review judgment stays independent** because they never touch the release machinery. The reviewer who approved is not the same agent running `git tag && git push`.
+
+#### Why three roles
+
+Two-agent (author + reviewer) conflates review judgment with release execution. The reviewer who approves ends up also merging, tagging, deploying, and assessing their own approval. Three-role separation keeps:
+
+- review independent of release mechanics
+- implementation independent of merge authority
+- assessment informed by release execution (releaser sees deploy issues)
+
+#### Operator override
+
+The operator may reassign any role explicitly. Implicit role drift is not permitted — if the coordinator identifies a fix, they request changes; the implementor executes.
 
 **Small-change exception:** A small-change cycle (§1.2) may be completed by one agent if the change qualifies under §1.2, no claim of independent review is made, and the artifact states that small-change mode was used.
 
 See CDD.md §1.4 for the full role specification.
 
-  - ❌ One agent authors, reviews, and approves its own substantial change.
-  - ✅ Author builds and self-checks; a different agent reviews; releasing agent assesses.
+  - ❌ One agent authors, reviews, merges, and assesses its own substantial change.
+  - ❌ Reviewer also runs `git tag && git push` for the release they approved.
+  - ✅ Coordinator reviews and directs; implementor codes; releaser merges and deploys on coordinator instruction.
 
 ## 2. Unfold
 
