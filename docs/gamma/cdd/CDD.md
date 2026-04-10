@@ -25,7 +25,7 @@ A release is therefore not just a bundle of outputs. It is a measured coherence 
 
 > A change is good not merely when it is implemented, but when it reduces incoherence across the system as a whole.
 
-CDD is γ at development scale.
+CDD is a triadic coherence method at development scale.
 
 ---
 
@@ -68,19 +68,60 @@ CDD exists to close that gap through coherent action.
 
 ### 1.4 Roles
 
-For **substantial cycles**, CDD requires **at least two agents** with distinct roles. A single agent cannot both author and review its own work — that collapses the coherence check into self-confirmation.
+CDD is triadic at the role level. A substantial cycle needs three distinct **verdict surfaces** over one system:
 
-| Role | Steps owned | Responsibility | Identity constraint |
-|------|-------------|----------------|---------------------|
-| **Author** | 0–7a (observe → pre-review) | Select the gap, design the fix, build the implementation, write tests, produce self-coherence report, pass pre-review gate | — |
-| **Reviewer** | 8 (review) | Verify the change closes its declared gap without creating larger incoherence. Every verdict traces to evidence in the diff and surrounding contract. | **Must be a different agent/identity than the author.** Same-identity review degrades to comments and is unenforceable (review skill §7.1). |
-| **Releaser** | 9–10 (gate → release) | Verify readiness, bump version, write changelog + release notes, tag, push, validate deployment. | May be the author or the reviewer. **Default: the reviewer**, because they already hold the independent evaluation context that the assessment (steps 11–13) requires. |
-| **Assessor** | 11–13 (observe → assess → close) | Post-release assessment: measure what shipped, score coherence, identify skill gaps, execute immediate fixes, commit deferred outputs. | **Must be the releasing agent** (post-release skill §Who). The release and its assessment are a single responsibility. |
-| **Implementer** *(optional, delegated)* | 6f | Build the delegated slice, follow the handoff constraints, produce the self-verification report, return the result to the author. | May be a third agent. Ownership of the cycle remains with the author. |
+- **α** — implementation coherence
+- **β** — integration/release coherence
+- **γ** — independent review/method coherence
 
-**Minimum configuration:** two agents — one authors, the other reviews. But authoring and reviewing the same substantial change must never be the same agent.
+These are operational roles aligned with the three coherence directions. They are not a claim that every cycle always uses three different humans.
 
-**Default release path:** Reviewer → Releaser → Assessor. The reviewer is the best default releaser because (a) they already evaluated the change independently, (b) the assessment requires the same evaluative context the review produced, and (c) having the author assess their own work weakens the independence that CDD exists to provide. The author *may* release, but the reviewer is preferred when both are available.
+| Role | Axis | Steps owned | Responsibility | Identity constraint |
+|------|------|-------------|----------------|---------------------|
+| **Author / Implementor** | α | 0–7a | Select the gap, design the fix, build the implementation, write tests, produce self-coherence, pass pre-review gate | Must be separate from γ |
+| **Integrator / Releaser** | β | 9–13 | Merge, tag, deploy, validate release state, perform post-release assessment, close the cycle | Must be separate from α |
+| **Reviewer** | γ | 8 | Review the change independently and decide **RC** (Request Changes) or **A** (Approved) | Must be separate from α |
+
+#### Triadic rule
+
+- α produces the change.
+- γ judges the change before release.
+- β integrates the change and measures what actually shipped.
+
+That is the triadic coherence pattern in CDD.
+
+#### Default flow
+
+```text
+α (author/implementor) → γ (review) → RC → back to α
+                                     → A  → forward to β (merge, tag, deploy, assess)
+```
+
+#### Minimum configuration
+
+A substantial cycle requires at least two agents: one for α and one for γ. When only two agents are available, **γ may also serve as β** — and this is the preferred default. The sequence becomes:
+
+```text
+α → γ (review) → A → γ (release + assess)
+```
+
+This preserves independent review while keeping release and assessment a single responsibility.
+
+#### Why this split
+
+Two-agent author+review is sufficient for many cycles, but review judgment and release/assessment responsibility are different coherence functions. The triadic model names that difference explicitly:
+
+- α owns the artifact
+- β owns what the system actually becomes after integration
+- γ owns independent judgment before release
+
+#### Delegated implementation
+
+A delegated implementer is still an α-side role. Delegation does not transfer ownership of the cycle.
+
+#### Operator override
+
+The operator may reassign any role explicitly. Implicit role drift is not permitted.
 
 **Small-change exception:** A small-change cycle (§1.2) may be completed by one agent when:
 
@@ -360,7 +401,7 @@ CDD is artifact-driven. For substantial changes, each lifecycle step must leave 
 
 **Primary branch artifact:** the PR body (`.github/PULL_REQUEST_TEMPLATE.md`) for L5/L6 changes, or the design artifact (design/SKILL.md §3.1) for larger changes.
 
-**Role key (§1.4):** *author* = steps 0–7a, *reviewer* = step 8 + default releaser (steps 9–10), *releaser* = steps 11–13 (must be whoever did 9–10), *implementer* = optional delegated role for steps 6c–6e/7. Merge is part of step 9 (gate + merge).
+**Role key (§1.4):** *α (author/implementor)* = steps 0–7a, *γ (reviewer)* = step 8 (RC/A decision), *β (integrator/releaser)* = steps 9–13 (merge, deploy, assess). Delegated implementer is α-side. Merge is part of step 9 (gate + merge).
 
 **Producer key:** *agent* = judgment required, *mechanical* = automatable by cnos (#94), *reviewer* = produced by the review process.
 
