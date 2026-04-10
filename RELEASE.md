@@ -2,33 +2,32 @@
 
 ## Outcome
 
-Coherence delta: C_Σ A (`α A`, `β A`, `γ A`) · **Level:** `L7`
+Coherence delta: C_Σ A (`α A`, `β A+`, `γ A`) · **Level:** `L5`
 
-Move 2 of the core refactor (#182) is complete. The pure-model extraction phase that began in v3.38.0 closes with the fourth and final slice: activation frontmatter parser + validation types into `src/lib/cn_frontmatter.ml`. Every pure type and parser in the codebase now lives in `src/lib/`; every IO function lives in `src/cmd/`. The boundary is structural, not conventional. The Go kernel rewrite (#192) has its contract.
+Doc authority convergence: the package system now has a single story. CDD self-learning loop tightened with two mechanical gates.
 
 ## Why it matters
 
-This release closes a 4-cycle architectural extraction. The boundary between pure model and IO code is now visible in the build system — `src/lib/` is a dune library that cannot import IO modules. This means the Go rewrite has a mechanically verifiable type spec to implement against, not a design doc to interpret. The CDD role model also reached its final form: reviewer → releaser → assessor is now the default path, with explicit role ownership per lifecycle step.
+The beta package-system doc claimed Git-native transport while the alpha spec and shipped code (v3.34.0+) use artifact-first distribution via package index. Any reader of the beta doc got a false picture. With the Go kernel rewrite (#192) about to begin, the docs must agree on what the kernel implements against. They now do.
+
+Separately, the v3.41.0 post-release assessment revealed a compaction gap: the assessment was written but hub memory was not, so the next session lost cycle context. The fix is MCA — a pre-publish gate check, not a "remember next time" commitment.
 
 ## Changed
 
-- **Move 2 slice 4** (#201, PR #202): `cn_frontmatter.ml` — 12 pure surface items extracted. 21 tests. 1 review round, 0 findings.
-- **Move 2 complete.** 5 pure modules in `src/lib/`. Boundary map closed.
-- **CDD §1.4 Roles**: Two-agent minimum, reviewer-default releaser, Role column in lifecycle table, small-change exception, Implementer role.
-- **CDD post-release ownership**: Releasing agent owns steps 11–13.
+- **Beta package-system doc retired** (#180): 620-line stale doc replaced with 18-line redirect stub pointing to alpha spec. Alpha doc §2.4 clarified: GitHub Releases is the current publishing surface, package index is the consumer-facing resolution authority. 4 cross-references updated.
+- **#192 Go kernel rewrite scoped**: narrow 4-phase kernel extraction (package/index/restore → command registry → doctor/status/help/update → runtime contract). Explicit non-goals: skills, A2A workflows, package-authored behavior.
 
 ## Added
 
-- **TypeScript skill** (`eng/typescript`): Schema-backed boundaries, branded primitives, explicit error policy, mutation discipline, idempotence/receipts. Registered in `cnos.eng`.
+- **CDD post-release Step 7 — Hub Memory**: daily reflection + adhoc thread update mandatory before cycle close. Two pre-publish gate checks added. CDD.md §10.1/§10.3 updated.
+- **CDD release §2.6a — Branch cleanup**: delete merged remote branches after tag+push. Mechanical, not judgment.
 
 ## Validation
 
-- CI green on all checks (ocaml build+test, protocol contract, package drift).
-- First Move 2 cycle with zero review findings — §2.5b checks 7+8 validated.
-- Post-release assessment pending (this release).
+- `scripts/check-version-consistency.sh` passes
+- 13 merged branches cleaned (51 → 37 remote branches)
+- Hub memory gate is structural: pre-publish checklist won't pass without §8 filled
 
 ## Known Issues
 
-- #192 — Go kernel rewrite (unblocked by Move 2 completion, not yet started).
-- #180 — Beta package doc retirement (Move 3, pending).
-- #193 — `llm` step execution (carried 5+ cycles).
+- 37 unmerged remote branches remain (open PRs or abandoned work — separate triage)
