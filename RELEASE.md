@@ -2,32 +2,31 @@
 
 ## Outcome
 
-Coherence delta: C_Σ A (`α A`, `β A+`, `γ A`) · **Level:** `L5`
+Coherence delta: C_Σ A (`α A`, `β A`, `γ A`) · **Level:** `L7`
 
-Doc authority convergence: the package system now has a single story. CDD self-learning loop tightened with two mechanical gates.
+First Go code in cnos. The runtime kernel rewrite begins with package restore — the most self-contained subsystem, proving the Go approach before touching command dispatch or orchestration.
 
 ## Why it matters
 
-The beta package-system doc claimed Git-native transport while the alpha spec and shipped code (v3.34.0+) use artifact-first distribution via package index. Any reader of the beta doc got a false picture. With the Go kernel rewrite (#192) about to begin, the docs must agree on what the kernel implements against. They now do.
+The OCaml toolchain has been an environmental constraint for 9+ authoring cycles. The Go kernel rewrite (#192) was blocked on Move 2 (pure type extraction) and #180 (doc authority convergence) — both now shipped. This release proves that Go can faithfully reimplement the package restore path against the `src/lib/` type spec, with structural parity in installed output.
 
-Separately, the v3.41.0 post-release assessment revealed a compaction gap: the assessment was written but hub memory was not, so the next session lost cycle context. The fix is MCA — a pre-publish gate check, not a "remember next time" commitment.
-
-## Changed
-
-- **Beta package-system doc retired** (#180): 620-line stale doc replaced with 18-line redirect stub pointing to alpha spec. Alpha doc §2.4 clarified: GitHub Releases is the current publishing surface, package index is the consumer-facing resolution authority. 4 cross-references updated.
-- **#192 Go kernel rewrite scoped**: narrow 4-phase kernel extraction (package/index/restore → command registry → doctor/status/help/update → runtime contract). Explicit non-goals: skills, A2A workflows, package-authored behavior.
+A new system boundary exists: Go module alongside OCaml. The kernel transitions; the content classes stay language-agnostic.
 
 ## Added
 
-- **CDD post-release Step 7 — Hub Memory**: daily reflection + adhoc thread update mandatory before cycle close. Two pre-publish gate checks added. CDD.md §10.1/§10.3 updated.
-- **CDD release §2.6a — Branch cleanup**: delete merged remote branches after tag+push. Mechanical, not judgment.
+- **Go kernel Phase 1** (#205, #192 umbrella): `go/` subtree with `internal/pkg/` (pure types mirroring `src/lib/cn_package.ml`) and `internal/restore/` (HTTP restore mirroring `src/cmd/cn_deps.ml`). Module: `github.com/usurobor/cnos/go`, Go 1.22, stdlib-only, zero external deps. 13 tests covering index lookup, lockfile round-trip, end-to-end restore with httptest, SHA-256 mismatch rejection, manifest validation, already-installed skip.
+- **Go CI workflow** (`.github/workflows/go.yml`): `go build`, `go test`, `go vet` on `go/**` path changes. Telegram notifications.
 
 ## Validation
 
-- `scripts/check-version-consistency.sh` passes
-- 13 merged branches cleaned (51 → 37 remote branches)
-- Hub memory gate is structural: pre-publish checklist won't pass without §8 filled
+- CI green on all 4 checks (ocaml, I1, I2/I3, go) — first push, zero draft iterations
+- `TestRestoreEndToEnd`: httptest server → download → SHA-256 verify → extract → validate manifest → same vendor path as OCaml
+- `TestReadPackageIndex`: parses live `packages/index.json` from repo
+- Directory traversal protection in `extractTarGz`
+- OCaml CI unaffected (Go workflow triggers only on `go/**` paths)
 
 ## Known Issues
 
-- 37 unmerged remote branches remain (open PRs or abandoned work — separate triage)
+- F2: `http.DefaultClient` has no timeout (OCaml: curl `--connect-timeout 10 --max-time 300`) — follow-up
+- F3: Traversal check should append `filepath.Separator` to destDir — security hardening follow-up
+- F4: `ReadLockfile`/`ReadPackageIndex` do IO in the "pure" `pkg` package — should move to `internal/restore/` to mirror `src/lib/` vs `src/cmd/` purity boundary — follow-up
