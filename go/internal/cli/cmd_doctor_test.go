@@ -17,9 +17,9 @@ func TestDoctorHealthyHub(t *testing.T) {
 	inv := Invocation{HubPath: hub, Stdout: &stdout, Stderr: &bytes.Buffer{}}
 	cmd := &DoctorCmd{Version: "3.46.0"}
 
-	// Doctor may return error (git remote, missing packages, etc.)
-	// but should not panic.
-	cmd.Run(context.Background(), inv)
+	// Run doctor. Some checks may fail (git remote, missing deps files)
+	// but the hub-structure checks should all pass for makeTestHub.
+	_ = cmd.Run(context.Background(), inv)
 
 	out := stdout.String()
 	if !strings.Contains(out, "Checking health") {
@@ -27,6 +27,13 @@ func TestDoctorHealthyHub(t *testing.T) {
 	}
 	if !strings.Contains(out, ".cn/config") {
 		t.Error("expected .cn/config check")
+	}
+	// Verify hub-structure checks pass (✓ not ✗ for config, SOUL.md, peers).
+	if strings.Contains(out, "✗ .cn/config") {
+		t.Error(".cn/config should pass for makeTestHub")
+	}
+	if strings.Contains(out, "✗ spec/SOUL.md") {
+		t.Error("spec/SOUL.md should pass (exists in makeTestHub)")
 	}
 }
 

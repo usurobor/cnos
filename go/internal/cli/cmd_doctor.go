@@ -141,7 +141,8 @@ func checkFileOptional(hubPath, rel string) checkResult {
 	if _, err := os.Stat(path); err == nil {
 		return checkResult{name: rel, passed: true, value: "exists"}
 	}
-	return checkResult{name: rel, passed: false, value: "missing (optional)"}
+	// Optional files pass with advisory text — ✓ not ✗.
+	return checkResult{name: rel, passed: true, value: "missing (optional)"}
 }
 
 func checkFilePresent(hubPath, rel, missingMsg string) checkResult {
