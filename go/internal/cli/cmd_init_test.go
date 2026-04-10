@@ -89,3 +89,47 @@ func TestInitAlreadyExists(t *testing.T) {
 		t.Error("expected 'already exists' in stderr")
 	}
 }
+
+func TestInitValidatesHubName(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{"valid bare name", "sigma", false},
+		{"with hyphens", "my-agent", false},
+		{"with underscores", "my_agent", false},
+		{"with dots", "agent.v2", false},
+		{"with digits", "bot42", false},
+		{"empty string", "", true},
+		{"path separator", "foo/bar", true},
+		{"parent traversal", "../bad", true},
+		{"backslash", `foo\bar`, true},
+		{"space", "foo bar", true},
+		{"special chars", "foo@bar", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmp := t.TempDir()
+			origDir, _ := os.Getwd()
+			t.Cleanup(func() { os.Chdir(origDir) })
+			os.Chdir(tmp)
+
+			var stdout, stderr bytes.Buffer
+			inv := Invocation{
+				Args:   []string{tt.input},
+				Stdout: &stdout,
+				Stderr: &stderr,
+			}
+
+			err := (&InitCmd{}).Run(context.Background(), inv)
+			if tt.wantErr && err == nil {
+				t.Errorf("expected error for input %q, got nil", tt.input)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("unexpected error for input %q: %v", tt.input, err)
+			}
+		})
+	}
+}
