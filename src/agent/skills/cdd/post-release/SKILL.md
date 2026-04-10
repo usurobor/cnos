@@ -80,6 +80,15 @@ The assessment produces one artifact with the following sections:
 | 12 Assess | POST-RELEASE-ASSESSMENT.md | post-release | assessment completed |
 | 13 Close | immediate fixes / next MCA issue | post-release (+ others if used) | cycle closed / deferred outputs committed |
 
+### 6a. Invariants Check
+
+If the project maintains an architectural invariants document, confirm which constraints were touched this cycle and their status:
+
+| Constraint | Touched? | Status (preserved / tightened / revised / N/A) |
+|---|---|---|
+
+If no invariants document exists, omit this section.
+
 ### 7. Next Move
 **Next MCA:** #NN — title
 **Owner:** ...
