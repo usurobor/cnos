@@ -334,31 +334,33 @@ The canonical artifact order is:
 
 CDD is artifact-driven. For substantial changes, each lifecycle step must leave one inspectable evidence surface. This table is the master reference for all step attributes.
 
-| Step | Name | Phase | Evidence | Format spec | Owner | Producer | Required | Skill |
-|------|------|-------|----------|-------------|-------|----------|----------|-------|
-| 0 | Observe | observe | CDD Trace row: inputs read, selected signal | §5.4 | primary branch artifact | agent | always | cdd |
-| 1 | Select | observe | CDD Trace row: selected gap + issue | §5.4 (trace) + `.github/ISSUE_TEMPLATE/cdd-issue.md` (issue) | primary branch artifact + issue tracker | agent | always | cdd |
-| 2 | Branch | build | valid branch name | — | branch + CDD Trace row | mechanical | always | cdd |
-| 3 | Bootstrap | build | version directory + manifest README + declared stubs | §5.1 | branch diff | mechanical | substantial only | cdd |
-| 4 | Gap | build | named incoherence / coherence contract | PR template §Gap or design/SKILL.md §3.1 | primary branch artifact | agent | always | cdd |
-| 5 | Mode | build | mode + active skills (+ bundle/level if used) | PR template §Mode or design/SKILL.md §3.1 | primary branch artifact | agent | always | cdd, eng/README |
-| 6a | Design | build | design artifact or explicit "not required" | design/SKILL.md §3.1 | primary branch artifact | agent | substantial only | design |
-| 6b | Plan | build | plan artifact or explicit "not required" | `docs/gamma/cdd/PLAN-TEMPLATE.md` | primary branch artifact or linked plan | agent | L7 / cycle-sized | design |
-| 6c | Tests | build | test files or explicit reason none apply | — (diff) | diff / primary branch artifact | agent | always | testing |
-| 6d | Code | build | implementation diff or "docs/process only" | — (diff) | diff / primary branch artifact | agent | always | active generation skills |
-| 6e | Docs | build | changed canonical docs / specs / READMEs | — (diff) | diff | agent | when docs affected | writing |
-| 6f | Delegated handoff | build | implementation prompt with: active skills, test requirements per module, engineering conventions, artifact order + self-verification report from implementer | cdd/SKILL.md §2.5a | prompt + report | delegator + implementer | when implementation is delegated | cdd |
-| 7 | Self-coherence | build | SELF-COHERENCE.md | `docs/gamma/cdd/SELF-COHERENCE-TEMPLATE.md` | version directory | agent | substantial only | cdd |
-| 7a | Pre-review | build | branch rebased onto current `main`; PR body carries CDD Trace through step 7; tests reference ACs; known debt explicit; **schema/shape audit across test fixtures** when contracts change; **workspace-global library-name uniqueness check** when adding a new `(library (name X))` stanza; **CI green on head commit** before requesting review (draft-until-green when local verification unavailable) | cdd/SKILL.md §2.5b | PR body | mechanical | always | cdd |
-| 8 | Review | review | review artifact / PR review / comment link | review/SKILL.md output format | review surface | reviewer | always | review |
-| 9 | Gate | release | gate result / release-readiness evidence | `docs/gamma/cdd/GATE-TEMPLATE.md` | release or review surface | mechanical + reviewer | always | release |
-| 10 | Release | release | CHANGELOG row, tag, release note | CHANGELOG.md ledger + release/SKILL.md | release surface | agent + mechanical | always | release, writing |
-| 11 | Observe | close | post-release observation result | post-release/SKILL.md | post-release assessment | releasing agent | always | post-release |
-| 12 | Assess | close | POST-RELEASE-ASSESSMENT.md | post-release/SKILL.md output template | version directory | releasing agent | always | post-release |
-| 12a | Skill patch | close | skill/spec patches for recurring failure modes identified in §3; synced across all surfaces (src/agent, packages/cnos.core, CDD.md) | post-release/SKILL.md §3 + cdd/SKILL.md §3.3/§3.3a | same commit as assessment | releasing agent | when §3 identifies recurring failure or skill gap | post-release, cdd |
-| 13 | Close | close | immediate outputs executed (incl. 12a patches) + deferred committed | post-release/SKILL.md §6 CDD Closeout | post-release assessment | releasing agent | always | post-release |
+| Step | Name | Phase | Role (§1.4) | Evidence | Format spec | Owner | Producer | Required | Skill |
+|------|------|-------|-------------|----------|-------------|-------|----------|----------|-------|
+| 0 | Observe | observe | author | CDD Trace row: inputs read, selected signal | §5.4 | primary branch artifact | agent | always | cdd |
+| 1 | Select | observe | author | CDD Trace row: selected gap + issue | §5.4 (trace) + `.github/ISSUE_TEMPLATE/cdd-issue.md` (issue) | primary branch artifact + issue tracker | agent | always | cdd |
+| 2 | Branch | build | author | valid branch name | — | branch + CDD Trace row | mechanical | always | cdd |
+| 3 | Bootstrap | build | author | version directory + manifest README + declared stubs | §5.1 | branch diff | mechanical | substantial only | cdd |
+| 4 | Gap | build | author | named incoherence / coherence contract | PR template §Gap or design/SKILL.md §3.1 | primary branch artifact | agent | always | cdd |
+| 5 | Mode | build | author | mode + active skills (+ bundle/level if used) | PR template §Mode or design/SKILL.md §3.1 | primary branch artifact | agent | always | cdd, eng/README |
+| 6a | Design | build | author | design artifact or explicit "not required" | design/SKILL.md §3.1 | primary branch artifact | agent | substantial only | design |
+| 6b | Plan | build | author | plan artifact or explicit "not required" | `docs/gamma/cdd/PLAN-TEMPLATE.md` | primary branch artifact or linked plan | agent | L7 / cycle-sized | design |
+| 6c | Tests | build | author (or implementer) | test files or explicit reason none apply | — (diff) | diff / primary branch artifact | agent | always | testing |
+| 6d | Code | build | author (or implementer) | implementation diff or "docs/process only" | — (diff) | diff / primary branch artifact | agent | always | active generation skills |
+| 6e | Docs | build | author (or implementer) | changed canonical docs / specs / READMEs | — (diff) | diff | agent | when docs affected | writing |
+| 6f | Delegated handoff | build | author → implementer | implementation prompt with: active skills, test requirements per module, engineering conventions, artifact order + self-verification report from implementer | cdd/SKILL.md §2.5a | prompt + report | delegator + implementer | when implementation is delegated | cdd |
+| 7 | Self-coherence | build | author (or implementer) | SELF-COHERENCE.md | `docs/gamma/cdd/SELF-COHERENCE-TEMPLATE.md` | version directory | agent | substantial only | cdd |
+| 7a | Pre-review | build | author | branch rebased onto current `main`; PR body carries CDD Trace through step 7; tests reference ACs; known debt explicit; **schema/shape audit across test fixtures** when contracts change; **workspace-global library-name uniqueness check** when adding a new `(library (name X))` stanza; **CI green on head commit** before requesting review (draft-until-green when local verification unavailable) | cdd/SKILL.md §2.5b | PR body | mechanical | always | cdd |
+| 8 | Review | review | reviewer | review artifact / PR review / comment link | review/SKILL.md output format | review surface | reviewer | always | review |
+| 9 | Gate + merge | release | reviewer (default) | gate result / release-readiness evidence + PR merge | `docs/gamma/cdd/GATE-TEMPLATE.md` | release or review surface | mechanical + reviewer | always | release |
+| 10 | Release | release | reviewer (default) | CHANGELOG row, tag, release note | CHANGELOG.md ledger + release/SKILL.md | release surface | agent + mechanical | always | release, writing |
+| 11 | Observe | close | releaser | post-release observation result | post-release/SKILL.md | post-release assessment | releasing agent | always | post-release |
+| 12 | Assess | close | releaser | POST-RELEASE-ASSESSMENT.md | post-release/SKILL.md output template | version directory | releasing agent | always | post-release |
+| 12a | Skill patch | close | releaser | skill/spec patches for recurring failure modes identified in §3; synced across all surfaces (src/agent, packages/cnos.core, CDD.md) | post-release/SKILL.md §3 + cdd/SKILL.md §3.3/§3.3a | same commit as assessment | releasing agent | when §3 identifies recurring failure or skill gap | post-release, cdd |
+| 13 | Close | close | releaser | immediate outputs executed (incl. 12a patches) + deferred committed | post-release/SKILL.md §6 CDD Closeout | post-release assessment | releasing agent | always | post-release |
 
 **Primary branch artifact:** the PR body (`.github/PULL_REQUEST_TEMPLATE.md`) for L5/L6 changes, or the design artifact (design/SKILL.md §3.1) for larger changes.
+
+**Role key (§1.4):** *author* = steps 0–7a, *reviewer* = step 8 + default releaser (steps 9–10), *releaser* = steps 11–13 (must be whoever did 9–10), *implementer* = optional delegated role for steps 6c–6e/7. Merge is part of step 9 (gate + merge).
 
 **Producer key:** *agent* = judgment required, *mechanical* = automatable by cnos (#94), *reviewer* = produced by the review process.
 
