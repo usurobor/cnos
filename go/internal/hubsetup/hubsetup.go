@@ -20,6 +20,7 @@ package hubsetup
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -107,38 +108,16 @@ func ensureDefaultDeps(path, version string, stdout io.Writer) error {
 			{Name: "cnos.eng", Version: version},
 		},
 	}
-	data, err := marshalDeps(&m)
+	data, err := json.MarshalIndent(&m, "", "  ")
 	if err != nil {
 		return fmt.Errorf("setup: marshal deps.json: %w", err)
 	}
+	data = append(data, '\n')
 	if err := os.WriteFile(path, data, 0644); err != nil {
 		return fmt.Errorf("setup: write %s: %w", path, err)
 	}
 	fmt.Fprintf(stdout, "✓ Created .cn/deps.json (profile: engineer)\n")
 	return nil
-}
-
-// marshalDeps serializes a manifest to pretty JSON with a trailing
-// newline, matching the shape written by OCaml's cn_deps.ml.
-func marshalDeps(m *pkg.Manifest) ([]byte, error) {
-	// Build JSON manually so the field order is deterministic and
-	// matches the OCaml writer. encoding/json respects struct tag
-	// order for marshaling, but keeping the format stable protects
-	// diffs across runtimes.
-	var b strings.Builder
-	b.WriteString("{\n")
-	fmt.Fprintf(&b, "  %q: %q,\n", "schema", m.Schema)
-	fmt.Fprintf(&b, "  %q: %q,\n", "profile", m.Profile)
-	b.WriteString("  \"packages\": [\n")
-	for i, p := range m.Packages {
-		fmt.Fprintf(&b, "    { %q: %q, %q: %q }", "name", p.Name, "version", p.Version)
-		if i < len(m.Packages)-1 {
-			b.WriteString(",")
-		}
-		b.WriteString("\n")
-	}
-	b.WriteString("  ]\n}\n")
-	return []byte(b.String()), nil
 }
 
 // ensureGitignoreEntry adds ".cn/vendor/" to .gitignore if it is not
