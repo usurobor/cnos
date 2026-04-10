@@ -22,9 +22,41 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/usurobor/cnos/go/internal/pkg"
 )
+
+// --- IO wrappers for pure parsers (mirrors OCaml src/cmd/ vs src/lib/ split) ---
+
+// ReadLockfile reads and parses a lockfile from disk.
+func ReadLockfile(path string) (*pkg.Lockfile, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read lockfile %s: %w", path, err)
+	}
+	return pkg.ParseLockfile(data)
+}
+
+// ReadPackageIndex reads and parses a package index from disk.
+func ReadPackageIndex(path string) (*pkg.PackageIndex, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read package index %s: %w", path, err)
+	}
+	return pkg.ParsePackageIndex(data)
+}
+
+// ValidatePackageManifest reads cn.package.json from pkgDir and
+// validates that it declares a name matching expectedName.
+func ValidatePackageManifest(pkgDir, expectedName string) error {
+	path := filepath.Join(pkgDir, "cn.package.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("missing cn.package.json: %w", err)
+	}
+	return pkg.ValidatePackageManifestData(data, expectedName)
+}
 
 // Result records the outcome of restoring one package.
 type Result struct {
@@ -38,7 +70,7 @@ type Result struct {
 // at the first failure.
 func Restore(ctx context.Context, hubPath, indexPath string) ([]Result, error) {
 	lockPath := filepath.Join(hubPath, ".cn", "deps.lock.json")
-	lf, err := pkg.ReadLockfile(lockPath)
+	lf, err := ReadLockfile(lockPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil // no lockfile = nothing to restore
@@ -49,7 +81,7 @@ func Restore(ctx context.Context, hubPath, indexPath string) ([]Result, error) {
 		return nil, nil
 	}
 
-	idx, err := pkg.ReadPackageIndex(indexPath)
+	idx, err := ReadPackageIndex(indexPath)
 	if err != nil {
 		return nil, fmt.Errorf("load package index: %w", err)
 	}
@@ -124,7 +156,7 @@ func restoreOne(ctx context.Context, hubPath string, idx *pkg.PackageIndex, dep 
 	}
 
 	// Validate cn.package.json.
-	if err := pkg.ValidatePackageManifest(pkgDir, dep.Name); err != nil {
+	if err := ValidatePackageManifest(pkgDir, dep.Name); err != nil {
 		os.RemoveAll(pkgDir) // invalid package, remove
 		r.Err = fmt.Errorf("validate %s@%s: %w", dep.Name, dep.Version, err)
 		return r
@@ -136,13 +168,19 @@ func restoreOne(ctx context.Context, hubPath string, idx *pkg.PackageIndex, dep 
 	return r
 }
 
+// httpClient is the shared HTTP client for package downloads.
+// Timeout mirrors OCaml's curl flags: --connect-timeout 10 --max-time 300.
+var httpClient = &http.Client{
+	Timeout: 300 * time.Second,
+}
+
 // downloadFile fetches url and writes it to dest.
 func downloadFile(ctx context.Context, url, dest string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("http get: %w", err)
 	}
@@ -204,9 +242,11 @@ func extractTarGz(tarball, destDir string) error {
 			return fmt.Errorf("tar next: %w", err)
 		}
 
-		// Security: prevent directory traversal.
+		// Security: prevent directory traversal. The separator suffix
+		// ensures /tmp/foo doesn't prefix-match /tmp/foobar.
 		target := filepath.Join(destDir, hdr.Name)
-		if !strings.HasPrefix(filepath.Clean(target), filepath.Clean(destDir)) {
+		cleanDest := filepath.Clean(destDir) + string(filepath.Separator)
+		if target != filepath.Clean(destDir) && !strings.HasPrefix(filepath.Clean(target), cleanDest) {
 			return fmt.Errorf("tar entry %q escapes dest dir", hdr.Name)
 		}
 

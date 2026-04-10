@@ -68,23 +68,32 @@ func TestLockfileRoundTrip(t *testing.T) {
 	}
 }
 
-func TestReadPackageIndex(t *testing.T) {
+func TestParsePackageIndex(t *testing.T) {
 	// Use the live index from the repo root.
 	repoRoot := findRepoRoot(t)
-	idx, err := ReadPackageIndex(filepath.Join(repoRoot, "packages", "index.json"))
+	data, err := os.ReadFile(filepath.Join(repoRoot, "packages", "index.json"))
 	if err != nil {
-		t.Fatalf("ReadPackageIndex: %v", err)
+		t.Fatalf("read live index: %v", err)
+	}
+	idx, err := ParsePackageIndex(data)
+	if err != nil {
+		t.Fatalf("ParsePackageIndex: %v", err)
 	}
 	if idx.Schema != "cn.package-index.v1" {
 		t.Errorf("schema = %q, want %q", idx.Schema, "cn.package-index.v1")
 	}
 	// Should have at least cnos.core
-	entry := idx.Lookup("cnos.core", "3.42.0")
-	if entry == nil {
-		t.Fatal("expected cnos.core@3.42.0 in live index")
+	// Find any cnos.core version in the live index rather than
+	// hardcoding a specific version (the index is bumped on every release).
+	coreVersions, ok := idx.Packages["cnos.core"]
+	if !ok || len(coreVersions) == 0 {
+		t.Fatal("expected cnos.core in live index with at least one version")
 	}
-	if entry.SHA256 == "" {
-		t.Error("expected non-empty sha256 for cnos.core@3.42.0")
+	for _, entry := range coreVersions {
+		if entry.SHA256 == "" {
+			t.Error("expected non-empty sha256 for cnos.core entry")
+		}
+		break // just need to verify one entry has a sha256
 	}
 }
 
@@ -109,39 +118,30 @@ func TestIsFirstParty(t *testing.T) {
 	}
 }
 
-func TestValidatePackageManifest(t *testing.T) {
+func TestValidatePackageManifestData(t *testing.T) {
 	t.Run("valid", func(t *testing.T) {
-		dir := t.TempDir()
-		writeJSON(t, filepath.Join(dir, "cn.package.json"), map[string]any{
-			"name": "cnos.core",
-		})
-		if err := ValidatePackageManifest(dir, "cnos.core"); err != nil {
+		data := []byte(`{"name": "cnos.core"}`)
+		if err := ValidatePackageManifestData(data, "cnos.core"); err != nil {
 			t.Errorf("expected nil, got %v", err)
 		}
 	})
 	t.Run("name mismatch", func(t *testing.T) {
-		dir := t.TempDir()
-		writeJSON(t, filepath.Join(dir, "cn.package.json"), map[string]any{
-			"name": "cnos.wrong",
-		})
-		err := ValidatePackageManifest(dir, "cnos.core")
+		data := []byte(`{"name": "cnos.wrong"}`)
+		err := ValidatePackageManifestData(data, "cnos.core")
 		if err == nil {
 			t.Fatal("expected error for name mismatch")
 		}
 	})
-	t.Run("missing file", func(t *testing.T) {
-		dir := t.TempDir()
-		err := ValidatePackageManifest(dir, "cnos.core")
+	t.Run("invalid json", func(t *testing.T) {
+		data := []byte(`not json`)
+		err := ValidatePackageManifestData(data, "cnos.core")
 		if err == nil {
-			t.Fatal("expected error for missing file")
+			t.Fatal("expected error for invalid json")
 		}
 	})
 	t.Run("missing name field", func(t *testing.T) {
-		dir := t.TempDir()
-		writeJSON(t, filepath.Join(dir, "cn.package.json"), map[string]any{
-			"version": "1.0.0",
-		})
-		err := ValidatePackageManifest(dir, "cnos.core")
+		data := []byte(`{"version": "1.0.0"}`)
+		err := ValidatePackageManifestData(data, "cnos.core")
 		if err == nil {
 			t.Fatal("expected error for missing name")
 		}
@@ -179,13 +179,3 @@ func findRepoRoot(t *testing.T) string {
 	}
 }
 
-func writeJSON(t *testing.T, path string, v any) {
-	t.Helper()
-	data, err := json.Marshal(v)
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
-	if err := os.WriteFile(path, data, 0644); err != nil {
-		t.Fatalf("write %s: %v", path, err)
-	}
-}
