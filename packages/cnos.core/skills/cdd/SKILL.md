@@ -59,40 +59,49 @@ CDD fails through pipeline without selection or release without closure. Typical
 
 For **substantial cycles**, CDD requires **at least two agents**. A single agent cannot both author and review its own work.
 
-| Role | Axis | Steps | What they own | Identity constraint |
-|------|------|-------|---------------|---------------------|
-| **α (Implementor)** | α | 6–7a | Codes, tests, fixes review findings, passes pre-review gate | Separate from β |
-| **β (Integrator)** | β | 0–5, 8, 11–13 | Selects gap, files issues, writes handoffs, reviews, directs merge/release, assesses | Separate from α |
-| **γ (Releaser)** | γ | 9–10 | Merges, tags, changelog, deploys, runs post-release verification | May be a third agent. **Default: delegated by β** |
+| Role | Axis | What they own | Identity constraint |
+|------|------|---------------|---------------------|
+| **α (Implementor)** | α | Produces code, tests, fixes findings | Separate from γ |
+| **β (Integrator)** | β | Merges, tags, deploys, release mechanics, post-release verification | Separate from α |
+| **γ (Reviewer)** | γ | Reviews, decides: **RC** (Request Changes) or **A** (Approved) | Separate from α and β |
 
-α creates. β integrates. γ delivers.
+α produces. β integrates. γ judges.
+
+#### Flow
+
+```
+α (code) → γ (review) → RC → back to α (fix)
+                       → A  → forward to β (merge, tag, deploy)
+```
+
+γ's verdict is the gate. **RC** sends straight back to α — not to β. **A** sends forward to β to integrate and ship.
 
 #### Role separation rules
 
-- **α does not merge.** Produces code, fixes findings, marks ready. Does not merge, tag, or release.
-- **β does not write code.** Files issues, reviews PRs, directs. Does not touch implementation files.
-- **γ executes release mechanics.** Merges on β instruction, tags, updates changelog, deploys. Does not review or approve.
-- **β's review judgment stays independent** because they never touch the release machinery. The integrator who approved is not the same agent running `git tag && git push`.
+- **α does not merge or review.** Produces code, fixes findings, marks ready.
+- **β does not write code or review.** Merges on γ's approval, tags, deploys, runs release mechanics.
+- **γ does not write code or merge.** Reviews and decides. RC or A. That's the entire job.
+- **γ's judgment stays independent** because they never touch code or release machinery.
 
 #### Why three roles
 
-Two-agent (author + reviewer) conflates integration judgment with release execution. The integrator who approves ends up also merging, tagging, deploying, and assessing their own approval. Three-role separation maps each role to the coherence axis it naturally owns:
+Two-agent (author + reviewer) conflates review judgment with release execution. Three-role separation maps each role to the coherence axis it naturally owns:
 
 - **α** owns code/architecture coherence — their output is what α scores
-- **β** owns integration coherence — their reviews and design direction are what β scores
-- **γ** owns process coherence — their merge/tag/deploy execution is what γ scores
+- **β** owns integration coherence — their merge/deploy execution is what β scores
+- **γ** owns process/method coherence — their review judgment is what γ scores
 
 #### Operator override
 
-The operator may reassign any role explicitly. Implicit role drift is not permitted — if β identifies a fix, they request changes; α executes.
+The operator may reassign any role explicitly. Implicit role drift is not permitted — if γ requests changes, α executes the fix.
 
 **Small-change exception:** A small-change cycle (§1.2) may be completed by one agent if the change qualifies under §1.2, no claim of independent review is made, and the artifact states that small-change mode was used.
 
 See CDD.md §1.4 for the full role specification.
 
   - ❌ One agent authors, reviews, merges, and assesses its own substantial change.
-  - ❌ β also runs `git tag && git push` for the release they approved.
-  - ✅ α codes; β reviews and directs; γ merges and deploys on β's instruction.
+  - ❌ The same agent that approved also runs `git tag && git push`.
+  - ✅ α codes → γ reviews (RC/A) → β ships on γ's approval.
 
 ## 2. Unfold
 
