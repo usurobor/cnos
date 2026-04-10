@@ -282,7 +282,7 @@ Check whether the change creates obligations on code it did not touch.
   - ✅ "This new step catches stale artifact references, but the check is mechanical and should move to CI/lint"
 
 2.2.13. **Project design constraints check**
-  - If the project maintains a design constraints document (e.g. `DESIGN-CONSTRAINTS.md`), load it before reviewing any substantial cycle.
+  - If the project maintains a design constraints document (e.g. `INVARIANTS.md`, `DESIGN-CONSTRAINTS.md`), load it before reviewing any substantial cycle.
   - For each constraint area touched by the diff, verify the change preserves, tightens, or explicitly revises the affected constraint.
   - Active invariants must not be violated. Transition constraints must not be moved away from. Process constraints must be followed.
   - If the diff violates a constraint without revising it, that is a D-level finding.

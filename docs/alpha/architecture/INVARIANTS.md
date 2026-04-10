@@ -3,7 +3,7 @@
 **Version:** 1.1.0
 **Status:** Active
 **Doc-Class:** constitutive
-**Canonical-Path:** `docs/alpha/DESIGN-CONSTRAINTS.md`
+**Canonical-Path:** `docs/alpha/architecture/INVARIANTS.md`
 **Owns:** architectural invariants and transition constraints that CDD must validate
 **Does-Not-Own:** implementation tactics, coding-style heuristics, release notes, or detailed migration plans
 
