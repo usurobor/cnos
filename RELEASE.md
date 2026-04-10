@@ -2,38 +2,33 @@
 
 ## Outcome
 
-Coherence delta: C_Σ A (`α A+`, `β A+`, `γ A+`) · **Level:** L7
+Coherence delta: C_Σ A+ (`α A+`, `β A`, `γ A+`) · **Level:** L5
 
-Go kernel gains `build` command — package assembly from source trees with tarball distribution. Architectural invariants are now a first-class validated surface across the full CDD lifecycle: author loads, handoff names, reviewer verifies, assessor confirms.
+Dispatch boundary enforced: cli/ is now dispatch-only with CI enforcement. Domain logic extracted to dedicated packages. INVARIANTS.md T-002 is mechanical — a `cmd_*.go` file importing `os`, `encoding/json`, or `path/filepath` fails CI.
 
 ## Why it matters
 
-This cycle closes two gaps: (1) the kernel can now build packages, completing Slice C of Phase 3, and (2) the architectural constraints that were previously implicit are now explicit, documented, and validated at every CDD touchpoint. The eng/go skill now has concrete rules for the purity boundary and dispatch boundary, both deriving from INVARIANTS.md — prevention at coding time, not just detection at review.
-
-## Added
-
-- **Go kernel `build` command** (#219, PR #220): three modes — `cn build` (assemble tarballs + index + checksums), `cn build --check` (CI drift verification), `cn build clean` (remove artifacts). Pure/IO split: `ParseManifestData` pure, `ReadManifest` IO wrapper.
-- **Architectural invariants doc** (`INVARIANTS.md`): 6 active invariants (one package substrate, language-neutral metadata, distinct runtime surfaces, kernel-owned policy, protocol above transport, hub state ≠ source), 5 transition constraints, 3 process constraints. Validated each CDD cycle.
-- **CDD invariants lifecycle**: project invariants loaded at §2.4 (pre-coding), §2.5a item 5 (handoff), review §2.2.13 (verification), post-release §6a (confirmation).
-- **eng/go §2.17**: Parse/Read purity boundary — derives from INVARIANTS.md T-004.
-- **eng/go §2.18**: cli/ dispatch boundary — derives from INVARIANTS.md T-002.
-- **Build-and-Distribution design doc**: independent package versioning (`package version ≠ binary version`), `src/packages/` → `dist/packages/` → `.cn/vendor/`, plain tarballs as artifact format.
-- **cli/ extraction issue** (#221): dispatch boundary enforcement — domain logic must leave `cli/`.
+This is the first architectural invariant enforced by machine, not just by reviewers. The leak class that produced #221 (doctor logic inline in cli/) is now impossible to reintroduce without CI failure. The CDD invariants chain (author loads → handoff names → reviewer verifies → assessor confirms → CI enforces) is complete for this constraint.
 
 ## Changed
 
-- **CDD review §2.2.13**: generic project design constraints check (any project with INVARIANTS.md gets the gate).
-- **CDD §2.5**: pre-coding gate — load engineering skills AND project invariants before writing code.
+- **cli/ extraction** (#221, PR #222): domain logic extracted from `cli/` into dedicated packages:
+  - `cmd_doctor.go` 238→44 lines → `internal/doctor/`
+  - `cmd_init.go` 131→27 lines → `internal/hubinit/`
+  - `cmd_status.go` 76→27 lines → `internal/hubstatus/`
+  - `FindIndexPath` → `internal/restore/`
+  - `cmd_deps.go` and `cmd_build.go` already correct (unchanged)
+- **CI dispatch boundary check** (`.github/workflows/go.yml`): greps `cmd_*.go` for prohibited imports. T-002 is now mechanical.
+- **INVARIANTS.md v1.2.0**: title normalized to "Architectural Invariants", stale `DESIGN-CONSTRAINTS.md` reference removed from review skill.
 
 ## Validation
 
 - Go binary builds: `cn help` lists 6 kernel commands (help, init, deps, status, doctor, build).
-- 35 Go tests pass. CI green on all checks.
-- `cn build --check` validates packages on VPS.
+- All Go tests pass (35 tests across 6 packages: cli, pkg, restore, pkgbuild, doctor, hubinit, hubstatus).
+- CI dispatch boundary check passes — no `cmd_*.go` imports prohibited packages.
 
 ## Known Issues
 
-- #221 — cli/ extraction (dispatch boundary enforcement, filed this cycle)
-- #193 — encoding lag (growing, 11 cycles)
+- #193 — encoding lag (growing, 12 cycles)
 - #186 — encoding lag (design doc shipped)
 - #175 — encoding lag (growing)
