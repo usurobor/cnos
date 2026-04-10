@@ -24,6 +24,10 @@ jobs:
         working-directory: go
         run: go build ./...
 
+      - name: Build binary
+        working-directory: go
+        run: go build -o cn ./cmd/cn
+
       - name: Test
         working-directory: go
         run: go test ./... -v
