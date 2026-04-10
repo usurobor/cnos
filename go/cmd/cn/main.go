@@ -15,8 +15,12 @@ import (
 	"github.com/usurobor/cnos/go/internal/cli"
 )
 
-// version is set at build time via -ldflags or defaults to "dev".
-var version = "dev"
+// version and commit are set at build time via -ldflags. They default
+// to placeholders so `go build ./cmd/cn` works without extra flags.
+var (
+	version = "dev"
+	commit  = ""
+)
 
 func main() {
 	ctx := context.Background()
@@ -26,10 +30,12 @@ func main() {
 	helpCmd := &cli.HelpCmd{Registry: reg}
 	reg.Register(helpCmd)
 	reg.Register(&cli.InitCmd{})
+	reg.Register(&cli.SetupCmd{Version: version})
 	reg.Register(&cli.DepsCmd{})
 	reg.Register(&cli.StatusCmd{Version: version})
 	reg.Register(&cli.DoctorCmd{Version: version})
 	reg.Register(&cli.BuildCmd{})
+	reg.Register(&cli.UpdateCmd{Version: version, Commit: commit})
 
 	// Discover hub: walk up from cwd to find .cn/.
 	hubPath := discoverHub()
