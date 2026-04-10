@@ -53,3 +53,16 @@
  (libraries cn_lib)
  (inline_tests)
  (preprocess (pps ppx_expect)))
+
+; cn_frontmatter tests (ppx_expect) — pure SKILL.md frontmatter
+; parser + activation validation types (#182 Move 2 slice 4 — final
+; slice). Library name `cn_frontmatter_test` is distinct from the
+; pre-existing `cn_activation_test` in test/cmd/dune (which covers
+; the IO-side build_index/validate); §2.5b check 7 grep verified
+; before naming.
+(library
+ (name cn_frontmatter_test)
+ (modules cn_frontmatter_test)
+ (libraries cn_lib)
+ (inline_tests)
+ (preprocess (pps ppx_expect)))
