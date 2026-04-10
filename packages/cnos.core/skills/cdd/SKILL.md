@@ -63,7 +63,7 @@ For **substantial cycles**, CDD requires **at least two agents**. A single agent
 |------|-------|---------------------|
 | **Author** | 0–7a | Selects gap, builds implementation, passes pre-review gate |
 | **Reviewer** | 8 | **Different agent/identity than the author** |
-| **Releaser** | 9–10 | May be author or reviewer |
+| **Releaser** | 9–10 | May be author or reviewer. **Default: reviewer** (carries independent evaluation into assessment) |
 | **Assessor** | 11–13 | **Must be the releasing agent** |
 | **Implementer** *(optional, delegated)* | 6f | May be a third agent; ownership remains with the author |
 

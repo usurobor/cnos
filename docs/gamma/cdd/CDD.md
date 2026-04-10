@@ -74,11 +74,13 @@ For **substantial cycles**, CDD requires **at least two agents** with distinct r
 |------|-------------|----------------|---------------------|
 | **Author** | 0–7a (observe → pre-review) | Select the gap, design the fix, build the implementation, write tests, produce self-coherence report, pass pre-review gate | — |
 | **Reviewer** | 8 (review) | Verify the change closes its declared gap without creating larger incoherence. Every verdict traces to evidence in the diff and surrounding contract. | **Must be a different agent/identity than the author.** Same-identity review degrades to comments and is unenforceable (review skill §7.1). |
-| **Releaser** | 9–10 (gate → release) | Verify readiness, bump version, write changelog + release notes, tag, push, validate deployment. | May be the author or the reviewer. |
+| **Releaser** | 9–10 (gate → release) | Verify readiness, bump version, write changelog + release notes, tag, push, validate deployment. | May be the author or the reviewer. **Default: the reviewer**, because they already hold the independent evaluation context that the assessment (steps 11–13) requires. |
 | **Assessor** | 11–13 (observe → assess → close) | Post-release assessment: measure what shipped, score coherence, identify skill gaps, execute immediate fixes, commit deferred outputs. | **Must be the releasing agent** (post-release skill §Who). The release and its assessment are a single responsibility. |
 | **Implementer** *(optional, delegated)* | 6f | Build the delegated slice, follow the handoff constraints, produce the self-verification report, return the result to the author. | May be a third agent. Ownership of the cycle remains with the author. |
 
-**Minimum configuration:** two agents — one authors, the other reviews. The author may also release and assess. The reviewer may also release and assess. But authoring and reviewing the same substantial change must never be the same agent.
+**Minimum configuration:** two agents — one authors, the other reviews. But authoring and reviewing the same substantial change must never be the same agent.
+
+**Default release path:** Reviewer → Releaser → Assessor. The reviewer is the best default releaser because (a) they already evaluated the change independently, (b) the assessment requires the same evaluative context the review produced, and (c) having the author assess their own work weakens the independence that CDD exists to provide. The author *may* release, but the reviewer is preferred when both are available.
 
 **Small-change exception:** A small-change cycle (§1.2) may be completed by one agent when:
 
