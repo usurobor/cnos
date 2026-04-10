@@ -290,29 +290,45 @@ A provider is not just a command with a different name. It may need:
 - receipt/error protocol
 - request/response framing
 
-#### 5.2 Minimal v1 provider contract
+#### 5.2 Provider declaration
 
-A provider must declare:
-
-- name
-- kind
-- version
-- entrypoint
-- capabilities
-- protocol_version
-
-Example:
+There is no separate provider manifest. Providers are declared via `cn.extension.v1` with a `capabilities` field:
 
 ```json
 {
-  "kind": "cn.provider.v1",
+  "schema": "cn.extension.v1",
   "name": "cnos.transport.git",
   "version": "0.1.0",
-  "entrypoint": "bin/git-cn-linux-x64",
-  "capabilities": ["transport.git.sync", "transport.git.packet"],
-  "protocol_version": 1
+  "interface": "cn.ext.v1",
+  "kind": "capability-provider",
+  "backend": {
+    "kind": "subprocess",
+    "command": ["bin/git-cn-linux-x64"]
+  },
+  "capabilities": [
+    "transport.git.sync",
+    "transport.git.packet"
+  ],
+  "ops": [
+    {
+      "kind": "git_sync",
+      "class": "effect",
+      "request_schema": "schemas/git_sync.json",
+      "response_format": "artifact:json"
+    }
+  ],
+  "permissions": {
+    "git": true,
+    "default_read_only": false,
+    "allow_secrets": []
+  },
+  "engines": {
+    "cnos": ">=3.40.0 <4.0.0"
+  }
 }
 ```
+
+`capabilities` is optional but strongly recommended. See RUNTIME-EXTENSIONS.md §5.1a.
 
 #### 5.3 Runtime model
 

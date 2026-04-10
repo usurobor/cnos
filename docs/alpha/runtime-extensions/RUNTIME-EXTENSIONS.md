@@ -250,6 +250,10 @@ Each extension is declared by a manifest:
     "kind": "subprocess",
     "command": ["cnos-ext-http"]
   },
+  "capabilities": [
+    "network.http.observe",
+    "network.dns.observe"
+  ],
   "ops": [
     {
       "kind": "http_get",
@@ -285,6 +289,17 @@ Each extension is declared by a manifest:
 - ops
 - permissions
 - engines
+
+### 5.1a Optional but recommended fields
+
+- **capabilities**
+
+`capabilities` names the high-level capability families the provider implements. This is not the same as `ops`:
+
+- `ops` are exact dispatchable typed operations
+- `capabilities` are higher-level families used for runtime contract rendering, doctor/status, and policy grouping
+
+First-party extensions SHOULD declare `capabilities`. If absent, the runtime MAY still load the extension but SHOULD warn in `doctor`.
 
 ### 5.2 Meaning of interface
 
