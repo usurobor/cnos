@@ -2,15 +2,15 @@
   "schema": "cn.package-index.v1",
   "packages": {
     "cnos.core": {
-      "3.48.0": {
-        "url": "https://github.com/usurobor/cnos/releases/download/3.48.0/cnos.core-3.48.0.tar.gz",
-        "sha256": "06a01c7c3293b60e87514ccfb0fc8b15ab9d96d19b186636b50bd6a0509d836e"
+      "3.49.0": {
+        "url": "https://github.com/usurobor/cnos/releases/download/3.49.0/cnos.core-3.49.0.tar.gz",
+        "sha256": "fd482458f78bd318f4896b91a915e52d48c2c2ebb2bff2ab86cda7f388cdbe0a"
       }
     },
     "cnos.eng": {
-      "3.48.0": {
-        "url": "https://github.com/usurobor/cnos/releases/download/3.48.0/cnos.eng-3.48.0.tar.gz",
-        "sha256": "7e639379fd68cc29ace8edba2c8b28b6149493ed07e3480cf640104895cc92b0"
+      "3.49.0": {
+        "url": "https://github.com/usurobor/cnos/releases/download/3.49.0/cnos.eng-3.49.0.tar.gz",
+        "sha256": "161cef6db3e0f2fa16619168cd5354bdf02a62dffe1ce5446c8fc604916e308d"
       }
     }
   }
