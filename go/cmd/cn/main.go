@@ -15,6 +15,9 @@ import (
 	"github.com/usurobor/cnos/go/internal/cli"
 )
 
+// version is set at build time via -ldflags or defaults to "dev".
+var version = "dev"
+
 func main() {
 	ctx := context.Background()
 
@@ -22,7 +25,9 @@ func main() {
 	reg := cli.NewRegistry()
 	helpCmd := &cli.HelpCmd{Registry: reg}
 	reg.Register(helpCmd)
+	reg.Register(&cli.InitCmd{})
 	reg.Register(&cli.DepsCmd{})
+	reg.Register(&cli.StatusCmd{Version: version})
 
 	// Discover hub: walk up from cwd to find .cn/.
 	hubPath := discoverHub()
