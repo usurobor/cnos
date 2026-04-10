@@ -585,6 +585,7 @@ These must be executed within the same cycle:
 - issue filing required by the assessment
 - lag-table updates
 - metadata fixes
+- hub memory writes: daily reflection (cycle state, scoring, MCI status) and adhoc thread update (which ongoing thread this release advances)
 
 Skill/spec patches produced as immediate outputs must pass CLP β: does this change create a mismatch with any canonical or derived surface? If the edited artifact has a paired authority surface (executable skill ↔ canonical spec), both must be updated in the same commit.
 
@@ -602,7 +603,7 @@ These may become the next cycle's work, but must be committed concretely:
 
 A cycle closes only when:
 
-- all immediate outputs are executed
+- all immediate outputs are executed (including hub memory writes)
 - all deferred outputs are captured as explicit next-cycle commitments
 - cycle iteration (§9.1) is present if any trigger fired
 
