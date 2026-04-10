@@ -479,6 +479,21 @@ Mechanical findings reaching review are **process bugs**. If mechanical findings
 - **Approved:** Reviewer merges (or signals merge-ready per repo workflow), branch cleaned up
 - **Changes requested:** Author fixes, re-requests; reviewer narrows on the next round
 
+### 7.0. All findings must be resolved before merge
+
+Every finding (A/B/C/D) must be fixed by the author on the branch before merge. There is no "approved with follow-up" — findings that ship unresolved become untracked debt. The pattern of deferring B/C findings to follow-up issues adds a cycle of overhead (new issue, new branch, new review) for work that is faster to do in-place.
+
+- **D findings:** already block merge (REQUEST CHANGES)
+- **C findings:** must be fixed on the branch before merge. If the reviewer approved with C notes, the author pushes fixes and the reviewer verifies in a narrowing round.
+- **B findings:** must be fixed on the branch before merge. These are small improvements — faster to fix now than to track.
+- **A findings:** must be fixed on the branch before merge. Polish is cheapest in context.
+
+The only exception: a finding that requires a design decision outside the scope of the current issue. In that case, the reviewer explicitly names it as "deferred by design scope" in the review, and the author files the issue before merge.
+
+- ❌ "APPROVED — F2/F3 are non-blocking, can be follow-up"
+- ✅ "APPROVED — 3 findings. Author: fix all on-branch, ping for re-check."
+- ✅ "APPROVED — F4 requires a design decision on purity boundaries outside this issue's scope. Author: file issue before merge. F1–F3: fix on-branch."
+
 ### 7.1. Review identity
 
 The reviewer must have a different GitHub identity than the PR author so that:
