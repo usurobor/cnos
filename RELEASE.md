@@ -2,39 +2,33 @@
 
 ## Outcome
 
-Coherence delta: C_Σ A (`α A`, `β A`, `γ A`) · **Level:** `L6`
+Coherence delta: C_Σ A (`α A`, `β A`, `γ A`) · **Level:** `L7`
 
-The pure model layer in `src/lib/` doubled from 2 modules to 4, now covering the two largest pure surfaces in the codebase: runtime contract types and workflow IR. The CDD pre-review gate gained two new mechanical checks that close the failure classes from the previous two cycles. A Go skill was converged to govern the upcoming kernel rewrite.
+Move 2 of the core refactor (#182) is complete. The pure-model extraction phase that began in v3.38.0 closes with the fourth and final slice: activation frontmatter parser + validation types into `src/lib/cn_frontmatter.ml`. Every pure type and parser in the codebase now lives in `src/lib/`; every IO function lives in `src/cmd/`. The boundary is structural, not conventional. The Go kernel rewrite (#192) has its contract.
 
 ## Why it matters
 
-Move 2 of the core refactor (#182) is 3/4 complete. The boundary between pure model and IO code is now structurally visible in 4 of 5 target modules. This boundary map is the contract the Go rewrite (#192) will implement against. The type-equality re-export pattern has been validated at scale — including 6-variant and 7-variant types with inline-record payloads. The CDD gate tightening (#198) means future slices will not leak mechanical failures into review rounds.
-
-## Added
-
-- **Go skill** (`eng/go`): Runtime/kernel Go craft skill for cnos, converged through 4 iterations. Registered in `cnos.eng`.
-- **CDD §2.5b checks 7+8** (#198): Library-name uniqueness + CI-green-before-review.
-- **Telegram CI notifications**: All 3 workflows notify on success/failure.
+This release closes a 4-cycle architectural extraction. The boundary between pure model and IO code is now visible in the build system — `src/lib/` is a dune library that cannot import IO modules. This means the Go rewrite has a mechanically verifiable type spec to implement against, not a design doc to interpret. The CDD role model also reached its final form: reviewer → releaser → assessor is now the default path, with explicit role ownership per lifecycle step.
 
 ## Changed
 
-- **Move 2 slice 2** (#194, PR #195): 11 runtime contract types → `src/lib/cn_contract.ml`. 13 tests. 2 review rounds.
-- **Move 2 slice 3** (#196, PR #197): 6 types + 10 pure functions → `src/lib/cn_workflow_ir.ml`. 20 tests. 2 review rounds.
-- **CORE-REFACTOR.md §7**: stderr discipline documented. v3.39.0 + v3.40.0 status blocks.
-- **`src/lib/`**: 4 pure modules. Move 2 is 3/4 complete.
+- **Move 2 slice 4** (#201, PR #202): `cn_frontmatter.ml` — 12 pure surface items extracted. 21 tests. 1 review round, 0 findings.
+- **Move 2 complete.** 5 pure modules in `src/lib/`. Boundary map closed.
+- **CDD §1.4 Roles**: Two-agent minimum, reviewer-default releaser, Role column in lifecycle table, small-change exception, Implementer role.
+- **CDD post-release ownership**: Releasing agent owns steps 11–13.
 
-## Fixed
+## Added
 
-- Go skill package placement (cnos.core → cnos.eng).
-- v3.38.0 lag table TBD → #193.
+- **TypeScript skill** (`eng/typescript`): Schema-backed boundaries, branded primitives, explicit error policy, mutation discipline, idempotence/receipts. Registered in `cnos.eng`.
 
 ## Validation
 
-- CI green on all 3 checks (ocaml build+test, protocol contract, package drift).
-- Post-release assessments pending (#199).
+- CI green on all checks (ocaml build+test, protocol contract, package drift).
+- First Move 2 cycle with zero review findings — §2.5b checks 7+8 validated.
+- Post-release assessment pending (this release).
 
 ## Known Issues
 
-- #199 — stacked v3.39.0 + v3.40.0 post-release assessments not yet written.
-- #182 — Move 2 slice 4 (activation evaluator) remaining.
-- #180 — beta package doc retirement (Move 3) pending.
+- #192 — Go kernel rewrite (unblocked by Move 2 completion, not yet started).
+- #180 — Beta package doc retirement (Move 3, pending).
+- #193 — `llm` step execution (carried 5+ cycles).
