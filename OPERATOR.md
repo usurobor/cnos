@@ -141,7 +141,7 @@ cn deps update                 # re-resolve and update lockfile
 
 Desired state: `.cn/deps.json`. Resolved state: `.cn/deps.lock.json`. Installed: `.cn/vendor/packages/`.
 
-See [PACKAGE-SYSTEM.md](docs/beta/architecture/PACKAGE-SYSTEM.md).
+See [PACKAGE-SYSTEM.md](docs/alpha/package-system/PACKAGE-SYSTEM.md).
 
 ### Peers
 
