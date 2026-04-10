@@ -59,38 +59,40 @@ CDD fails through pipeline without selection or release without closure. Typical
 
 For **substantial cycles**, CDD requires **at least two agents**. A single agent cannot both author and review its own work.
 
-| Role | Steps | What they own | Identity constraint |
-|------|-------|---------------|---------------------|
-| **Coordinator** | 0–5, 8, 11–13 | Selects gap, files issues, writes handoffs, reviews, directs merge/release, assesses | Separate from implementor |
-| **Implementor** | 6–7a | Codes, tests, fixes review findings, passes pre-review gate | Separate from coordinator |
-| **Releaser** | 9–10 | Merges, tags, changelog, deploys, runs post-release verification | May be a third agent. **Default: delegated by coordinator** |
+| Role | Axis | Steps | What they own | Identity constraint |
+|------|------|-------|---------------|---------------------|
+| **α (Implementor)** | α | 6–7a | Codes, tests, fixes review findings, passes pre-review gate | Separate from β |
+| **β (Integrator)** | β | 0–5, 8, 11–13 | Selects gap, files issues, writes handoffs, reviews, directs merge/release, assesses | Separate from α |
+| **γ (Releaser)** | γ | 9–10 | Merges, tags, changelog, deploys, runs post-release verification | May be a third agent. **Default: delegated by β** |
+
+α creates. β integrates. γ delivers.
 
 #### Role separation rules
 
-- **Coordinator does not write code.** Files issues, reviews PRs, directs. Does not touch implementation files.
-- **Implementor does not merge.** Produces code, fixes findings, marks ready. Does not merge, tag, or release.
-- **Releaser executes release mechanics.** Merges on coordinator instruction, tags, updates changelog, deploys. Does not review or approve.
-- **Coordinator's review judgment stays independent** because they never touch the release machinery. The reviewer who approved is not the same agent running `git tag && git push`.
+- **α does not merge.** Produces code, fixes findings, marks ready. Does not merge, tag, or release.
+- **β does not write code.** Files issues, reviews PRs, directs. Does not touch implementation files.
+- **γ executes release mechanics.** Merges on β instruction, tags, updates changelog, deploys. Does not review or approve.
+- **β's review judgment stays independent** because they never touch the release machinery. The integrator who approved is not the same agent running `git tag && git push`.
 
 #### Why three roles
 
-Two-agent (author + reviewer) conflates review judgment with release execution. The reviewer who approves ends up also merging, tagging, deploying, and assessing their own approval. Three-role separation keeps:
+Two-agent (author + reviewer) conflates integration judgment with release execution. The integrator who approves ends up also merging, tagging, deploying, and assessing their own approval. Three-role separation maps each role to the coherence axis it naturally owns:
 
-- review independent of release mechanics
-- implementation independent of merge authority
-- assessment informed by release execution (releaser sees deploy issues)
+- **α** owns code/architecture coherence — their output is what α scores
+- **β** owns integration coherence — their reviews and design direction are what β scores
+- **γ** owns process coherence — their merge/tag/deploy execution is what γ scores
 
 #### Operator override
 
-The operator may reassign any role explicitly. Implicit role drift is not permitted — if the coordinator identifies a fix, they request changes; the implementor executes.
+The operator may reassign any role explicitly. Implicit role drift is not permitted — if β identifies a fix, they request changes; α executes.
 
 **Small-change exception:** A small-change cycle (§1.2) may be completed by one agent if the change qualifies under §1.2, no claim of independent review is made, and the artifact states that small-change mode was used.
 
 See CDD.md §1.4 for the full role specification.
 
   - ❌ One agent authors, reviews, merges, and assesses its own substantial change.
-  - ❌ Reviewer also runs `git tag && git push` for the release they approved.
-  - ✅ Coordinator reviews and directs; implementor codes; releaser merges and deploys on coordinator instruction.
+  - ❌ β also runs `git tag && git push` for the release they approved.
+  - ✅ α codes; β reviews and directs; γ merges and deploys on β's instruction.
 
 ## 2. Unfold
 
