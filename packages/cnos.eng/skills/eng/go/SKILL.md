@@ -460,6 +460,55 @@ Do not let core/runtime packages smear these concepts together.
 
 The kernel stays minimal. Package-driven commands are preferred over built-ins. Core should not accrete convenience commands casually. Mechanical first, semantic second — the kernel resolves, validates, registers, dispatches, and enforces policy. It does not do hidden interpretation or "smart" inference when explicit metadata should exist.
 
+### 2.17. Purity boundary: Parse vs Read
+
+*Derives from: INVARIANTS.md T-004 (source/artifact/installed explicit)*
+
+Pure functions operate on bytes/data. IO functions operate on paths/network. Keep them separate.
+
+```go
+// Pure — no os imports, no IO
+func ParseManifestData(data []byte) (*PackageManifest, error)
+
+// IO wrapper — calls pure function
+func ReadManifest(path string) (*PackageManifest, error) {
+    data, err := os.ReadFile(path)
+    if err != nil { return nil, err }
+    return ParseManifestData(data)
+}
+```
+
+This mirrors the OCaml `src/lib/` (pure) vs `src/cmd/` (IO) discipline.
+
+- ❌ `func ParseManifest(path string)` — mixes file IO with parsing
+- ✅ `func ParseManifestData(data []byte)` pure + `func ReadManifest(path string)` IO wrapper
+- ❌ `internal/pkg/` importing `os`
+- ✅ `internal/pkg/` has zero `os` imports; all IO enters through explicit wrappers elsewhere
+
+**Rule:** `Parse*` takes `[]byte`, returns typed data. `Read*` takes a path, calls `Parse*`. No mixing.
+
+### 2.18. Dispatch boundary: cli/ owns dispatch only
+
+*Derives from: INVARIANTS.md T-002 (kernel remains minimal and trusted)*
+
+`cli/` contains: types (`CommandSpec`, `Invocation`, `Command`, `Registry`) and thin command wrappers. Domain logic lives in domain packages.
+
+```
+internal/cli/         # dispatch only — types, registry, thin cmd_*.go wrappers
+internal/doctor/      # doctor check logic
+internal/pkgbuild/    # build pipeline logic
+internal/restore/     # deps restore logic
+internal/hubinit/     # hub creation logic
+internal/hubstatus/   # status display logic
+```
+
+- ❌ `cmd_doctor.go` with 238 lines of check logic inline in `cli/`
+- ✅ `cmd_doctor.go` as a 20-line wrapper calling `doctor.Run()`
+- ❌ Any `cmd_*.go` in `cli/` with more than ~30 lines of domain logic
+- ✅ Domain logic extracted to its own package, `cmd_*.go` delegates
+
+**Rule:** If a command's logic exceeds a thin wrapper, extract it to a domain package. `cli/` owns dispatch. Domain packages own logic.
+
 ---
 
 ## 3. Rules

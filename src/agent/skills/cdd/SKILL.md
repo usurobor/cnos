@@ -183,6 +183,13 @@ For substantial changes:
 
 Do not invert the order casually. Each step should reduce uncertainty for the next.
 
+**Pre-coding gate (before step 5):** Before writing code, confirm:
+- Active engineering skills are loaded (not just named — read the SKILL.md files)
+- Project invariants are loaded and affected constraints identified (§2.4)
+- Engineering skill rules that derive from those invariants are understood (e.g. eng/go §2.17 derives from INVARIANTS.md T-004, §2.18 derives from T-002)
+
+This gate exists because implementation agents produce correct features with wrong boundaries when invariants are loaded at review time but not at coding time.
+
 ### 2.5a Delegated implementation handoff
 
 When implementation is delegated to another agent (Claude Code, sub-agent, human contractor), the prompt or brief is the contract. The receiving agent does not have session context, prior cycle learnings, or loaded skills.
