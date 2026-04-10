@@ -1,6 +1,6 @@
-# cnos Design Constraints
+# cnos Architectural Invariants
 
-**Version:** 1.1.0
+**Version:** 1.2.0
 **Status:** Active
 **Doc-Class:** constitutive
 **Canonical-Path:** `docs/alpha/architecture/INVARIANTS.md`
