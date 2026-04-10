@@ -292,6 +292,82 @@ Check whether the change creates obligations on code it did not touch.
   - ✅ "Diff adds `cn.provider.v1` manifest — INV-001 (one package substrate) would be violated. Either use `cn.extension.v1` or explicitly revise the constraint. D finding."
   - ✅ "Diff moves doctor logic inline into cli/ — T boundary (cli/ owns dispatch) not yet a hard invariant but transition direction is away. C finding."
 
+2.2.14. **Architecture and design-principles check**
+  - Use this check when the change touches any of:
+    - package boundaries
+    - command / provider / orchestrator / skill separation
+    - source / artifact / installed-state flow
+    - registry design
+    - kernel vs package responsibility
+    - transport vs protocol semantics
+    - command dispatch vs domain logic
+  - Load `eng/design-principles` when this check is active.
+  - Check the change against these questions:
+
+  #### A. Reason to change
+  - Does each touched module/package/boundary still have one real reason to change?
+  - Has any boundary become a convenience bucket rather than a responsibility boundary?
+  - ❌ CLI wrapper now contains dispatch, doctor logic, and package resolution
+  - ✅ CLI wrapper dispatches; domain packages own doctor and package logic
+
+  #### B. Policy above detail
+  - Does policy remain in the kernel/core?
+  - Can a package/provider widen its own authority or rewrite precedence/routing/permissions?
+  - ❌ Package/provider decides its own effective authority
+  - ✅ Kernel remains the policy decision point
+
+  #### C. Truthful interface
+  - Does each interface promise only what all implementations can actually support?
+  - Are unrelated runtime surfaces being collapsed into one interface?
+  - ❌ One interface for both commands and providers because both "run things"
+  - ✅ Command dispatch and provider protocol remain separate contracts
+
+  #### D. Registry normalization
+  - Do different source forms still normalize into one runtime descriptor model?
+  - Do help / doctor / status / runtime contract reveal the same registry truth?
+  - ❌ Kernel commands and package commands use unrelated registration models
+  - ✅ One runtime descriptor, multiple source forms
+
+  #### E. Source / artifact / installed clarity
+  - Is it still clear what is authored, what is built, and what is installed?
+  - Has any derived layer started acting like source?
+  - ❌ Edit generated package output as if it were authored source
+  - ✅ Source, artifact, and installed state remain explicit and distinct
+
+  #### F. Surface separation
+  - Are skills, commands, orchestrators, and providers still distinct?
+  - Is transport implementation still distinct from protocol semantics?
+  - ❌ Command activation by keyword like a skill
+  - ❌ Provider treated as just a hidden command
+  - ✅ Each surface keeps its own contract and runtime role
+
+  #### G. Degraded-path visibility
+  - If the change introduces fallback or degraded behavior, is it visible and testable?
+  - Does doctor / status / receipts expose it when needed?
+  - ❌ Fallback exists only in code comments
+  - ✅ Fallback is explicit, testable, and inspectable
+
+  **Rules:**
+  - Any silent architectural boundary smear is a blocking finding.
+  - Any silent source-of-truth duplication is a blocking finding.
+  - If a change intentionally tightens or revises a design constraint, the review must name that explicitly rather than treating it as preservation.
+
+  **Output block** (include when §2.2.14 is active):
+
+  ```
+  ## Architecture Check
+
+  | Check | Result | Notes |
+  |---|---|---|
+  | Reason to change preserved | yes / no / n/a | |
+  | Policy above detail preserved | yes / no / n/a | |
+  | Interfaces remain truthful | yes / no / n/a | |
+  | Registry model remains unified | yes / no / n/a | |
+  | Source / artifact / installed boundary preserved | yes / no / n/a | |
+  | Runtime surfaces remain distinct | yes / no / n/a | |
+  | Degraded paths visible and testable | yes / no / n/a | |
+  ```
+
 ---
 
 ### 2.3. Verdict — the judgment
@@ -321,7 +397,12 @@ The verdict is a function of the worst named incoherence.
   - ❌ "Fix git_status"
   - ✅ "Positive: show src/ changes. Negative: hide .cn/, state/, logs/."
 
-2.3.5. **Close the search space on approval**
+2.3.5. **Architecture Check gate**
+  - If the Architecture Check (§2.2.14) contains any "no", the review cannot conclude "approve" without an explicit issue-backed redesign or scope reduction.
+  - ❌ "APPROVED" with Architecture Check showing "no" on surface separation
+  - ✅ "REQUEST CHANGES — Architecture Check F (surface separation) failed. File redesign issue or reduce scope."
+
+2.3.7. **Close the search space on approval**
   - Approval explicitly states that no remaining blocker was found in the relevant contract.
   - ❌ "APPROVED"
   - ✅ "APPROVED — I do not see a remaining blocker in the executor/sandbox contract"
