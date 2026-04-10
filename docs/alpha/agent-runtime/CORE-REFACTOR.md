@@ -444,7 +444,7 @@ This refactor does not:
 - `docs/alpha/package-system/PACKAGE-SYSTEM.md`
 - `docs/alpha/package-system/PACKAGE-ARTIFACTS.md`
 - `docs/alpha/runtime-extensions/RUNTIME-EXTENSIONS.md`
-- `docs/beta/architecture/PACKAGE-SYSTEM.md`
+- `docs/beta/architecture/PACKAGE-SYSTEM.md` (retired — see alpha spec)
 - `src/cmd/cn_runtime_contract.ml`
 - Package build/install code to support commands and orchestrators through the same pipeline
 

@@ -6,7 +6,7 @@
 **Status:** Draft
 **Addresses:** #119 (template distribution), build-system content model
 **Related:**
-- docs/beta/architecture/PACKAGE-SYSTEM.md (system-level design)
+- docs/beta/architecture/PACKAGE-SYSTEM.md (retired — redirect stub)
 - docs/alpha/cognitive-substrate/COGNITIVE-SUBSTRATE.md (asset taxonomy)
 - docs/alpha/runtime-extensions/RUNTIME-EXTENSIONS.md (extension model)
 
@@ -17,8 +17,7 @@
 This document defines the set of content classes that `cn build` knows how
 to assemble from `src/agent/` into distributable packages. It covers only
 the build-system content pipeline -- not profiles, resolution, registry,
-or other package-system layers (see docs/beta/architecture/PACKAGE-SYSTEM.md
-for the full system design).
+or other package-system layers (see §2.4 below for the distribution model).
 It answers:
 
 1. What kinds of content can a package distribute?
@@ -151,8 +150,10 @@ spec/SOUL.md (in hub)
 
 ### 2.4 Install (cn deps restore)
 
-First-party packages are distributed as versioned tarball artifacts
-published to GitHub releases. The restore flow is:
+First-party packages are distributed as versioned tarball artifacts.
+GitHub Releases is the current publishing/hosting surface, not the
+long-term consumer endpoint — the package index abstracts the URL,
+so hosting can move without changing any consumer. The restore flow is:
 
 1. Read the lockfile (`.cn/deps.lock.json`) — name + version + sha256 per package
 2. Look the name+version up in the package index (`packages/index.json`) for a URL
