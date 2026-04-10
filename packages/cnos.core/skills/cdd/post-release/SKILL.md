@@ -14,6 +14,8 @@ After every release, assess what shipped, what the system looks like now, and wh
 
 **The agent that performed the release (steps 9–10) owns the post-release assessment (steps 11–13).** The release and its assessment are a single responsibility — splitting them across agents or sessions creates a handoff gap where cycle context is lost. If the releasing agent's session ends before the assessment is complete, the assessment is the first task of its next session, not a task for a different agent.
 
+**Default: the reviewer releases.** The reviewer already holds the independent evaluation context that the assessment requires. Having the author release and assess their own work weakens the independence CDD exists to provide. See CDD.md §1.4 for the full rationale.
+
 Exception: the operator may explicitly reassign the assessment to another agent. The reassignment must name the target agent and the reason.
 
 ## When
