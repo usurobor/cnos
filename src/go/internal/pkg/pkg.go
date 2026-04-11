@@ -1,14 +1,14 @@
 // Package pkg defines the pure types for cnos package management:
 // manifest, lockfile, package index, and their JSON serialization.
 //
-// This is the Go equivalent of src/lib/cn_package.ml — no IO, only
+// This is the Go equivalent of src/ocaml/lib/cn_package.ml — no IO, only
 // types + JSON + pure helpers. The types and field names match the
 // OCaml definitions so Go and OCaml produce structurally identical
 // JSON for the same data.
 //
 // Discipline: this package imports only encoding/json and fmt.
 // No os, no net, no io — file reading lives in internal/restore/,
-// mirroring the OCaml split (src/lib/ = pure, src/cmd/ = IO).
+// mirroring the OCaml split (src/ocaml/lib/ = pure, src/ocaml/cmd/ = IO).
 package pkg
 
 import (

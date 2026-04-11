@@ -93,8 +93,8 @@ gate_package_sync() {
   fi
 
   local cn_bin=""
-  if [[ -f "_build/default/src/cli/cn.exe" ]]; then
-    cn_bin="_build/default/src/cli/cn.exe"
+  if [[ -f "_build/default/src/ocaml/cli/cn.exe" ]]; then
+    cn_bin="_build/default/src/ocaml/cli/cn.exe"
   else
     fail "cn binary not found after dune build"
     errors=$((errors + 1))

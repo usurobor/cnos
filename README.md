@@ -156,6 +156,7 @@ cnos/
       doctrine/        Core doctrine (FOUNDATIONS, CAP, COHERENCE, ...)
       mindsets/        Behavioral frames (ENGINEERING, PM, WISDOM, ...)
       skills/          Task-specific skills (agent/, cdd/, eng/, ops/)
+    ocaml/             Legacy OCaml runtime (ceased — retained until Phase 5 deletion)
   dist/                All built output
     packages/          Package tarballs + index + checksums
     bin/               Platform binaries (linux/macos × x64/arm64)

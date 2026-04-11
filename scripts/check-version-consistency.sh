@@ -43,7 +43,7 @@ for pkg in cnos.core cnos.eng; do
 done
 
 # 3. cn_lib.ml should NOT contain a hardcoded version string
-CN_LIB="$REPO_ROOT/src/lib/cn_lib.ml"
+CN_LIB="$REPO_ROOT/src/ocaml/lib/cn_lib.ml"
 if grep -q 'let version = "' "$CN_LIB"; then
   HARDCODED=$(grep 'let version = "' "$CN_LIB" | head -1 | sed 's/.*"\(.*\)"/\1/')
   echo "FAIL: cn_lib.ml has hardcoded version '$HARDCODED' — should read from Cn_version.version"

@@ -91,7 +91,7 @@ func Run(ctx context.Context, opts Options) error {
 // ensureDefaultDeps writes a default deps.json at path if none exists.
 // The default manifest pins cnos.core and cnos.eng to the given version
 // under the "engineer" profile. Matches
-// Cn_deps.default_manifest_for_profile in src/cmd/cn_deps.ml.
+// Cn_deps.default_manifest_for_profile in src/ocaml/cmd/cn_deps.ml.
 func ensureDefaultDeps(path, version string, stdout io.Writer) error {
 	if _, err := os.Stat(path); err == nil {
 		// Present — preserve.
