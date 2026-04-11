@@ -147,19 +147,28 @@ Design docs:
 
 ```
 cnos/
-  go/
+  go/                  Go CLI (the active codebase)
     cmd/cn/            CLI entrypoint
-    internal/          Go packages (cli, doctor, hubinit, hubstatus,
-                       hubsetup, binupdate, pkgbuild, pkg, restore)
-  src/agent/           Source of truth for cognitive content
-    doctrine/          Core doctrine (FOUNDATIONS, CAP, COHERENCE, ...)
-    mindsets/          Behavioral frames (ENGINEERING, PM, WISDOM, ...)
-    skills/            Task-specific skills (agent/, cdd/, eng/, ops/)
-  packages/            Built output — assembled by 'cn build'
+    internal/          Packages: cli, doctor, hubinit, hubstatus,
+                       hubsetup, binupdate, pkgbuild, pkg, restore
+  src/                 Source
+    agent/             Cognitive content (source of truth)
+      doctrine/        Core doctrine (FOUNDATIONS, CAP, COHERENCE, ...)
+      mindsets/        Behavioral frames (ENGINEERING, PM, WISDOM, ...)
+      skills/          Task-specific skills (agent/, cdd/, eng/, ops/)
+    cli/               Legacy OCaml CLI (ceased)
+    cmd/               Legacy OCaml runtime modules (ceased)
+    lib/               Legacy OCaml types and FSMs (ceased)
+  packages/            Intermediate build — assembled by 'cn build' from src/agent/
     cnos.core/         Doctrine, mindsets, core skills
     cnos.eng/          Engineering skills
+  dist/                Distribution output
+    packages/          Release-ready package tarballs
   profiles/            Setup-time presets (engineer, pm)
+  scripts/             Build and release scripts
+  spec/                SOUL.md, USER.md — cnos project identity
   docs/                Documentation (triadic: α pattern, β relation, γ evolution)
+  test/                Tests
 ```
 
 ### Agent hub (created by `cn init` + `cn setup`)
