@@ -3,7 +3,7 @@ package cli
 import (
 	"context"
 
-	"github.com/usurobor/cnos/go/internal/hubstatus"
+	"github.com/usurobor/cnos/src/go/internal/hubstatus"
 )
 
 // StatusCmd implements the "status" command — shows hub info + installed packages.

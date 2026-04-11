@@ -168,8 +168,8 @@ func findRepoRoot(t *testing.T) string {
 	}
 	for {
 		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			// dir is go/; repo root is parent
-			return filepath.Dir(dir)
+			// dir is src/go/; repo root is two levels up
+			return filepath.Dir(filepath.Dir(dir))
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/usurobor/cnos/go/internal/doctor"
+	"github.com/usurobor/cnos/src/go/internal/doctor"
 )
 
 // DoctorCmd implements the "doctor" command — validates hub health.

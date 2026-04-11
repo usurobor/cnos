@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/usurobor/cnos/go/internal/pkg"
+	"github.com/usurobor/cnos/src/go/internal/pkg"
 )
 
 // makeTarGz creates a .tar.gz in memory containing the given files

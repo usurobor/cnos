@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/usurobor/cnos/go/internal/binupdate"
+	"github.com/usurobor/cnos/src/go/internal/binupdate"
 )
 
 // UpdateCmd implements the "update" command — checks GitHub Releases
