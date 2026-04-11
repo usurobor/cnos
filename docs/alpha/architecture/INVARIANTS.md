@@ -137,12 +137,14 @@ The kernel owns bootstrap, registries, policy, protocol semantics, and runtime s
 
 ---
 
-### T-003 — Go is the kernel implementation language
+### T-003 — Go is the sole implementation language
 
-The trusted kernel is monolingual Go. No CGo. No embedded interpreters. No dynamic loading.
+The trusted kernel is monolingual Go. No CGo. No embedded interpreters. No dynamic loading. OCaml is ceased — no OCaml CI, no OCaml releases, no OCaml changes. The existing OCaml source remains in-tree as dead code until Go Phase 5 replaces the full runtime, at which point it is deleted.
 
 **Validation:**
 
+- all CI, release, and coherence workflows use Go exclusively
+- no OCaml build or test steps in any workflow
 - kernel build remains pure-Go
 - non-Go behavior lives at package/provider boundaries, not inside kernel internals
 
@@ -238,7 +240,7 @@ Constraints are validated by owner surface and cadence.
 | INV-006 Hub runtime state is not source | doctor + review | continuous + every cycle touching source/build/runtime boundaries |
 | T-001 Kernel is package-compatible | build/check + review | every kernel/package model cycle |
 | T-002 Kernel remains minimal | review + post-release | every kernel/built-in command cycle |
-| T-003 Go kernel | CI/build | every Go-kernel cycle |
+| T-003 Go sole language | CI/build/release | every cycle (OCaml ceased) |
 | T-004 Source/artifact/installed explicit | build/check + review | every package/build/restore cycle |
 | T-005 Content classes explicit and finite | design + review | every cycle touching package content classes |
 | P-001 Two-agent minimum | PR/review trail | every substantial cycle |
