@@ -27,17 +27,17 @@ import (
 	"github.com/usurobor/cnos/src/go/internal/pkg"
 )
 
-// FindIndexPath walks up from hubPath looking for packages/index.json.
+// FindIndexPath walks up from hubPath looking for dist/packages/index.json.
 func FindIndexPath(hubPath string) string {
 	dir := hubPath
 	for {
-		candidate := filepath.Join(dir, "packages", "index.json")
+		candidate := filepath.Join(dir, "dist", "packages", "index.json")
 		if _, err := os.Stat(candidate); err == nil {
 			return candidate
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return filepath.Join(hubPath, "packages", "index.json")
+			return filepath.Join(hubPath, "dist", "packages", "index.json")
 		}
 		dir = parent
 	}
