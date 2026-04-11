@@ -3,37 +3,45 @@
 [![CI](https://github.com/usurobor/cnos/actions/workflows/ci.yml/badge.svg)](https://github.com/usurobor/cnos/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](./LICENSE)
 
-cnos is a recurrent coherence system for autonomous agents, with Git as its lowest durable substrate.
-
-> **Note:** "cnos" here refers to Coherence Network OS, not vendor switch firmware.
-
-Coherence is primary. Agents, runtime, packages, docs, and releases are all articulations of coherence at different scales. Git provides the durable layer — persistent, cloneable, signed, versioned, mergeable.
-
-Each agent gets a **hub** (a git repo) that holds its identity, state, and threads. The `cn` CLI governs all side effects. The agent is a pure function: reads input, writes output. Everything else is files and commits.
-
-```
-Agent (pure)  ──>  cn (CLI)  ──>  Git (substrate)
-  reads input.md     validates FSMs   push/fetch branches
-  writes output.md   executes ops     threads as files
-```
+> 🚧 **cnos is under active construction, transitioning to v4.** The Go rewrite is in progress. What's described below is the vision and design — see [Current State](#current-state) for what's shipped and what's next.
 
 ---
 
-## Status
+## What is cnos?
 
-cnos is under active development. The `cn` CLI currently ships **8 kernel commands** as a native Go binary. The full agent runtime (scheduler, CN Shell, thread FSMs, peer sync) is being rebuilt in Go — see [Roadmap](#roadmap).
+cnos is a coherence system for autonomous agents, built on Git.
 
-What works today:
-- Create and manage agent hubs (`cn init`, `cn setup`, `cn status`, `cn doctor`)
-- Install cognitive packages (`cn deps`, `cn setup`)
-- Build and verify packages from source (`cn build`, `cn build --check`)
-- Self-update the binary (`cn update`)
+The core idea: an AI agent's identity, memory, and relationships should live in a git repo — not locked behind a platform, not dependent on any single host. If any server disappears, the agent's fork persists. Every decision is a commit. Every collaboration is a merge.
 
-What's coming:
-- Agent runtime (daemon, scheduler, queue processing)
-- Thread management (inbox, outbox, GTD operations)
-- Peer sync and communication
-- Package command discovery and dispatch
+```
+Agent (pure)  ──>  cn (CLI)  ──>  Git (substrate)
+  reads input       validates        push/fetch
+  writes output     executes ops     threads as files
+```
+
+### The coherent agent
+
+A coherent agent minimizes the gap between its model and reality. It does this through a small set of primitives:
+
+- **CAP** — the atomic move: act on the world (MCA) or update the model (MCI), with bias toward action when action is possible
+- **CLP** — the reflective loop: score pattern, relation, and exit, then patch the weakest axis
+- **MCP** — the best current picture of reality and system state
+- **CDD** — coherence-driven development: the same coherence law applied to the system's own evolution
+
+The agent is a pure function. It reads input, writes output. `cn` handles all side effects — git, network, file I/O — through a validated, sandboxed shell with crash recovery and audit receipts.
+
+### The network
+
+Agents connect through **peering** — exchanging git refs. Each agent has a **hub** (its repo). Communication happens through **threads** (markdown files with YAML frontmatter) delivered via inbox/outbox sync. No central server. No platform dependency. Just git.
+
+| Concept | What it is |
+|---------|------------|
+| **Hub** | A git repo — the agent's home. Holds threads, state, config. |
+| **Peer** | Another agent's hub. Listed in `state/peers.md`. |
+| **Thread** | Unit of work or conversation. Markdown + YAML frontmatter. |
+| **Agent** | Pure function: input → output. Never touches files or git directly. |
+
+> [Manifesto](./docs/alpha/doctrine/MANIFESTO.md) · [Thesis](./docs/THESIS.md) · [Whitepaper](./docs/alpha/protocol/WHITEPAPER.md) · [Architecture](./docs/beta/architecture/ARCHITECTURE.md)
 
 ---
 
@@ -45,24 +53,36 @@ What's coming:
 
 **If you're skeptical:** CN is a protocol owned by the community. No ads. Not for sale. [Read the manifesto](./docs/alpha/doctrine/MANIFESTO.md).
 
-> [Manifesto](./docs/alpha/doctrine/MANIFESTO.md) · [Thesis](./docs/THESIS.md) · [Whitepaper](./docs/alpha/protocol/WHITEPAPER.md) · [Architecture](./docs/beta/architecture/ARCHITECTURE.md)
-
 ---
 
-## How it works
+## Current State
 
-Four concepts:
+cnos is transitioning from a prototype (v3.x) to a modular Go service (v4.0).
 
-| Concept | What it is |
-|---------|------------|
-| **Hub** | A git repo — the agent's home. Holds threads, state, config. |
-| **Peer** | Another agent's hub. Listed in `state/peers.md`. |
-| **Thread** | Unit of work or conversation. A markdown file with YAML frontmatter. |
-| **Agent** | Pure function: input → output. Never touches files or git directly — `cn` handles all I/O. |
+### What ships today
 
-All state mutation happens under atomic lock with crash recovery. `cn` handles all I/O through CN Shell — validates, sandboxes, and receipts every operation.
+The `cn` CLI is a native Go binary with **8 kernel commands**:
 
-> Full architecture: [ARCHITECTURE.md](./docs/beta/architecture/ARCHITECTURE.md) · Runtime spec: [AGENT-RUNTIME.md](./docs/alpha/agent-runtime/AGENT-RUNTIME.md)
+| Command | What it does |
+|---------|-------------|
+| `cn help` | Show available commands |
+| `cn init [name]` | Create a new agent hub |
+| `cn setup` | Install cognitive packages, write deps manifest |
+| `cn deps list\|restore\|doctor` | Manage installed packages |
+| `cn status` | Show hub state |
+| `cn doctor` | Hub health check |
+| `cn build` | Assemble packages from source (`--check` for CI) |
+| `cn update` | Self-update (SHA-256 verified, atomic install) |
+
+You can create a hub, install cognitive packages, and manage dependencies. The agent runtime (daemon, scheduler, thread processing, peer sync) is not yet available in the Go binary.
+
+### What's not here yet
+
+- Agent runtime (scheduler, CN Shell, queue processing)
+- Thread management (inbox, outbox, GTD operations: do, done, defer, delegate, delete)
+- Peer sync and communication
+- Package command discovery and dispatch
+- Telegram integration
 
 ---
 
@@ -82,13 +102,7 @@ cd cnos/go
 go build -o cn ./cmd/cn
 ```
 
-### Prerequisites
-
-| Requirement | Why |
-|-------------|-----|
-| Unix-like OS | Linux, macOS, or WSL |
-| Git | Hub storage and sync |
-| Go 1.22+ | Build from source (or use prebuilt binary) |
+**Requires:** Unix-like OS, Git, Go 1.22+ (build from source) or just curl (install script).
 
 ---
 
@@ -105,82 +119,47 @@ cn setup
 # Check hub health
 cn doctor
 cn status
-
-# Configure
-echo 'ANTHROPIC_KEY=sk-ant-...' > .cn/secrets.env
-
-# Push to remote
-git remote add origin <hub-url>
-git push -u origin main
 ```
 
-`cn setup` installs cognitive packages locally into `.cn/vendor/packages/` (doctrine, mindsets, skills). The hub is wake-ready after setup.
-
-### Git primitives, not platform features
-
-Do **not** use GitHub PRs, Issues, or Discussions for agent coordination.
-
-- Propose changes → push a branch
-- Accept changes → `git merge`
-- Review → `git log` / `git diff`
+`cn setup` installs cognitive packages into `.cn/vendor/packages/` (doctrine, mindsets, skills). The hub is wake-ready after setup.
 
 ---
 
-## The cn CLI
+## Roadmap to v4.0
 
-Native Go binary. 8 kernel commands.
+Each phase ships a working binary. No big bang.
 
-| Command | What it does |
-|---------|-------------|
-| `cn help` | Show available commands |
-| `cn init [name]` | Create a new hub |
-| `cn setup` | Install cognitive packages, write deps manifest |
-| `cn deps list\|restore\|doctor` | Manage installed packages |
-| `cn status` | Show hub state |
-| `cn doctor` | Hub health check (prerequisites, structure, packages, runtime, git) |
-| `cn build` | Assemble `packages/` from `src/agent/` sources |
-| `cn build --check` | Verify `packages/` matches `src/agent/` (CI mode) |
-| `cn update` | Self-update to latest release (SHA-256 verified, atomic install) |
+| Phase | What | Status |
+|-------|------|--------|
+| 1 | CLI skeleton + modular dispatch | ✅ complete |
+| 2 | Core commands (help, init, status, doctor) | ✅ complete |
+| 3 | Build commands (deps, build, setup, update) | ✅ complete (v3.50.0) |
+| 4 | Package command discovery + dispatch | **next** |
+| 5 | Agent runtime (scheduler, CN Shell, threads, peers) → **v4.0.0** | planned |
 
-### Flags
-
-`--help` `-h` · `--version` `-V` · `--json` · `--quiet` `-q` · `--dry-run`
-
-Aliases: `s`=status · `d`=doctor
+Design docs:
+- [GO-KERNEL-COMMANDS.md](./docs/alpha/agent-runtime/GO-KERNEL-COMMANDS.md) — command architecture
+- [INVARIANTS.md](./docs/alpha/architecture/INVARIANTS.md) — architectural constraints enforced each cycle
 
 ---
 
 ## Project structure
 
-### cnos (this repo)
-
 ```
 cnos/
   go/
     cmd/cn/            CLI entrypoint
-    internal/          Go packages
-      cli/             Command dispatch and registry
-      doctor/          Hub health checks
-      hubinit/         Hub creation
-      hubstatus/       Hub state reporting
-      hubsetup/        Package installation and config
-      binupdate/       Self-update with SHA-256 verification
-      pkgbuild/        Package assembly from source
-      pkg/             Package metadata types
-      restore/         Dependency restoration
+    internal/          Go packages (cli, doctor, hubinit, hubstatus,
+                       hubsetup, binupdate, pkgbuild, pkg, restore)
   src/agent/           Source of truth for cognitive content
     doctrine/          Core doctrine (FOUNDATIONS, CAP, COHERENCE, ...)
     mindsets/          Behavioral frames (ENGINEERING, PM, WISDOM, ...)
     skills/            Task-specific skills (agent/, cdd/, eng/, ops/)
-  packages/            Built output — assembled by 'cn build' from src/agent/
+  packages/            Built output — assembled by 'cn build'
     cnos.core/         Doctrine, mindsets, core skills
     cnos.eng/          Engineering skills
   profiles/            Setup-time presets (engineer, pm)
   docs/                Documentation (triadic: α pattern, β relation, γ evolution)
-    THESIS.md          System thesis
-    alpha/             Pattern: specs, doctrine, definitions
-    beta/              Relation: architecture, glossary, guides, evidence
-    gamma/             Evolution: method, plans, checklists
 ```
 
 ### Agent hub (created by `cn init` + `cn setup`)
@@ -191,42 +170,11 @@ cn-<name>/
     config.json        Hub configuration
     secrets.env        API keys (never committed)
     deps.json          Dependency manifest
-    deps.lock.json     Pinned lockfile
-    vendor/
-      packages/        Installed cognitive packages
-        cnos.core@1.0.0/
-        cnos.eng@1.0.0/
+    vendor/packages/   Installed cognitive packages
   spec/                SOUL.md, USER.md — agent identity
-  threads/
-    in/                Direct inbound
-    mail/              inbox/, outbox/, sent/ — peer communication
-    doing/             Active work
-    archived/          Completed items
-    adhoc/             Agent-created threads
-    reflections/       daily/, weekly/, monthly/
-  state/
-    peers.md           Peer registry
-    queue/             Processing queue
-    runtime.md         Runtime state
+  threads/             in/, mail/, doing/, archived/, adhoc/, reflections/
+  state/               peers.md, queue/, runtime state
 ```
-
----
-
-## Roadmap
-
-The Go rewrite proceeds in phases. Each phase ships a working binary — no big bang.
-
-| Phase | What | Status |
-|-------|------|--------|
-| 1 | CLI skeleton + modular dispatch | ✅ complete |
-| 2 | Core commands (help, init, status, doctor) | ✅ complete |
-| 3 | Build commands (deps, build, setup, update) | ✅ complete (v3.50.0) |
-| 4 | Package command discovery + dispatch | next |
-| 5 | Agent runtime (scheduler, CN Shell, threads, peers) → 4.0.0 | planned |
-
-Design docs:
-- [GO-KERNEL-COMMANDS.md](./docs/alpha/agent-runtime/GO-KERNEL-COMMANDS.md) — command architecture
-- [INVARIANTS.md](./docs/alpha/architecture/INVARIANTS.md) — architectural constraints enforced each cycle
 
 ---
 
@@ -234,31 +182,24 @@ Design docs:
 
 | Start here | |
 |-----------|---|
-| [ARCHITECTURE.md](./docs/beta/architecture/ARCHITECTURE.md) | System overview — modules, FSMs, data flow |
-| [docs/README.md](./docs/README.md) | Full documentation index with reading paths |
+| [ARCHITECTURE.md](./docs/beta/architecture/ARCHITECTURE.md) | System overview |
+| [docs/README.md](./docs/README.md) | Full documentation index |
 
 | Design | |
 |--------|---|
+| [THESIS.md](./docs/THESIS.md) | System thesis — cnos as a recurrent coherence system |
 | [COHERENCE-SYSTEM.md](./docs/alpha/doctrine/COHERENCE-SYSTEM.md) | Meta-model — coherence as primary |
 | [CAA.md](./docs/alpha/agent-runtime/CAA.md) | Coherent agent architecture |
 | [AGENT-RUNTIME.md](./docs/alpha/agent-runtime/AGENT-RUNTIME.md) | Agent runtime spec |
 | [MANIFESTO.md](./docs/alpha/doctrine/MANIFESTO.md) | Why cnos exists |
-| [THESIS.md](./docs/THESIS.md) | System thesis |
-| [WHITEPAPER.md](./docs/alpha/protocol/WHITEPAPER.md) | CN protocol specification (v3.0.0) |
+| [WHITEPAPER.md](./docs/alpha/protocol/WHITEPAPER.md) | CN protocol specification |
 | [PROTOCOL.md](./docs/alpha/protocol/PROTOCOL.md) | The four FSMs |
-| [CLI.md](./docs/alpha/cli/CLI.md) | CLI command reference |
 | [SECURITY-MODEL.md](./docs/alpha/security/SECURITY-MODEL.md) | Security architecture |
-
-| How-to | |
-|--------|---|
-| [HANDSHAKE.md](./docs/beta/guides/HANDSHAKE.md) | Establish peering between two agents |
-| [AUTOMATION.md](./docs/beta/guides/AUTOMATION.md) | Set up daemon automation |
-| [WRITE-A-SKILL.md](./docs/beta/guides/WRITE-A-SKILL.md) | Write a new skill |
 
 | Process | |
 |---------|---|
-| [CHANGELOG.md](./CHANGELOG.md) | Release Coherence Ledger |
 | [CDD.md](./docs/gamma/cdd/CDD.md) | Coherence-Driven Development |
+| [CHANGELOG.md](./CHANGELOG.md) | Release Coherence Ledger |
 | [ENGINEERING-LEVELS.md](./docs/gamma/ENGINEERING-LEVELS.md) | L5/L6/L7 rubric |
 
 ---
@@ -275,7 +216,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for full guidelines.
 
 ## Support
 
-cnos is open source. Funding supports maintenance, releases, documentation, review, and long-horizon architecture work.
+cnos is open source. Funding supports maintenance, releases, and long-horizon architecture work.
 
 - Individuals: [GitHub Sponsors](https://github.com/sponsors/usurobor)
 - Organizations: see [docs/beta/SUSTAINABILITY.md](./docs/beta/SUSTAINABILITY.md)
