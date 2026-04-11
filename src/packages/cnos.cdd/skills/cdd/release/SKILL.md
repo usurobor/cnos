@@ -4,6 +4,7 @@ description: Ship a version as a measured coherence delta with matching code, ch
 artifact_class: skill
 kata_surface: embedded
 governing_question: How do we turn a converged branch into a released version with a complete and auditable coherence delta?
+parent: cdd
 triggers: [release, ship, tag, version, deploy, changelog]
 ---
 

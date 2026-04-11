@@ -5,5 +5,18 @@
   "kind": "package",
   "engines": {
     "cnos": ">=3.50.0"
+  },
+  "skills": {
+    "exposed": [
+      "cdd"
+    ],
+    "internal": [
+      "cdd/design",
+      "cdd/issue",
+      "cdd/plan",
+      "cdd/post-release",
+      "cdd/release",
+      "cdd/review"
+    ]
   }
 }
