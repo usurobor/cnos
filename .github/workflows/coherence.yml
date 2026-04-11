@@ -17,10 +17,10 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
-          cache-dependency-path: go/go.sum
+          cache-dependency-path: src/go/go.sum
 
       - name: Build cn binary
-        working-directory: go
+        working-directory: src/go
         run: go build -o ../cn ./cmd/cn
 
       - name: Check package/source sync
