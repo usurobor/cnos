@@ -2,7 +2,7 @@
 
 ## What the build system distributes via packages
 
-**Version:** 1.0.0
+**Version:** 2.0.0
 **Status:** Draft
 **Addresses:** #119 (template distribution), build-system content model
 **Related:**
@@ -15,8 +15,8 @@
 ## 0. Purpose
 
 This document defines the set of content classes that `cn build` knows how
-to assemble from `src/agent/` into distributable packages. It covers only
-the build-system content pipeline -- not profiles, resolution, registry,
+to assemble from `src/packages/` into distributable packages. It covers only
+the build-system content pipeline -- not resolution, registry,
 or other package-system layers (see §2.4 below for the distribution model).
 It answers:
 
@@ -29,69 +29,54 @@ It answers:
 
 ## 1. Content Classes
 
-A package content class is a named category of assets that the build system
-knows how to copy from `src/agent/<class>/` into `packages/<name>/<class>/`.
+A package content class is a named category of assets that lives inside
+a package's source directory at `src/packages/<name>/<class>/`.
 
 ### 1.1 Content classes
 
-| Class | Copy mode | Source location | Declared in manifest | Runtime role |
-|-------|-----------|-----------------|---------------------|--------------|
-| doctrine | wildcard or named | `src/agent/doctrine/` | `"doctrine": ["*"]` or `["FILE.md"]` | Always-on core principles |
-| mindsets | named files | `src/agent/mindsets/` | `"mindsets": ["FILE.md", ...]` | Always-on behavioral frames |
-| skills | directory trees | `src/agent/skills/` | `"skills": ["path/to/skill"]` | Keyword-scored, bounded |
-| extensions | directory trees | `src/agent/extensions/` | `"extensions": ["ext.name"]` | Runtime capability providers |
-| templates | named files | `src/agent/templates/` | `"templates": ["FILE.md"]` | Identity/config scaffolding for new hubs |
-| commands | directory trees | `src/agent/commands/` | `"commands": ["id", ...]` | Operator-facing CLI commands (dispatched by `Cn_command`) |
-| orchestrators | directory trees | `src/agent/orchestrators/` | `"orchestrators": ["id", ...]` | Mechanical workflows executed by the `cn.orchestrator.v1` runtime |
-| (metadata) | implicit | `packages/<name>/` | `cn.package.json` | Package identity, version, engine constraint |
+| Class | Copy mode | Source location | Runtime role |
+|-------|-----------|-----------------|--------------|
+| doctrine | wildcard or named | `src/packages/<name>/doctrine/` | Always-on core principles |
+| mindsets | named files | `src/packages/<name>/mindsets/` | Always-on behavioral frames |
+| skills | directory trees | `src/packages/<name>/skills/` | Keyword-scored, bounded |
+| extensions | directory trees | `src/packages/<name>/extensions/` | Runtime capability providers |
+| templates | named files | `src/packages/<name>/templates/` | Identity/config scaffolding for new hubs |
+| commands | directory trees | `src/packages/<name>/commands/` | Operator-facing CLI commands |
+| orchestrators | directory trees | `src/packages/<name>/orchestrators/` | Mechanical workflows (`cn.orchestrator.v1`) |
+| (metadata) | implicit | `src/packages/<name>/` | `cn.package.json` — package identity, version, engine constraint |
 
-All seven content classes flow through the same source → build →
-install pipeline: authored under `src/agent/<class>/`, copied
-mechanically to `packages/<name>/<class>/` by `cn build`, and
-installed to `.cn/vendor/packages/<name>@<version>/<class>/` by
-`cn deps restore`. There is no longer any content class that
-bypasses `cn build` (this was the #184 / v3.37.0 cleanup — before
-that release, `commands` was authored directly under `packages/`
-as the lone exception).
+All seven content classes are co-located with their package manifest.
+`cn build` assembles each package from `src/packages/<name>/` into
+a tarball in `dist/packages/`. `cn deps restore` installs from dist
+into `.cn/vendor/packages/<name>/` on a hub. Content is authored
+in-place — no copy step, no drift possible.
 
-The `commands` class has the same on-disk layout as `skills` and
-`orchestrators`: each declared id in `sources.commands` points at
-`src/agent/commands/<id>/`, which `cn build` copies tree-wise to
-`packages/<name>/commands/<id>/`. Inside each command directory,
-a file named `cn-<id>` is the entrypoint script (executable bit
-preserved across the copy). Per-command metadata — entrypoint path
-and summary — lives at the **top level** of `cn.package.json`
-under a `commands` object (not under `sources.commands`, which is
-only the string-id list for `cn build`). This split mirrors how
-`sources.orchestrators` declares ids while each orchestrator's
-metadata lives inside the per-orchestrator `orchestrator.json`.
+The `commands` class: each command id has a directory at
+`src/packages/<name>/commands/<id>/` containing an entrypoint script
+`cn-<id>` (executable bit preserved). Per-command metadata (entrypoint
+path and summary) lives at the top level of `cn.package.json` under
+a `commands` object.
 
-The `orchestrators` class follows the same on-disk layout as skills:
-each declared id in `sources.orchestrators` points at
-`src/agent/orchestrators/<id>/orchestrator.json`, which `cn build`
-copies to `packages/<name>/orchestrators/<id>/orchestrator.json`.
-The JSON is a `cn.orchestrator.v1` manifest with steps, permissions,
-and a trigger — see `docs/alpha/agent-runtime/ORCHESTRATORS.md` §7–8
-for the full schema. The runtime loads, validates, and executes
-these via the workflow engine (`Cn_workflow`).
+The `orchestrators` class: each orchestrator id has a directory at
+`src/packages/<name>/orchestrators/<id>/orchestrator.json`. The JSON
+is a `cn.orchestrator.v1` manifest with steps, permissions, and a
+trigger — see `docs/alpha/agent-runtime/ORCHESTRATORS.md` for the
+full schema.
 
-Metadata (`cn.package.json`) is not a source-declared content class.
-It is always present and not copied from `src/agent/`.
+Metadata (`cn.package.json`) is not a content class — it is always
+present at the package root.
 
 ### 1.2 Copy modes
 
 The build system uses two copy strategies:
 
 - **Individual file copy**: Used by doctrine (when named), mindsets, and templates.
-  Each declared entry is a single file name relative to `src/agent/<class>/`.
-  The file is copied directly into `packages/<name>/<class>/<filename>`.
+  Each declared entry is a single file name relative to the package's class directory.
 
-- **Directory tree copy**: Used by skills and extensions.
-  Each declared entry is a directory path relative to `src/agent/<class>/`.
-  The entire subtree is copied recursively.
+- **Directory tree copy**: Used by skills, extensions, commands, and orchestrators.
+  Each declared entry is a directory path. The entire subtree is copied recursively.
 
-Doctrine has a special case: `"*"` copies all `.md` files from the source
-directory (wildcard mode).
+Doctrine has a special case: `"*"` copies all `.md` files (wildcard mode).
 
 ---
 
@@ -101,15 +86,15 @@ Each content class flows through the same four-stage pipeline.
 Angle-bracket segments are substitution variables, not literal paths.
 
 ```
-src/agent/{class}/{entry}
+src/packages/{name}/{class}/{entry}
     |
-    | cn build         (copy from source to package output)
+    | cn build         (assemble into tarball)
     v
-packages/{name}/{class}/{entry}
+dist/packages/{name}-{version}.tar.gz
     |
     | cn deps restore  (fetch + materialize into hub)
     v
-.cn/vendor/packages/{name}@{version}/{class}/{entry}
+.cn/vendor/packages/{name}/{class}/{entry}
     |
     | runtime read     (loaded at wake or on-demand)
     v
@@ -119,13 +104,13 @@ agent context / hub state
 Concrete example for the templates content class:
 
 ```
-src/agent/templates/SOUL.md
+src/packages/cnos.core/templates/SOUL.md
     |  cn build
     v
-packages/cnos.core/templates/SOUL.md
+dist/packages/cnos.core-1.0.0.tar.gz  (contains templates/SOUL.md)
     |  cn deps restore
     v
-.cn/vendor/packages/cnos.core@3.24.0/templates/SOUL.md
+.cn/vendor/packages/cnos.core/templates/SOUL.md
     |  read_template
     v
 spec/SOUL.md (in hub)
@@ -133,20 +118,19 @@ spec/SOUL.md (in hub)
 
 ### 2.1 Build (cn build)
 
-- Reads `cn.package.json` source declarations
-- For each content class, copies declared entries from `src/agent/<class>/`
-- Cleans stale content before copying
+- Reads each `src/packages/<name>/cn.package.json`
+- Assembles content into a tarball in `dist/packages/`
+- Generates `dist/packages/index.json` and `dist/packages/checksums.txt`
 
 ### 2.2 Check (cn build --check)
 
-- Builds to a temp directory
-- Diffs against existing `packages/<name>/<class>/`
-- Reports any drift between source and package output
+- Validates package structure and manifest completeness
+- Verifies all declared content is present and buildable
 
 ### 2.3 Clean (cn build clean)
 
-- Removes all content class directories from `packages/<name>/`
-- Preserves `cn.package.json`
+- Removes `dist/packages/` build output
+- Leaves `src/packages/` untouched
 
 ### 2.4 Install (cn deps restore)
 
@@ -168,41 +152,45 @@ Hosting can move by republishing a new index without touching any
 hub's lockfile.
 
 When `cn deps restore` runs inside a cnos checkout, first-party
-packages are copied directly from the local source tree after a
-freshness check against `src/agent/`. This is the development path;
-consumers always go through the index.
+packages can be installed from the local `dist/packages/` after
+`cn build`. Consumers always go through the index.
 
 ---
 
 ## 3. Manifest Schema
 
-Content classes are declared in the `sources` object of `cn.package.json`:
+The package manifest declares identity, version, and command metadata.
+Content classes are discovered by directory presence — content is
+co-located with the manifest, so no `sources` map is needed.
 
 ```json
 {
   "schema": "cn.package.v1",
   "name": "cnos.core",
-  "version": "3.24.0",
+  "version": "1.0.0",
   "kind": "package",
-  "engines": { "cnos": "3.24.0" },
-  "sources": {
-    "doctrine": ["*"],
-    "mindsets": ["ENGINEERING.md", "PM.md", "WISDOM.md"],
-    "skills": ["agent/agent-ops", "cdd", "eng/coding"],
-    "extensions": ["cnos.net.http"],
-    "templates": ["SOUL.md", "USER.md"],
-    "commands": {
-      "daily": {
-        "entrypoint": "commands/cn-daily",
-        "summary": "Create or show the daily reflection thread"
-      }
+  "engines": { "cnos": ">=3.50.0" },
+  "commands": {
+    "daily": {
+      "entrypoint": "commands/daily/cn-daily",
+      "summary": "Create or show today's daily reflection thread"
+    },
+    "weekly": {
+      "entrypoint": "commands/weekly/cn-weekly",
+      "summary": "Create or show the current weekly reflection thread"
+    },
+    "save": {
+      "entrypoint": "commands/save/cn-save",
+      "summary": "Commit + push"
     }
   }
 }
 ```
 
-All content class keys are optional. A package may declare any subset.
-Missing keys default to empty lists (or empty objects for `commands`).
+`cn build` discovers content classes by scanning for known directory
+names (`doctrine/`, `mindsets/`, `skills/`, `templates/`, `commands/`,
+`orchestrators/`, `extensions/`) inside each package's source directory.
+A package includes only the classes it has directories for.
 
 ---
 
@@ -210,49 +198,24 @@ Missing keys default to empty lists (or empty objects for `commands`).
 
 ### 4.1 Why explicit classes, not a generic tree model
 
-The content classes are explicit record fields in the build system:
+The content classes are an explicit, closed set rather than a generic
+extensible model.
 
-```ocaml
-type source_decl = {
-  doctrine   : string list;
-  mindsets   : string list;
-  skills     : string list;
-  extensions : string list;
-  templates  : string list;
-}
-```
+**Why explicit is preferred:**
 
-An alternative design would use a generic `(string * copy_mode) list`,
-removing the per-class cost of adding new categories.
-
-**Why explicit is preferred now:**
-
-- **Readability**: Each class has a named field. Typos are compile errors.
 - **Semantics**: Different classes have different copy modes (file vs tree vs wildcard). These are not interchangeable.
-- **Debugging**: A mismatch in one class is easy to identify. A generic list requires parsing the class name from strings.
-- **Cost**: Adding a new class requires touching ~5 locations (type, parser, build, check, clean). This is bounded and mechanical.
-- **Current scale**: 6 classes. The explicit model is not yet a maintenance burden.
+- **Readability**: Each class is a known directory name. No configuration needed.
+- **Debugging**: A mismatch in one class is easy to identify.
+- **Current scale**: 7 classes. The explicit model is not a maintenance burden.
 
 **When to reconsider:**
 
-If a 7th or 8th content class creates enough pressure that the per-class
-mechanical cost outweighs the readability benefit, refactoring to a generic
-model is the right move. The signal is: "adding this class feels like
-boilerplate, not design."
+If adding a new content class feels like boilerplate rather than design,
+refactor to a generic model.
 
 ### 4.2 Why templates are a content class (not special-cased)
 
-Before v3.24.0, SOUL.md and USER.md were hardcoded inline strings in
-`cn_system.ml`. This violated the single-source-of-truth principle:
-the canonical templates lived in `src/agent/` but were duplicated
-(and divergent) in the setup code.
-
-Templates could have been special-cased:
-- Read directly from `src/agent/` at build time
-- Embedded as OCaml string literals
-- Treated as a build-system concern only
-
-Instead, templates became a content class because:
+Templates became a content class (rather than being special-cased) because:
 - They follow the same source -> build -> install -> read path
 - They benefit from the same drift detection (`cn build --check`)
 - They can be overridden by future third-party packages
@@ -301,7 +264,9 @@ identity templates. The set is intentionally closed:
 |---------|--------|
 | v3.4.0 | Package system introduced (doctrine, mindsets, skills) |
 | v3.18.0 | Extensions added as 4th content class |
-| v3.24.0 | Templates added as 5th declared content class (#119) |
+| v3.24.0 | Templates added as 5th content class (#119) |
+| v3.37.0 | Commands migrated from built-in to package content class |
+| v3.51.0 | Content co-located with manifests in `src/packages/`; `sources` field removed |
 
 ---
 
