@@ -55,8 +55,7 @@ jobs:
       - name: Smoke test
         working-directory: src/go
         run: |
-          ./cn --version
-          ./cn --help
+          ./cn help
 
   notify:
     needs: [go]

@@ -21,7 +21,7 @@ jobs:
 
       - name: Build cn binary
         working-directory: src/go
-        run: go build -o ../cn ./cmd/cn
+        run: go build -o ../../cn ./cmd/cn
 
       - name: Check package/source sync
         run: ./cn build --check
