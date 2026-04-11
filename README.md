@@ -156,7 +156,6 @@ cnos/
       cnos.core/       Doctrine, mindsets, templates, agent + ops skills, commands
       cnos.eng/        Engineering skills
       cnos.cdd/        CDD skills (review, release, design, issue, post-release)
-      cnos.net.http/   HTTP extension
     ocaml/             Legacy OCaml runtime (ceased — retained until Phase 5 deletion)
   dist/                All built output
     packages/          Package tarballs + index + checksums
