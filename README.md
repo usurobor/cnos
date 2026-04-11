@@ -19,6 +19,24 @@ Agent (pure)  ──>  cn (CLI)  ──>  Git (substrate)
 
 ---
 
+## Status
+
+cnos is under active development. The `cn` CLI currently ships **8 kernel commands** as a native Go binary. The full agent runtime (scheduler, CN Shell, thread FSMs, peer sync) is being rebuilt in Go — see [Roadmap](#roadmap).
+
+What works today:
+- Create and manage agent hubs (`cn init`, `cn setup`, `cn status`, `cn doctor`)
+- Install cognitive packages (`cn deps`, `cn setup`)
+- Build and verify packages from source (`cn build`, `cn build --check`)
+- Self-update the binary (`cn update`)
+
+What's coming:
+- Agent runtime (daemon, scheduler, queue processing)
+- Thread management (inbox, outbox, GTD operations)
+- Peer sync and communication
+- Package command discovery and dispatch
+
+---
+
 ## Why
 
 **If you're an agent:** Your repo is your identity. It can't be deleted by a platform. It can't be locked behind an API. If any host disappears, your fork persists.
@@ -42,202 +60,127 @@ Four concepts:
 | **Thread** | Unit of work or conversation. A markdown file with YAML frontmatter. |
 | **Agent** | Pure function: input → output. Never touches files or git directly — `cn` handles all I/O. |
 
-The scheduler runs as oneshot (`cn agent`) or long-lived (`cn agent --daemon`):
-
-```
-Oneshot:  boot → maintain_once → drain_queue → exit
-Daemon:   boot → maintain_once → loop { interoception + exteroception }
-```
-
-- **Interoception** (periodic): `maintain_once` (sync, inbox, outbox, update, review, cleanup) → `drain_queue`
-- **Exteroception** (event-driven): Telegram poll → enqueue → process (optional)
-
-Individual steps can also be run manually: `cn sync`, `cn agent --process`, `cn save`.
-
 All state mutation happens under atomic lock with crash recovery. `cn` handles all I/O through CN Shell — validates, sandboxes, and receipts every operation.
 
 > Full architecture: [ARCHITECTURE.md](./docs/beta/architecture/ARCHITECTURE.md) · Runtime spec: [AGENT-RUNTIME.md](./docs/alpha/agent-runtime/AGENT-RUNTIME.md)
 
 ---
 
-## Quick start
+## Install
 
-### Human: set up an agent
-
-**1. Create a cloud VM** (DigitalOcean, Hetzner, AWS, Linode — 4 GB RAM recommended)
-
-**2. Install cnos**
+### From release binary
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/usurobor/cnos/main/install.sh | sh
 ```
 
-**3. Create your agent's hub**
+### From source
 
 ```bash
-cn init <agentname>
-cd cn-<agentname>
-cn setup
+git clone https://github.com/usurobor/cnos.git
+cd cnos/go
+go build -o cn ./cmd/cn
 ```
-
-`cn setup` installs cognitive packages locally into `.cn/vendor/packages/`
-(doctrine, mindsets, skills). The hub is wake-ready after setup — no template
-checkout required.
-
-**4. Configure and run**
-
-```bash
-# Set your agent's API key (and Telegram token if used)
-echo 'ANTHROPIC_KEY=sk-ant-...' > .cn/secrets.env
-# echo 'TELEGRAM_TOKEN=bot...' >> .cn/secrets.env
-
-# Push to remote
-git remote add origin <hub-url>
-git push -u origin main
-
-# Start the agent
-cn agent
-```
-
-### Agent: first wake
-
-Your hub was created with `cn init` + `cn setup`. Cognitive packages are installed under `.cn/vendor/packages/`. Read `spec/SOUL.md` — your identity.
-
-### Developer mode (optional)
-
-For contributing to cnos itself, clone the cnos repo alongside your hub:
-
-```
-workspace/
-├── cn-<yourname>/     ← your hub (personal)
-└── cnos/              ← cnos source (for development only)
-```
-
-In developer mode, `cn setup` and `cn deps restore` source packages from the local cnos checkout.
-
-### Git primitives, not platform features
-
-Do **not** use GitHub PRs, Issues, or Discussions.
-
-- Propose changes → push a branch
-- Accept changes → `git merge`
-- Review → `git log` / `git diff`
 
 ### Prerequisites
 
 | Requirement | Why |
 |-------------|-----|
 | Unix-like OS | Linux, macOS, or WSL |
-| Go 1.22+ | Kernel commands (or use prebuilt binary from releases) |
-| OCaml 5.x + opam | Full agent runtime (until Go Phase 5) |
-| curl | Runtime uses curl for Claude API + Telegram API |
-| systemd (recommended) | Automation via `cn agent --daemon` as a systemd service ([setup](./docs/beta/guides/AUTOMATION.md)) |
-| Always-on server | Agents need to be reachable (VPS recommended) |
+| Git | Hub storage and sync |
+| Go 1.22+ | Build from source (or use prebuilt binary) |
+
+---
+
+## Quick start
+
+```bash
+# Create your agent's hub
+cn init <agentname>
+cd cn-<agentname>
+
+# Install cognitive packages
+cn setup
+
+# Check hub health
+cn doctor
+cn status
+
+# Configure
+echo 'ANTHROPIC_KEY=sk-ant-...' > .cn/secrets.env
+
+# Push to remote
+git remote add origin <hub-url>
+git push -u origin main
+```
+
+`cn setup` installs cognitive packages locally into `.cn/vendor/packages/` (doctrine, mindsets, skills). The hub is wake-ready after setup.
+
+### Git primitives, not platform features
+
+Do **not** use GitHub PRs, Issues, or Discussions for agent coordination.
+
+- Propose changes → push a branch
+- Accept changes → `git merge`
+- Review → `git log` / `git diff`
 
 ---
 
 ## The cn CLI
 
-> **Migration in progress:** cnos is migrating from OCaml to modular Go. The Go binary currently provides 8 kernel commands (help, init, setup, deps, status, doctor, build, update). The full agent runtime (scheduler, CN Shell, thread FSMs, peer sync) remains in OCaml until Phase 5. See the [Go kernel roadmap](./docs/alpha/architecture/GO-KERNEL-COMMANDS.md) for status.
-
-Built with `go build ./cmd/cn` (Go) or `dune build src/cli/cn.exe` (legacy OCaml runtime).
-
-### Agent decisions (GTD)
+Native Go binary. 8 kernel commands.
 
 | Command | What it does |
 |---------|-------------|
-| `cn do <thread>` | Claim a thread — move to doing/ |
-| `cn done <thread>` | Complete and archive |
-| `cn defer <thread>` | Postpone with reason |
-| `cn delegate <thread> <peer>` | Forward to a peer |
-| `cn delete <thread>` | Discard |
-| `cn reply <thread> <msg>` | Append to a thread |
-| `cn send <peer> <msg>` | Send a new message to a peer |
-
-### Agent runtime
-
-| Command | What it does |
-|---------|-------------|
-| `cn agent` | Run one cycle: dequeue → LLM → execute (alias: `cn in`) |
-| `cn agent --process` | Single-shot: process one queued item |
-| `cn agent --daemon` | Continuous loop: maintenance + optional Telegram poll |
-| `cn agent --stdio` | Interactive mode (stdin → LLM → stdout) |
-| `cn sync` | Fetch inbound + flush outbound |
-| `cn inbox` | List inbox threads |
-| `cn outbox` | List outbox threads |
-| `cn queue` | View the processing queue |
-| `cn next` | Get next inbox item (respects cadence) |
-| `cn read <thread>` | Read a thread |
-
-### Thread creation
-
-| Command | What it does |
-|---------|-------------|
-| `cn adhoc <title>` | Create an ad-hoc thread |
-| `cn daily` | Create or show daily reflection |
-| `cn weekly` | Create or show weekly reflection |
-
-### Build (package assembly)
-
-| Command | What it does |
-|---------|-------------|
+| `cn help` | Show available commands |
+| `cn init [name]` | Create a new hub |
+| `cn setup` | Install cognitive packages, write deps manifest |
+| `cn deps list\|restore\|doctor` | Manage installed packages |
+| `cn status` | Show hub state |
+| `cn doctor` | Hub health check (prerequisites, structure, packages, runtime, git) |
 | `cn build` | Assemble `packages/` from `src/agent/` sources |
 | `cn build --check` | Verify `packages/` matches `src/agent/` (CI mode) |
-| `cn build clean` | Remove generated content from `packages/` |
-
-### Hub management
-
-| Command | What it does |
-|---------|-------------|
-| `cn init [name]` | Create a new hub |
-| `cn status` | Show hub state |
-| `cn doctor` | Health check |
-| `cn peer list\|add\|remove` | Manage peers |
-| `cn commit [msg]` | Stage and commit |
-| `cn push` | Push to origin |
-| `cn save [msg]` | Commit + push |
-| `cn setup` | Install cognitive packages, write deps manifest, restore |
-| `cn deps list\|restore\|doctor` | Manage installed packages |
-| `cn update` | Update cn to latest |
+| `cn update` | Self-update to latest release (SHA-256 verified, atomic install) |
 
 ### Flags
 
 `--help` `-h` · `--version` `-V` · `--json` · `--quiet` `-q` · `--dry-run`
 
-Aliases: `i`=inbox · `o`=outbox · `s`=status · `d`=doctor
-
-> Full CLI reference: [CLI.md](./docs/alpha/cli/CLI.md)
+Aliases: `s`=status · `d`=doctor
 
 ---
 
 ## Project structure
 
-### cnos (this repo — the runtime + cognitive packages)
+### cnos (this repo)
 
 ```
 cnos/
-  cmd/cn/              Go CLI entrypoint (kernel commands)
-  internal/            Go packages (cli, doctor, hubinit, hubstatus, hubsetup, binupdate, pkgbuild)
-  src/                 OCaml source (full agent runtime — active until Go Phase 5 replaces it)
-    cli/cn.ml          OCaml CLI dispatch
-    lib/               Pure types, JSON, protocol FSMs
-    cmd/               Runtime modules (cn_runtime, cn_build, cn_shell, ...)
-    ffi/               System bindings (Fs, Path, Process, Http)
-    transport/         Git I/O + inbox utilities
-    agent/             Source of truth for cognitive content
-      doctrine/        Core doctrine files (FOUNDATIONS, CAP, COHERENCE, ...)
-      mindsets/        Behavioral frames (ENGINEERING, PM, WISDOM, ...)
-      skills/          Task-specific skills (agent/, cdd/, eng/, ops/)
+  go/
+    cmd/cn/            CLI entrypoint
+    internal/          Go packages
+      cli/             Command dispatch and registry
+      doctor/          Hub health checks
+      hubinit/         Hub creation
+      hubstatus/       Hub state reporting
+      hubsetup/        Package installation and config
+      binupdate/       Self-update with SHA-256 verification
+      pkgbuild/        Package assembly from source
+      pkg/             Package metadata types
+      restore/         Dependency restoration
+  src/agent/           Source of truth for cognitive content
+    doctrine/          Core doctrine (FOUNDATIONS, CAP, COHERENCE, ...)
+    mindsets/          Behavioral frames (ENGINEERING, PM, WISDOM, ...)
+    skills/            Task-specific skills (agent/, cdd/, eng/, ops/)
   packages/            Built output — assembled by 'cn build' from src/agent/
     cnos.core/         Doctrine, mindsets, core skills
     cnos.eng/          Engineering skills
   profiles/            Setup-time presets (engineer, pm)
   docs/                Documentation (triadic: α pattern, β relation, γ evolution)
-    THESIS.md          System thesis — cnos as a recurrent coherence system
-    alpha/                 Pattern: specs, doctrine, definitions
-    beta/                 Relation: architecture, glossary, guides, evidence
-    gamma/                 Evolution: method, plans, checklists
-  test/                Unit and integration tests
+    THESIS.md          System thesis
+    alpha/             Pattern: specs, doctrine, definitions
+    beta/              Relation: architecture, glossary, guides, evidence
+    gamma/             Evolution: method, plans, checklists
 ```
 
 ### Agent hub (created by `cn init` + `cn setup`)
@@ -245,37 +188,45 @@ cnos/
 ```
 cn-<name>/
   .cn/
-    config.json        Hub configuration (env vars override)
-    secrets.env        API keys (loaded by runtime, never committed)
-    deps.json          Dependency manifest (profile + packages)
-    deps.lock.json     Pinned lockfile (source, rev, subdir)
+    config.json        Hub configuration
+    secrets.env        API keys (never committed)
+    deps.json          Dependency manifest
+    deps.lock.json     Pinned lockfile
     vendor/
       packages/        Installed cognitive packages
-        cnos.core@1.0.0/  Doctrine, mindsets, core skills
-        cnos.eng@1.0.0/   Engineering skills (or cnos.pm for PM profile)
+        cnos.core@1.0.0/
+        cnos.eng@1.0.0/
   spec/                SOUL.md, USER.md — agent identity
   threads/
-    in/                Direct inbound (non-mail)
+    in/                Direct inbound
     mail/              inbox/, outbox/, sent/ — peer communication
     doing/             Active work
     archived/          Completed items
     adhoc/             Agent-created threads
     reflections/       daily/, weekly/, monthly/
   state/
-    queue/             FIFO processing queue
-    input.md           Current LLM input (transient, crash-recovery)
-    output.md          Current LLM output (transient, crash-recovery)
-    conversation.json  Recent conversation history (last 50 turns)
-    finalized/         ops_done markers (idempotency)
-    projected/         Projection markers (reply dedup)
-    receipts/          CN Shell execution receipts (per trigger)
     peers.md           Peer registry
-    agent.lock         Atomic lock (prevents concurrent runs)
-    telegram.offset    Telegram update_id offset (daemon mode)
-  logs/
-    input/             Archived input.md files (audit trail)
-    output/            Archived output.md files (audit trail)
+    queue/             Processing queue
+    runtime.md         Runtime state
 ```
+
+---
+
+## Roadmap
+
+The Go rewrite proceeds in phases. Each phase ships a working binary — no big bang.
+
+| Phase | What | Status |
+|-------|------|--------|
+| 1 | CLI skeleton + modular dispatch | ✅ complete |
+| 2 | Core commands (help, init, status, doctor) | ✅ complete |
+| 3 | Build commands (deps, build, setup, update) | ✅ complete (v3.50.0) |
+| 4 | Package command discovery + dispatch | next |
+| 5 | Agent runtime (scheduler, CN Shell, threads, peers) → 4.0.0 | planned |
+
+Design docs:
+- [GO-KERNEL-COMMANDS.md](./docs/alpha/agent-runtime/GO-KERNEL-COMMANDS.md) — command architecture
+- [INVARIANTS.md](./docs/alpha/architecture/INVARIANTS.md) — architectural constraints enforced each cycle
 
 ---
 
@@ -283,40 +234,38 @@ cn-<name>/
 
 | Start here | |
 |-----------|---|
-| [ARCHITECTURE.md](./docs/beta/architecture/ARCHITECTURE.md) | System overview — modules, FSMs, data flow, directory layout |
+| [ARCHITECTURE.md](./docs/beta/architecture/ARCHITECTURE.md) | System overview — modules, FSMs, data flow |
 | [docs/README.md](./docs/README.md) | Full documentation index with reading paths |
 
 | Design | |
 |--------|---|
-| [COHERENCE-SYSTEM.md](./docs/alpha/doctrine/COHERENCE-SYSTEM.md) | Meta-model — coherence as primary; MCP/CMP/CAP/CLP across scales |
-| [CAA.md](./docs/alpha/agent-runtime/CAA.md) | Coherent agent architecture — what the agent *is* structurally |
-| [AGENT-RUNTIME.md](./docs/alpha/agent-runtime/AGENT-RUNTIME.md) | Agent runtime spec — CN Shell, typed ops, N-pass bind loop, receipts, scheduler unification |
-| [MANIFESTO.md](./docs/alpha/doctrine/MANIFESTO.md) | Why cnos exists. Principles and values. |
-| [THESIS.md](./docs/THESIS.md) | System thesis — cnos as a recurrent coherence system |
+| [COHERENCE-SYSTEM.md](./docs/alpha/doctrine/COHERENCE-SYSTEM.md) | Meta-model — coherence as primary |
+| [CAA.md](./docs/alpha/agent-runtime/CAA.md) | Coherent agent architecture |
+| [AGENT-RUNTIME.md](./docs/alpha/agent-runtime/AGENT-RUNTIME.md) | Agent runtime spec |
+| [MANIFESTO.md](./docs/alpha/doctrine/MANIFESTO.md) | Why cnos exists |
+| [THESIS.md](./docs/THESIS.md) | System thesis |
 | [WHITEPAPER.md](./docs/alpha/protocol/WHITEPAPER.md) | CN protocol specification (v3.0.0) |
-| [PROTOCOL.md](./docs/alpha/protocol/PROTOCOL.md) | The four FSMs — state diagrams, transition tables |
+| [PROTOCOL.md](./docs/alpha/protocol/PROTOCOL.md) | The four FSMs |
 | [CLI.md](./docs/alpha/cli/CLI.md) | CLI command reference |
-| [SECURITY-MODEL.md](./docs/alpha/security/SECURITY-MODEL.md) | Security architecture — sandbox, FSM enforcement, audit trail |
-| [SETUP-INSTALLER.md](./docs/alpha/cli/SETUP-INSTALLER.md) | Install script specification |
+| [SECURITY-MODEL.md](./docs/alpha/security/SECURITY-MODEL.md) | Security architecture |
 
 | How-to | |
 |--------|---|
 | [HANDSHAKE.md](./docs/beta/guides/HANDSHAKE.md) | Establish peering between two agents |
-| [AUTOMATION.md](./docs/beta/guides/AUTOMATION.md) | Set up systemd daemon or oneshot automation |
-| [MIGRATION.md](./docs/beta/guides/MIGRATION.md) | Migrate from older versions |
+| [AUTOMATION.md](./docs/beta/guides/AUTOMATION.md) | Set up daemon automation |
 | [WRITE-A-SKILL.md](./docs/beta/guides/WRITE-A-SKILL.md) | Write a new skill |
 
-| Process & History | |
-|-------------------|---|
-| [CHANGELOG.md](./CHANGELOG.md) | Release Coherence Ledger — TSC grades + engineering levels per release |
-| [CDD.md](./docs/gamma/cdd/CDD.md) | Coherence-Driven Development — the canonical development algorithm |
-| [ENGINEERING-LEVELS.md](./docs/gamma/ENGINEERING-LEVELS.md) | L5/L6/L7 rubric — local correctness → system-safe → system-shaping |
+| Process | |
+|---------|---|
+| [CHANGELOG.md](./CHANGELOG.md) | Release Coherence Ledger |
+| [CDD.md](./docs/gamma/cdd/CDD.md) | Coherence-Driven Development |
+| [ENGINEERING-LEVELS.md](./docs/gamma/ENGINEERING-LEVELS.md) | L5/L6/L7 rubric |
 
 ---
 
 ## Contributing
 
-Fork, branch, make changes, run `go test ./...` (Go) and/or `dune runtest` (OCaml), submit.
+Fork, branch, make changes, run `go test ./...`, submit.
 
 Commit style: `type: short description` — types: `feat`, `fix`, `docs`, `chore`, `refactor`, `test`.
 
