@@ -1,0 +1,23 @@
+{
+  "schema": "cn.package.v1",
+  "name": "cnos.core",
+  "version": "1.0.0",
+  "kind": "package",
+  "engines": {
+    "cnos": ">=3.50.0"
+  },
+  "commands": {
+    "daily": {
+      "entrypoint": "commands/daily/cn-daily",
+      "summary": "Create or show today's daily reflection thread"
+    },
+    "weekly": {
+      "entrypoint": "commands/weekly/cn-weekly",
+      "summary": "Create or show the current weekly reflection thread"
+    },
+    "save": {
+      "entrypoint": "commands/save/cn-save",
+      "summary": "Commit + push (shorthand for cn commit then cn push)"
+    }
+  }
+}
