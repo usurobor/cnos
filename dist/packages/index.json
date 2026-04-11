@@ -1,0 +1,23 @@
+{
+  "schema": "cn.package-index.v1",
+  "packages": {
+    "cnos.cdd": {
+      "0.1.0": {
+        "url": "dist/packages/cnos.cdd-0.1.0.tar.gz",
+        "sha256": "a4ab3eed8506792035e43be2a4917ba63adbf37e176e57df1df543e9821ab176"
+      }
+    },
+    "cnos.core": {
+      "1.0.0": {
+        "url": "dist/packages/cnos.core-1.0.0.tar.gz",
+        "sha256": "773dab501cd3ce096b7b025d170ffcaee5a0c1e5e16e22804e494ed074b9236b"
+      }
+    },
+    "cnos.eng": {
+      "1.0.0": {
+        "url": "dist/packages/cnos.eng-1.0.0.tar.gz",
+        "sha256": "0c9a16f3106b1fe20a872653b2e645d8b1deb30dc6e4ab9d1ab2e92e69b98ced"
+      }
+    }
+  }
+}
