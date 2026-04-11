@@ -152,10 +152,13 @@ cnos/
       cmd/cn/          Entrypoint
       internal/        Packages: cli, doctor, hubinit, hubstatus,
                        hubsetup, binupdate, pkgbuild, pkg, restore
-    agent/             Cognitive content (migrating to src/packages/)
-      doctrine/        Core doctrine (FOUNDATIONS, CAP, COHERENCE, ...)
-      mindsets/        Behavioral frames (ENGINEERING, PM, WISDOM, ...)
-      skills/          Task-specific skills (agent/, cdd/, eng/, ops/)
+    packages/          Cognitive content — one dir per package
+      cnos.core/       Doctrine, mindsets, templates, agent + ops skills, commands
+      cnos.eng/        Engineering skills
+      cnos.cdd/        CDD skills (review, release, design, issue, post-release)
+      cnos.agent/      Agent runtime skills (placeholder — Phase 5)
+      cnos.hub/        Hub management skills (placeholder — Phase 5)
+      cnos.net.http/   HTTP extension
     ocaml/             Legacy OCaml runtime (ceased — retained until Phase 5 deletion)
   dist/                All built output
     packages/          Package tarballs + index + checksums
@@ -165,7 +168,7 @@ cnos/
   test/                Tests
 ```
 
-> `cn build` assembles from `src/` → `dist/packages/`. `cn setup` installs from dist into a hub's `.cn/vendor/packages/`. See [BUILD-AND-DIST.md](./docs/alpha/package-system/BUILD-AND-DIST.md).
+> `cn build` assembles from `src/packages/` → `dist/packages/`. `cn setup` installs from dist into a hub's `.cn/vendor/packages/`. See [BUILD-AND-DIST.md](./docs/alpha/package-system/BUILD-AND-DIST.md).
 
 ### Agent hub (created by `cn init` + `cn setup`)
 
