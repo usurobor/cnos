@@ -3,7 +3,7 @@
 // tar extract → validate cn.package.json.
 //
 // This is the Go equivalent of the restore path in
-// src/cmd/cn_deps.ml. Phase 1 implements only the HTTP restore
+// src/ocaml/cmd/cn_deps.ml. Phase 1 implements only the HTTP restore
 // path — local-source development restore (try_restore_local)
 // is out of scope.
 package restore
@@ -43,7 +43,7 @@ func FindIndexPath(hubPath string) string {
 	}
 }
 
-// --- IO wrappers for pure parsers (mirrors OCaml src/cmd/ vs src/lib/ split) ---
+// --- IO wrappers for pure parsers (mirrors OCaml src/ocaml/cmd/ vs src/ocaml/lib/ split) ---
 
 // ReadLockfile reads and parses a lockfile from disk.
 func ReadLockfile(path string) (*pkg.Lockfile, error) {
