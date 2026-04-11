@@ -128,6 +128,7 @@ Do **not** use GitHub PRs, Issues, or Discussions.
 | Requirement | Why |
 |-------------|-----|
 | Unix-like OS | Linux, macOS, or WSL |
+| Go 1.22+ | Build from source (or use prebuilt binary from releases) |
 | curl | Runtime uses curl for Claude API + Telegram API |
 | systemd (recommended) | Automation via `cn agent --daemon` as a systemd service ([setup](./docs/beta/guides/AUTOMATION.md)) |
 | Always-on server | Agents need to be reachable (VPS recommended) |
@@ -136,7 +137,7 @@ Do **not** use GitHub PRs, Issues, or Discussions.
 
 ## The cn CLI
 
-Native OCaml binary. Built with `dune build src/cli/cn.exe`.
+Native Go binary. Built with `go build ./cmd/cn`.
 
 ### Agent decisions (GTD)
 
@@ -212,12 +213,9 @@ Aliases: `i`=inbox · `o`=outbox · `s`=status · `d`=doctor
 
 ```
 cnos/
-  src/                 Native OCaml CLI and libraries
-    cli/cn.ml          CLI dispatch (~130 lines)
-    lib/               Pure types, JSON, protocol FSMs
-    cmd/               Runtime modules (cn_runtime, cn_build, cn_shell, ...)
-    ffi/               System bindings (Fs, Path, Process, Http)
-    transport/         Git I/O + inbox utilities
+  cmd/cn/              Go CLI entrypoint
+  internal/            Go packages (cli, doctor, hubinit, hubstatus, hubsetup, binupdate, pkgbuild)
+  src/                 Legacy OCaml source (ceased — retained until Phase 5 deletion)
     agent/             Source of truth for cognitive content
       doctrine/        Core doctrine files (FOUNDATIONS, CAP, COHERENCE, ...)
       mindsets/        Behavioral frames (ENGINEERING, PM, WISDOM, ...)
@@ -310,7 +308,7 @@ cn-<name>/
 
 ## Contributing
 
-Fork, branch, make changes, run `dune runtest`, submit.
+Fork, branch, make changes, run `go test ./...`, submit.
 
 Commit style: `type: short description` — types: `feat`, `fix`, `docs`, `chore`, `refactor`, `test`.
 
