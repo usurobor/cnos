@@ -27,7 +27,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/usurobor/cnos/go/internal/pkg"
+	"github.com/usurobor/cnos/src/go/internal/pkg"
 )
 
 // Options carries the runtime context for a setup run.

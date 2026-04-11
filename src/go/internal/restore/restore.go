@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/usurobor/cnos/go/internal/pkg"
+	"github.com/usurobor/cnos/src/go/internal/pkg"
 )
 
 // FindIndexPath walks up from hubPath looking for packages/index.json.

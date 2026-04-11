@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/usurobor/cnos/go/internal/pkgbuild"
+	"github.com/usurobor/cnos/src/go/internal/pkgbuild"
 )
 
 // BuildCmd implements the "build" command per BUILD-AND-DIST.md:

@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/usurobor/cnos/go/internal/cli"
+	"github.com/usurobor/cnos/src/go/internal/cli"
 )
 
 // version and commit are set at build time via -ldflags. They default

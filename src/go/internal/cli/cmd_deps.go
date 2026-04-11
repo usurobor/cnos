@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/usurobor/cnos/go/internal/restore"
+	"github.com/usurobor/cnos/src/go/internal/restore"
 )
 
 // DepsCmd implements the "deps" command with subcommands:

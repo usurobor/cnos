@@ -3,7 +3,7 @@ package cli
 import (
 	"context"
 
-	"github.com/usurobor/cnos/go/internal/hubinit"
+	"github.com/usurobor/cnos/src/go/internal/hubinit"
 )
 
 // InitCmd implements the "init" command — creates a new hub.

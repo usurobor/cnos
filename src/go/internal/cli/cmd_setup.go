@@ -3,7 +3,7 @@ package cli
 import (
 	"context"
 
-	"github.com/usurobor/cnos/go/internal/hubsetup"
+	"github.com/usurobor/cnos/src/go/internal/hubsetup"
 )
 
 // SetupCmd implements the "setup" command — makes a hub wake-ready.
