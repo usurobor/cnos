@@ -115,14 +115,6 @@ Two-agent author+review is sufficient for many cycles, but review judgment and r
 - β owns what the system actually becomes after integration
 - γ owns independent judgment before release
 
-#### Delegated implementation
-
-A delegated implementer is still an α-side role. Delegation does not transfer ownership of the cycle.
-
-#### Operator override
-
-The operator may reassign any role explicitly. Implicit role drift is not permitted.
-
 **Small-change exception:** A small-change cycle (§1.2) may be completed by one agent when:
 
 - the change qualifies under §1.2,
