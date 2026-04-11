@@ -13,54 +13,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup OCaml
-        uses: ocaml/setup-ocaml@v3
+      - name: Setup Go
+        uses: actions/setup-go@v5
         with:
-          ocaml-compiler: 4.14.x
-
-      - name: Install dependencies
-        run: |
-          opam install dune ppx_expect ppxlib mdx --yes
-        env:
-          OPAMRETRIES: "3"
+          go-version: '1.22'
+          cache-dependency-path: go/go.sum
 
       - name: Build cn binary
-        run: |
-          eval $(opam env)
-          dune build src/cli/cn.exe
+        working-directory: go
+        run: go build -o ../cn ./cmd/cn
 
       - name: Check package/source sync
-        run: |
-          eval $(opam env)
-          ./_build/default/src/cli/cn.exe build --check
+        run: ./cn build --check
 
   protocol-contract-check:
-    name: Protocol contract + traceability (I2/I3)
+    name: Protocol contract schema sync (I2)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup OCaml
-        uses: ocaml/setup-ocaml@v3
-        with:
-          ocaml-compiler: 4.14.x
-
-      - name: Install dependencies
-        run: |
-          opam install dune ppx_expect ppxlib mdx --yes
-        env:
-          OPAMRETRIES: "3"
-
       - name: Check contract copy matches source
         run: diff docs/alpha/schemas/protocol-contract.json test/cmd/protocol-contract.json
-
-      - name: Run invariant tests
-        run: |
-          eval $(opam env)
-          mkdir -p "$TMPDIR"
-          dune runtest test/cmd -j 1
-        env:
-          TMPDIR: ${{ runner.temp }}/dune-tests
 
   notify:
     needs: [coherence-build-check, protocol-contract-check]

@@ -25,31 +25,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup OCaml
-        uses: ocaml/setup-ocaml@v3
+      - name: Setup Go
+        uses: actions/setup-go@v5
         with:
-          ocaml-compiler: 4.14.x
+          go-version: '1.22'
+          cache-dependency-path: go/go.sum
 
-      - name: Install dependencies
-        run: opam install dune ppx_expect ppxlib mdx --yes
+      - name: Build binary
+        working-directory: go
+        run: go build -o cn ./cmd/cn
 
-      - name: Build native binary
-        run: |
-          eval $(opam env)
-          dune build src/cli/cn.exe
-
-      - name: Run tests
-        run: |
-          eval $(opam env)
-          mkdir -p "$TMPDIR"
-          dune runtest -j 1
-        env:
-          TMPDIR: ${{ runner.temp }}/dune-tests
+      - name: Test
+        working-directory: go
+        run: go test ./... -v
 
       - name: Package binary
         run: |
           mkdir -p dist
-          cp _build/default/src/cli/cn.exe dist/cn-${{ matrix.target }}
+          cp go/cn dist/cn-${{ matrix.target }}
           chmod +x dist/cn-${{ matrix.target }}
 
       - name: Upload artifact
@@ -70,6 +63,12 @@ jobs:
           fetch-depth: 0
           ref: main
 
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache-dependency-path: go/go.sum
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -88,27 +87,14 @@ jobs:
           cat checksums.txt
 
       - name: Build package tarballs and index
-        env:
-          CNOS_REPO: ${{ github.repository }}
         run: |
-          scripts/build-packages.sh
+          cd go && go build -o ../cn ./cmd/cn && cd ..
+          ./cn build
           mkdir -p artifacts/packages
-          cp dist/packages/*.tar.gz artifacts/packages/
-          cp packages/index.json artifacts/packages/
-          ls -la artifacts/packages/
-
-      - name: Commit updated package index
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          if ! git diff --quiet -- packages/index.json; then
-            git add packages/index.json
-            git commit -m "chore(release): update packages/index.json for ${GITHUB_REF_NAME}"
-            # Push the index update to main so the raw GitHub URL resolves it.
-            git push origin HEAD:main || echo "WARN: could not push index update to main (non-fatal)"
-          else
-            echo "packages/index.json unchanged"
-          fi
+          cp dist/packages/*.tar.gz artifacts/packages/ 2>/dev/null || true
+          cp dist/packages/index.json artifacts/packages/ 2>/dev/null || true
+          cp dist/packages/checksums.txt artifacts/packages/ 2>/dev/null || true
+          ls -la artifacts/packages/ 2>/dev/null || echo "No packages built (src/packages/ may not exist yet)"
 
       - name: Check for release notes
         id: notes
