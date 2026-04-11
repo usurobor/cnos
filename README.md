@@ -151,25 +151,22 @@ cnos/
     cmd/cn/            CLI entrypoint
     internal/          Packages: cli, doctor, hubinit, hubstatus,
                        hubsetup, binupdate, pkgbuild, pkg, restore
-  src/                 Source
-    agent/             Cognitive content (source of truth)
+  src/                 Source (authored, single source of truth)
+    agent/             Cognitive content (current layout, migrating to src/packages/)
       doctrine/        Core doctrine (FOUNDATIONS, CAP, COHERENCE, ...)
       mindsets/        Behavioral frames (ENGINEERING, PM, WISDOM, ...)
       skills/          Task-specific skills (agent/, cdd/, eng/, ops/)
-    cli/               Legacy OCaml CLI (ceased)
-    cmd/               Legacy OCaml runtime modules (ceased)
-    lib/               Legacy OCaml types and FSMs (ceased)
-  packages/            Intermediate build — assembled by 'cn build' from src/agent/
-    cnos.core/         Doctrine, mindsets, core skills
-    cnos.eng/          Engineering skills
-  dist/                Distribution output
-    packages/          Release-ready package tarballs
+  dist/                Distribution output (built by 'cn build')
+    packages/          Release-ready package tarballs + index + checksums
+    bin/               Platform binaries (linux/macos × x64/arm64)
   profiles/            Setup-time presets (engineer, pm)
   scripts/             Build and release scripts
   spec/                SOUL.md, USER.md — cnos project identity
   docs/                Documentation (triadic: α pattern, β relation, γ evolution)
   test/                Tests
 ```
+
+> **Migration note:** Package sources are moving from `src/agent/` to `src/packages/` (per [BUILD-AND-DIST.md](./docs/alpha/package-system/BUILD-AND-DIST.md)). `cn build` assembles from source → `dist/packages/`. `cn setup` installs from dist into a hub's `.cn/vendor/packages/`.
 
 ### Agent hub (created by `cn init` + `cn setup`)
 
