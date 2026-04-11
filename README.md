@@ -159,7 +159,6 @@ cnos/
   dist/                All built output
     packages/          Package tarballs + index + checksums
     bin/               Platform binaries (linux/macos × x64/arm64)
-  profiles/            Setup-time presets (engineer, pm)
   scripts/             Build and release scripts
   spec/                SOUL.md, USER.md — cnos project identity
   docs/                Documentation (triadic: α pattern, β relation, γ evolution)

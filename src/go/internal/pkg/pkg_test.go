@@ -69,11 +69,11 @@ func TestLockfileRoundTrip(t *testing.T) {
 }
 
 func TestParsePackageIndex(t *testing.T) {
-	// Use the live index from the repo root.
+	// Use the live index from dist/ if it exists (built by cn build).
 	repoRoot := findRepoRoot(t)
-	data, err := os.ReadFile(filepath.Join(repoRoot, "packages", "index.json"))
+	data, err := os.ReadFile(filepath.Join(repoRoot, "dist", "packages", "index.json"))
 	if err != nil {
-		t.Fatalf("read live index: %v", err)
+		t.Skip("dist/packages/index.json not present (run cn build first)")
 	}
 	idx, err := ParsePackageIndex(data)
 	if err != nil {
