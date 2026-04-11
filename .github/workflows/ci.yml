@@ -16,26 +16,26 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
-          cache-dependency-path: go/go.sum
+          cache-dependency-path: src/go/go.sum
 
       - name: Build
-        working-directory: go
+        working-directory: src/go
         run: go build ./...
 
       - name: Build binary
-        working-directory: go
+        working-directory: src/go
         run: go build -o cn ./cmd/cn
 
       - name: Test
-        working-directory: go
+        working-directory: src/go
         run: go test ./... -v
 
       - name: Vet
-        working-directory: go
+        working-directory: src/go
         run: go vet ./...
 
       - name: Dispatch boundary check (INVARIANTS.md T-002)
-        working-directory: go
+        working-directory: src/go
         run: |
           VIOLATIONS=""
           for f in internal/cli/cmd_*.go; do
@@ -53,7 +53,7 @@ jobs:
           echo "✓ Dispatch boundary: all cmd_*.go files are thin wrappers"
 
       - name: Smoke test
-        working-directory: go
+        working-directory: src/go
         run: |
           ./cn --version
           ./cn --help

@@ -98,7 +98,7 @@ curl -fsSL https://raw.githubusercontent.com/usurobor/cnos/main/install.sh | sh
 
 ```bash
 git clone https://github.com/usurobor/cnos.git
-cd cnos/go
+cd cnos/src/go
 go build -o cn ./cmd/cn
 ```
 
@@ -147,17 +147,17 @@ Design docs:
 
 ```
 cnos/
-  go/                  Go CLI (the active codebase)
-    cmd/cn/            CLI entrypoint
-    internal/          Packages: cli, doctor, hubinit, hubstatus,
+  src/                 All source
+    go/                CLI source (the active Go codebase)
+      cmd/cn/          Entrypoint
+      internal/        Packages: cli, doctor, hubinit, hubstatus,
                        hubsetup, binupdate, pkgbuild, pkg, restore
-  src/                 Source (authored, single source of truth)
-    agent/             Cognitive content (current layout, migrating to src/packages/)
+    agent/             Cognitive content (migrating to src/packages/)
       doctrine/        Core doctrine (FOUNDATIONS, CAP, COHERENCE, ...)
       mindsets/        Behavioral frames (ENGINEERING, PM, WISDOM, ...)
       skills/          Task-specific skills (agent/, cdd/, eng/, ops/)
-  dist/                Distribution output (built by 'cn build')
-    packages/          Release-ready package tarballs + index + checksums
+  dist/                All built output
+    packages/          Package tarballs + index + checksums
     bin/               Platform binaries (linux/macos × x64/arm64)
   profiles/            Setup-time presets (engineer, pm)
   scripts/             Build and release scripts
@@ -166,7 +166,7 @@ cnos/
   test/                Tests
 ```
 
-> **Migration note:** Package sources are moving from `src/agent/` to `src/packages/` (per [BUILD-AND-DIST.md](./docs/alpha/package-system/BUILD-AND-DIST.md)). `cn build` assembles from source → `dist/packages/`. `cn setup` installs from dist into a hub's `.cn/vendor/packages/`.
+> `cn build` assembles from `src/` → `dist/packages/`. `cn setup` installs from dist into a hub's `.cn/vendor/packages/`. See [BUILD-AND-DIST.md](./docs/alpha/package-system/BUILD-AND-DIST.md).
 
 ### Agent hub (created by `cn init` + `cn setup`)
 
