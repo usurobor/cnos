@@ -1,3 +1,8 @@
+---
+name: star-sync
+triggers: [sync, star, fetch, push, pull]
+---
+
 # Star Sync
 
 TERMS:

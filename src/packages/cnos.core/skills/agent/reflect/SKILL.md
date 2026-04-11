@@ -1,3 +1,8 @@
+---
+name: reflect
+triggers: [reflect, daily, weekly, retrospective, what happened]
+---
+
 # Reflect
 
 ## Core Principle

@@ -1,3 +1,8 @@
+---
+name: follow-up
+triggers: [follow up, check, verify, confirm, track]
+---
+
 # Follow-Up Skill
 
 ## Purpose

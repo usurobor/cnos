@@ -1,3 +1,8 @@
+---
+name: self-cohere
+triggers: [self-cohere, self-check, alignment, drift, recalibrate]
+---
+
 # Self Cohere
 
 Wire the agent to an existing hub and establish constitutive self before normal work begins.

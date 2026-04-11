@@ -1,3 +1,8 @@
+---
+name: ship
+triggers: [ship, deploy, deliver, merge, land]
+---
+
 # Ship
 
 Ship code to production or merge to main.

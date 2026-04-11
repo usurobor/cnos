@@ -1,3 +1,8 @@
+---
+name: process-economics
+triggers: [process, economics, cost, efficiency, overhead]
+---
+
 # Process Economics
 
 Add, keep, simplify, automate, or remove process only when it earns its cost.

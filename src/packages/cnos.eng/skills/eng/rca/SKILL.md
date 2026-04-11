@@ -1,3 +1,8 @@
+---
+name: rca
+triggers: [RCA, root cause, failure, incident, postmortem, debug]
+---
+
 # RCA
 
 Blameless Root Cause Analysis after incidents.

@@ -1,3 +1,8 @@
+---
+name: testing
+triggers: [test, testing, unit test, integration test, coverage]
+---
+
 # Testing
 
 Prove system behavior from invariants, not just examples.

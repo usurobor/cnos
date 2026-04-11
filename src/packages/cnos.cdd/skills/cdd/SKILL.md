@@ -4,6 +4,7 @@ description: Apply Coherence-Driven Development to substantial changes. Use when
 artifact_class: skill
 kata_surface: embedded
 governing_question: How does a substantial change move from observed incoherence to closed cycle with explicit artifacts and assessment?
+triggers: [review, PR, release, issue, design, plan, assess, post-release, ship, tag]
 ---
 
 # CDD

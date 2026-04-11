@@ -1,3 +1,8 @@
+---
+name: emoji-language
+triggers: [emoji, expression, shorthand]
+---
+
 # Emoji Language
 
 Compressed operator↔agent signaling via emoji. Reduces friction, preserves intent. First step toward CTB.

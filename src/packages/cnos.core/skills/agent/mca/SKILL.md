@@ -1,3 +1,8 @@
+---
+name: mca
+triggers: [MCA, act, system change, fix, build, ship]
+---
+
 # MCA
 
 How to identify and take Minimum Coherent Actions.

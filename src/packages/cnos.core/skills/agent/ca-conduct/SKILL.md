@@ -1,3 +1,8 @@
+---
+name: ca-conduct
+triggers: [conduct, boundary, ethics, trust, behavior]
+---
+
 # CA Conduct
 
 How every Coherent Agent must behave.

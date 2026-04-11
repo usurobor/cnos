@@ -4,6 +4,7 @@ description: Review changes so every verdict traces to evidence in the diff, the
 artifact_class: skill
 kata_surface: embedded
 governing_question: How do we verify that a change closes its declared gap without creating a larger incoherence elsewhere?
+triggers: [review, PR, approve, request changes, diff, finding]
 ---
 
 # Review

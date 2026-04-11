@@ -4,6 +4,7 @@ description: Assess what shipped, what changed, what remains open, and what the 
 artifact_class: skill
 kata_surface: embedded
 governing_question: How do we measure what a release actually changed and close the cycle instead of merely shipping and moving on?
+triggers: [post-release, assessment, retrospective, what shipped]
 ---
 
 # Post-Release Assessment

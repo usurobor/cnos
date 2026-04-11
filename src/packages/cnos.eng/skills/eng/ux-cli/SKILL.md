@@ -1,3 +1,8 @@
+---
+name: ux-cli
+triggers: [UX, CLI, interface, usability, ergonomics]
+---
+
 # UX CLI
 
 Terminal application UX standards.

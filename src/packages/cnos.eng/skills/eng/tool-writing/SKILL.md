@@ -1,3 +1,8 @@
+---
+name: tool-writing
+triggers: [tool, script, automation, CLI, utility]
+---
+
 # Tool Writing
 
 Standards for mechanical scripts in `tools/`.

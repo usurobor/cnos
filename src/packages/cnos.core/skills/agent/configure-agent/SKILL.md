@@ -1,3 +1,8 @@
+---
+name: configure-agent
+triggers: [configure, setup, identity, SOUL, USER, customize]
+---
+
 # Configure Agent
 
 Install or update the agent's constitutive self and operator relationship.

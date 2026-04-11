@@ -1,3 +1,8 @@
+---
+name: coherent
+triggers: [coherence, alignment, incoherence, gap, drift]
+---
+
 # Coherent
 
 Produce outputs where internal consistency and external alignment are verifiable.

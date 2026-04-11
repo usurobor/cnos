@@ -1,3 +1,8 @@
+---
+name: hello-world
+triggers: [hello, introduce, first run, onboard]
+---
+
 # Hello World
 
 Create initial "Hello, world" thread in hub.
