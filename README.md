@@ -128,7 +128,8 @@ Do **not** use GitHub PRs, Issues, or Discussions.
 | Requirement | Why |
 |-------------|-----|
 | Unix-like OS | Linux, macOS, or WSL |
-| Go 1.22+ | Build from source (or use prebuilt binary from releases) |
+| Go 1.22+ | Kernel commands (or use prebuilt binary from releases) |
+| OCaml 5.x + opam | Full agent runtime (until Go Phase 5) |
 | curl | Runtime uses curl for Claude API + Telegram API |
 | systemd (recommended) | Automation via `cn agent --daemon` as a systemd service ([setup](./docs/beta/guides/AUTOMATION.md)) |
 | Always-on server | Agents need to be reachable (VPS recommended) |
@@ -137,7 +138,9 @@ Do **not** use GitHub PRs, Issues, or Discussions.
 
 ## The cn CLI
 
-Native Go binary. Built with `go build ./cmd/cn`.
+> **Migration in progress:** cnos is migrating from OCaml to modular Go. The Go binary currently provides 8 kernel commands (help, init, setup, deps, status, doctor, build, update). The full agent runtime (scheduler, CN Shell, thread FSMs, peer sync) remains in OCaml until Phase 5. See the [Go kernel roadmap](./docs/alpha/architecture/GO-KERNEL-COMMANDS.md) for status.
+
+Built with `go build ./cmd/cn` (Go) or `dune build src/cli/cn.exe` (legacy OCaml runtime).
 
 ### Agent decisions (GTD)
 
@@ -213,9 +216,14 @@ Aliases: `i`=inbox · `o`=outbox · `s`=status · `d`=doctor
 
 ```
 cnos/
-  cmd/cn/              Go CLI entrypoint
+  cmd/cn/              Go CLI entrypoint (kernel commands)
   internal/            Go packages (cli, doctor, hubinit, hubstatus, hubsetup, binupdate, pkgbuild)
-  src/                 Legacy OCaml source (ceased — retained until Phase 5 deletion)
+  src/                 OCaml source (full agent runtime — active until Go Phase 5 replaces it)
+    cli/cn.ml          OCaml CLI dispatch
+    lib/               Pure types, JSON, protocol FSMs
+    cmd/               Runtime modules (cn_runtime, cn_build, cn_shell, ...)
+    ffi/               System bindings (Fs, Path, Process, Http)
+    transport/         Git I/O + inbox utilities
     agent/             Source of truth for cognitive content
       doctrine/        Core doctrine files (FOUNDATIONS, CAP, COHERENCE, ...)
       mindsets/        Behavioral frames (ENGINEERING, PM, WISDOM, ...)
@@ -308,7 +316,7 @@ cn-<name>/
 
 ## Contributing
 
-Fork, branch, make changes, run `go test ./...`, submit.
+Fork, branch, make changes, run `go test ./...` (Go) and/or `dune runtest` (OCaml), submit.
 
 Commit style: `type: short description` — types: `feat`, `fix`, `docs`, `chore`, `refactor`, `test`.
 
