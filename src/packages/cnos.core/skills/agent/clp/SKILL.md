@@ -1,3 +1,8 @@
+---
+name: clp
+triggers: [coherence, check, verify, CLP, pattern, relation, exit]
+---
+
 # Coherence Ladder Process (CLP)
 
 Refine any artifact toward higher coherence before publishing, by climbing explicit versions through a triadic self-check loop.

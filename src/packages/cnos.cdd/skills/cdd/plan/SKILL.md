@@ -4,6 +4,7 @@ description: Turn a converged design into an ordered implementation sequence wit
 artifact_class: runbook
 kata_surface: none
 governing_question: How do we operationalize an accepted design into an ordered sequence of implementation steps?
+triggers: [plan, implementation, sequence, steps, operationalize]
 ---
 
 # Plan

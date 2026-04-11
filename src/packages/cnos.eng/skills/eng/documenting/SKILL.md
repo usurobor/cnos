@@ -1,3 +1,8 @@
+---
+name: documenting
+triggers: [document, docs, README, write docs, explain]
+---
+
 # Documenting
 
 Write documentation that describes reality, not intentions.

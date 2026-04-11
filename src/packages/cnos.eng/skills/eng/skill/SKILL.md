@@ -1,6 +1,7 @@
 ---
 name: skill
 artifact_class: deprecated
+triggers: [skill, write skill, create skill, SKILL.md]
 ---
 
 # Skill (deprecated)

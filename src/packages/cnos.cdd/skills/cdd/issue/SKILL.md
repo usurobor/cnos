@@ -4,6 +4,7 @@ description: Write an issue so problem, impact, and acceptance criteria are spec
 artifact_class: runbook
 kata_surface: none
 governing_question: How do we write an issue that is specific, actionable, and testable?
+triggers: [issue, bug, feature, problem, acceptance criteria]
 ---
 
 # Issue

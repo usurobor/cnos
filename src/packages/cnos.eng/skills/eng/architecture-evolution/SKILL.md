@@ -1,3 +1,8 @@
+---
+name: architecture-evolution
+triggers: [architecture, evolution, refactor, restructure, migration]
+---
+
 # Architecture Evolution
 
 Change the shape of the system so repeated future work becomes simpler, safer, and cheaper.

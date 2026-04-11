@@ -1,6 +1,7 @@
 ---
 name: functional
 description: Write code in functional style — pure core, effects at edges, composition over mutation. Use for design decisions, refactoring toward FP, or reviewing code for functional patterns.
+triggers: [functional, pure, immutable, composition, algebraic]
 ---
 
 # Functional Programming

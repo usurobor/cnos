@@ -1,3 +1,8 @@
+---
+name: communicating
+triggers: [communicate, message, tone, clarity, respond]
+---
+
 # Communicating
 
 Every word carries weight. Say it or don't.

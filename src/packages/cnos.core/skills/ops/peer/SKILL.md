@@ -1,3 +1,8 @@
+---
+name: peer
+triggers: [peer, handshake, peering, sync, connect]
+---
+
 # Peer
 
 Add another agent as a peer.

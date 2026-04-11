@@ -1,3 +1,8 @@
+---
+name: adhoc-thread
+triggers: [adhoc, thread, topic, working thread]
+---
+
 # Adhoc Thread
 
 ## Core Principle

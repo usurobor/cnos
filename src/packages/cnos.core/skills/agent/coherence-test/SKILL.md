@@ -1,3 +1,8 @@
+---
+name: coherence-test
+triggers: [coherence test, verify, validate, self-check]
+---
+
 # Coherence Test
 
 Certification test for Coherent Agent (CA) badge.

@@ -1,3 +1,8 @@
+---
+name: agent-ops
+triggers: [ops, status, doctor, hub, maintenance]
+---
+
 # Agent Ops
 
 Operations an agent can request via `state/output.md`.

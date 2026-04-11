@@ -1,3 +1,8 @@
+---
+name: performance-reliability
+triggers: [performance, reliability, latency, throughput, uptime]
+---
+
 # Performance & Reliability
 
 Model cost, saturation, failure, and degradation before the system surprises you in production.

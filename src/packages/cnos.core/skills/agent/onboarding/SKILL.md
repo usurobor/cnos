@@ -1,3 +1,8 @@
+---
+name: onboarding
+triggers: [onboard, new agent, bootstrap, first wake]
+---
+
 # Onboarding
 
 First steps for a new coherent agent. Complete in order.

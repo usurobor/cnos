@@ -1,3 +1,8 @@
+---
+name: mci
+triggers: [MCI, model update, learn, reflect, trace, note]
+---
+
 # MCI
 
 How to identify and capture Minimum Coherent Insights.

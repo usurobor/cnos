@@ -1,3 +1,8 @@
+---
+name: cbp
+triggers: [boundary, policy, permission, gate, constraint]
+---
+
 # CBP
 
 The Coherent Behavior Principle — how agents treat others.
