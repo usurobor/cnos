@@ -29,7 +29,7 @@ Thumbs.db
 *.key
 
 # Build artifacts
-dist/
+dist/bin/
 build/
 coverage/
 *.tgz
