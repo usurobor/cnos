@@ -39,3 +39,8 @@ coverage/
 
 # OCaml/Dune build output
 _build/
+
+# Built binaries
+src/cn
+src/go/cn
+cn
