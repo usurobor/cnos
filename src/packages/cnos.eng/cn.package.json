@@ -5,5 +5,28 @@
   "kind": "package",
   "engines": {
     "cnos": ">=3.50.0"
+  },
+  "skills": {
+    "exposed": [
+      "eng/architecture-evolution",
+      "eng/coding",
+      "eng/design-principles",
+      "eng/documenting",
+      "eng/follow-up",
+      "eng/functional",
+      "eng/go",
+      "eng/ocaml",
+      "eng/performance-reliability",
+      "eng/process-economics",
+      "eng/rca",
+      "eng/ship",
+      "eng/skill",
+      "eng/testing",
+      "eng/tool-writing",
+      "eng/typescript",
+      "eng/ux-cli",
+      "eng/writing",
+      "skill"
+    ]
   }
 }
