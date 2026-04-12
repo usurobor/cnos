@@ -179,7 +179,7 @@ For every PR in this release cycle, record:
 1. **Review rounds** — how many iterations before merge (fix commits + review comments requesting changes). Target: ≤1 for docs PRs, ≤2 for code PRs.
 2. **Superseded PRs** — count of PRs closed-not-merged and replaced. Target: 0.
 3. **Finding taxonomy** — tag each review finding as `mechanical` (automatable: stale cross-refs, missing scope items, wrong branch name) or `judgment` (design coherence, architecture trade-offs).
-4. **Mechanical ratio** — mechanical findings / total findings. If >20%, file an issue to add the missing pre-flight check.
+4. **Mechanical ratio** — mechanical findings / total findings. If >20% AND total findings ≥ 10, file an issue to add the missing pre-flight check. Below 10 findings the ratio is noise — note it but don't file.
 
 This step closes the loop from CDD §9 (Assessment). The review quality section in the output template must be filled.
 
@@ -274,7 +274,7 @@ Before committing the assessment, verify mechanically:
 - [ ] §2 has MCI/MCA balance decision with rationale
 - [ ] §3 has What went wrong, What went right, Skill patches, Active skill re-evaluation, and explicit disposition on CDD improvement (patch landed OR "no patch needed" with justification)
 - [ ] §4 has all fields: PRs, review rounds, superseded PRs, finding breakdown, mechanical ratio, action
-- [ ] §4 mechanical ratio: if >20%, a process issue is **filed and referenced** (not just noted)
+- [ ] §4 mechanical ratio: if >20% AND total findings ≥ 10, a process issue is **filed and referenced** (not just noted). Below 10 findings, note the ratio but no filing required.
 - [ ] §4a CDD self-coherence: α/β/γ scored, weakest axis named, action stated (or "none" if all ≥3)
 - [ ] §3/§4 skill patches: if §3 identifies a recurring failure mode or skill gap, the patch is **in this commit** (not deferred) and synced across all surfaces: `src/agent/skills/`, `packages/cnos.core/skills/` (build-sync §3.3), `docs/gamma/cdd/CDD.md` (authority-sync §3.3a). Verify with `diff` that src/agent and packages/cnos.core copies are identical.
 - [ ] §5.7 has production verification scenario (or explicit deferral with commitment)
