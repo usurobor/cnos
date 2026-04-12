@@ -1,11 +1,12 @@
 // Package restore implements the cn deps restore flow in Go:
-// lockfile → index lookup → HTTP download → SHA-256 verify →
+// lockfile → index lookup → fetch (HTTP or local) → SHA-256 verify →
 // tar extract → validate cn.package.json.
 //
-// This is the Go equivalent of the restore path in
-// src/ocaml/cmd/cn_deps.ml. Phase 1 implements only the HTTP restore
-// path — local-source development restore (try_restore_local)
-// is out of scope.
+// Also provides lockfile generation from a package index
+// (GenerateLockFromIndex) for the `cn deps lock` command.
+//
+// Fetch supports both HTTP URLs (remote index) and relative file paths
+// (local dev workflow: cn build → dist/ → cn deps restore).
 package restore
 
 import (
@@ -22,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -123,9 +125,14 @@ func Restore(ctx context.Context, hubPath, indexPath string) ([]Result, error) {
 func restoreOne(ctx context.Context, hubPath string, idx *pkg.PackageIndex, dep pkg.LockedDep, indexDir string) Result {
 	r := Result{Name: dep.Name, Version: dep.Version}
 
-	pkgDir := pkg.VendorPath(hubPath, dep.Name, dep.Version)
+	pkgDir := pkg.VendorPath(hubPath, dep.Name)
 
 	// Already installed — skip.
+	// NOTE: With version-less VendorPath, this check does not detect
+	// version upgrades (v1 installed, lockfile updated to v2 → directory
+	// exists from v1, skip fires). Version upgrade requires comparing
+	// the installed cn.package.json version against the lockfile version,
+	// or comparing SHA-256 of installed state. Tracked in #230.
 	if _, err := os.Stat(pkgDir); err == nil {
 		slog.DebugContext(ctx, "package already installed, skipping",
 			slog.String("package", dep.Name),
@@ -372,6 +379,8 @@ type LockResult struct {
 // GenerateLockFromIndex reads the package index and generates a lockfile
 // at <hubPath>/.cn/deps.lock.json. This is the domain logic for
 // `cn deps lock` — CLI wiring calls this, keeping cmd_deps.go thin.
+// Uses canonical pkg.Lockfile/pkg.LockedDep types. Output is sorted
+// by name then version for deterministic lockfile content.
 func GenerateLockFromIndex(hubPath, indexPath string) (*LockResult, error) {
 	idx, err := ReadPackageIndex(indexPath)
 	if err != nil {
@@ -383,27 +392,24 @@ func GenerateLockFromIndex(hubPath, indexPath string) (*LockResult, error) {
 		return nil, fmt.Errorf("create lockfile dir: %w", err)
 	}
 
-	// Build the lockfile JSON from the index entries.
-	type lockedDep struct {
-		Name    string `json:"name"`
-		Version string `json:"version"`
-		SHA256  string `json:"sha256"`
-	}
-	type lockfile struct {
-		Schema   string      `json:"schema"`
-		Packages []lockedDep `json:"packages"`
-	}
-
-	lf := lockfile{Schema: "cn.lock.v2"}
+	lf := pkg.Lockfile{Schema: "cn.lock.v2"}
 	for name, versions := range idx.Packages {
 		for version, entry := range versions {
-			lf.Packages = append(lf.Packages, lockedDep{
+			lf.Packages = append(lf.Packages, pkg.LockedDep{
 				Name:    name,
 				Version: version,
 				SHA256:  entry.SHA256,
 			})
 		}
 	}
+
+	// Sort for deterministic output — map iteration order is random.
+	sort.Slice(lf.Packages, func(i, j int) bool {
+		if lf.Packages[i].Name != lf.Packages[j].Name {
+			return lf.Packages[i].Name < lf.Packages[j].Name
+		}
+		return lf.Packages[i].Version < lf.Packages[j].Version
+	})
 
 	data, err := json.MarshalIndent(lf, "", "  ")
 	if err != nil {

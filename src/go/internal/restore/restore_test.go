@@ -105,7 +105,7 @@ func TestRestoreEndToEnd(t *testing.T) {
 	}
 
 	// Verify package was installed.
-	pkgDir := pkg.VendorPath(hub, "cnos.core", "3.42.0")
+	pkgDir := pkg.VendorPath(hub, "cnos.core")
 	if _, err := os.Stat(filepath.Join(pkgDir, "cn.package.json")); err != nil {
 		t.Errorf("cn.package.json not found in vendor: %v", err)
 	}
@@ -160,7 +160,7 @@ func TestRestoreSHA256Mismatch(t *testing.T) {
 	}
 
 	// Verify package was NOT installed.
-	pkgDir := pkg.VendorPath(hub, "cnos.core", "3.42.0")
+	pkgDir := pkg.VendorPath(hub, "cnos.core")
 	if _, err := os.Stat(pkgDir); !os.IsNotExist(err) {
 		t.Error("vendor dir should not exist after sha256 mismatch")
 	}
@@ -175,7 +175,7 @@ func TestRestoreAlreadyInstalled(t *testing.T) {
 	writeJSON(t, indexPath, idx)
 
 	// Pre-install the package.
-	pkgDir := pkg.VendorPath(hub, "cnos.core", "3.42.0")
+	pkgDir := pkg.VendorPath(hub, "cnos.core")
 	os.MkdirAll(pkgDir, 0755)
 	writeJSON(t, filepath.Join(pkgDir, "cn.package.json"), map[string]any{"name": "cnos.core"})
 
@@ -307,7 +307,7 @@ func TestRestoreLocalFile(t *testing.T) {
 	}
 
 	// Verify installed.
-	pkgDir := pkg.VendorPath(hub, "test.local", "1.0.0")
+	pkgDir := pkg.VendorPath(hub, "test.local")
 	if _, err := os.Stat(filepath.Join(pkgDir, "cn.package.json")); err != nil {
 		t.Errorf("cn.package.json not found: %v", err)
 	}
@@ -372,7 +372,7 @@ func TestBuildRestoreRoundTrip(t *testing.T) {
 
 	// 6. Verify round-trip for each package.
 	for _, br := range results {
-		pkgDir := pkg.VendorPath(hub, br.Name, br.Version)
+		pkgDir := pkg.VendorPath(hub, br.Name)
 
 		// cn.package.json must exist and parse.
 		manifestPath := filepath.Join(pkgDir, "cn.package.json")
@@ -388,14 +388,14 @@ func TestBuildRestoreRoundTrip(t *testing.T) {
 
 	// 7. Verify specific content survived the round-trip.
 	alphaSkill := filepath.Join(
-		pkg.VendorPath(hub, "alpha.pkg", "1.0.0"),
+		pkg.VendorPath(hub, "alpha.pkg"),
 		"skills", "alpha-skill", "SKILL.md")
 	if _, err := os.Stat(alphaSkill); err != nil {
 		t.Errorf("alpha skill not found after round-trip: %v", err)
 	}
 
 	betaDoctrine := filepath.Join(
-		pkg.VendorPath(hub, "beta.pkg", "0.5.0"),
+		pkg.VendorPath(hub, "beta.pkg"),
 		"doctrine", "CORE.md")
 	if _, err := os.Stat(betaDoctrine); err != nil {
 		t.Errorf("beta doctrine not found after round-trip: %v", err)

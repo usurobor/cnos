@@ -24,6 +24,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/usurobor/cnos/src/go/internal/pkg"
 )
 
 // ContentClasses lists the 7 content classes that a package may contain.
@@ -347,24 +349,15 @@ func CheckOne(pkg DiscoveredPackage) CheckResult {
 // --- Lockfile generation ---
 
 // GenerateLockfileData produces a cn.lock.v2 lockfile from build results.
+// Uses canonical pkg.Lockfile/pkg.LockedDep types — single schema definition.
 // Pure — no IO.
 func GenerateLockfileData(results []BuildResult) ([]byte, error) {
-	type lockedDep struct {
-		Name    string `json:"name"`
-		Version string `json:"version"`
-		SHA256  string `json:"sha256"`
-	}
-	type lockfile struct {
-		Schema   string      `json:"schema"`
-		Packages []lockedDep `json:"packages"`
-	}
-
-	lf := lockfile{Schema: "cn.lock.v2"}
+	lf := pkg.Lockfile{Schema: "cn.lock.v2"}
 	for _, r := range results {
 		if r.Err != nil {
 			continue
 		}
-		lf.Packages = append(lf.Packages, lockedDep{
+		lf.Packages = append(lf.Packages, pkg.LockedDep{
 			Name:    r.Name,
 			Version: r.Version,
 			SHA256:  r.SHA256,

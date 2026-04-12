@@ -130,9 +130,8 @@ func ValidatePackageManifestData(data []byte, expectedName string) error {
 // Format: <hubPath>/.cn/vendor/packages/<name>/
 // Per BUILD-AND-DIST.md: "the installed path does not [carry the version]
 // (.cn/vendor/packages/cnos.core/). This keeps the active runtime simple."
-// The version parameter is accepted for API compatibility but not used
-// in the path — version identity lives in the lockfile and tarball filename.
-func VendorPath(hubPath, name, _ string) string {
+// Version identity lives in the lockfile and the installed cn.package.json.
+func VendorPath(hubPath, name string) string {
 	return hubPath + "/.cn/vendor/packages/" + name
 }
 
