@@ -24,6 +24,7 @@ See [RELEASE-LEVEL-CLASSIFICATION.md](docs/gamma/essays/RELEASE-LEVEL-CLASSIFICA
 
 | Version | C_Σ | α | β | γ | Level | Coherence note |
 |---------|-----|---|---|---|-------|----------------|
+| 3.52.0 | A | A | A | A- | L6 | **Package and repo-local command discovery + dispatch** (#226, PR #231). Go kernel Phase 4: three source forms (kernel, repo-local, package) normalized into one registry, one dispatch. `internal/discover/` owns scanning + exec. `ExecCommand` dispatches via subprocess with `CN_HUB_PATH`/`CN_PACKAGE_ROOT` env vars. `cn help` shows tiered output with `[pkg-name]` attribution. `cn doctor` validates command integrity (missing/non-exec entrypoints, duplicates). Path confinement on manifest entrypoints. 13 new tests. 1 review round, 4 findings (0D, 1B mechanical, 3B/A judgment), all fixed on-branch. T-002 preserved (cmd_*.go thin wrappers, CI-enforced). INV-003 preserved (commands dispatch, no surface conflation). INV-004 preserved (kernel owns precedence). |
 | 3.51.0 | A | A | A | A- | L5 | **Distribution pipeline proved end-to-end** (#227, PR #229). `src/packages/ → cn build → dist/ → cn deps restore → .cn/vendor/packages/` round-trip verified with `TestBuildRestoreRoundTrip`. 3 mismatches fixed: VendorPath aligned to BUILD-AND-DIST.md (version-less), local file restore for dev workflow, `cn deps lock` subcommand. Lockfile types consolidated on `pkg.Lockfile`/`pkg.LockedDep`. T-004 tightened. 2 review rounds, 5 findings all resolved. Known debt: #230 (version upgrade skip). |
 | 3.50.0 | A+ | A+ | A+ | A+ | L7 | **Go kernel Phase 3 complete.** Slice D: `update` + `setup` commands (#212, PR #225). `cn update` fetches latest release, SHA-256 verifies, atomic installs. `cn update --check` for dry run. `cn setup` creates .cn/, agent/, default deps.json, .gitignore. All 8 kernel commands implemented: help, init, setup, deps, status, doctor, build, update. 63 Go tests. eng/design-principles skill (L6): Parnas/Martin/Liskov + cnos-specific rules. CDD review §2.2.14 architecture check (7 questions A-G) + §2.3.5 verdict gate — turns design principles into a mechanical review gate. BUILD-AND-DIST migration steps explicit. T-004 premature canonicalization fixed. I1 caught design-principles manifest drift — first real coherence CI catch on main. α A+ (all 8 commands, dispatch boundary CI-enforced). β A+ (design-principles skill + architecture review gate). γ A+ (full CDD invariants chain complete: author→handoff→review→close→CI). |
 | 3.49.0 | A+ | A | A+ | A+ | L5 | cli/ extraction (#221, PR #222): dispatch boundary enforced. Domain logic extracted from cli/ to internal/doctor/, internal/hubinit/, internal/hubstatus/. FindIndexPath moved to internal/restore/. CI dispatch boundary check added — INVARIANTS.md T-002 is now mechanical. cmd_doctor 238→44 lines, cmd_init 131→27, cmd_status 76→27. INVARIANTS.md v1.2.0: title normalized, stale references cleaned. α A+ because the purity boundary is now machine-enforced, not just review-enforced. γ A+ because the CDD invariants chain (author→handoff→review→close) produced its first mechanicalization. |
@@ -112,6 +113,26 @@ See [RELEASE-LEVEL-CLASSIFICATION.md](docs/gamma/essays/RELEASE-LEVEL-CLASSIFICA
 | v1.1.0 | B | B+ | B | B | L5 | Template layout; git-CN naming; CLI added. |
 | v1.0.0 | B− | B− | C+ | B− | L5 | First public template; git-CN hub + self-cohere. |
 | v0.1.0 | C− | C | C− | D+ | L4 | Moltbook-coupled prototype with SQLite. |
+
+---
+
+## 3.52.0 (2026-04-12)
+
+### Added
+
+- **Package command scanning** (#226): `internal/discover/ScanPackageCommands` walks `.cn/vendor/packages/*/cn.package.json`, parses `commands` entries, creates exec-backed `Command` implementations registered into the unified registry.
+- **Repo-local command scanning** (#226): `internal/discover/ScanRepoLocalCommands` walks `.cn/commands/cn-*`, creates `Command` from filename convention. Operator overrides at tier 1.
+- **External command dispatch** (#226): `ExecCommand.Run()` execs entrypoint scripts with `CN_HUB_PATH`, `CN_PACKAGE_ROOT`, `CN_COMMAND_NAME` environment variables.
+- **Tiered help output** (#226): `cn help` groups commands by Kernel / Repo-local / Package with source attribution (`[cnos.core]`).
+- **Command integrity validation** (#226): `cn doctor` reports missing entrypoints, non-executable files, and duplicate command names within a tier.
+- **Entrypoint path confinement** (#226): manifest entrypoints validated to stay within package directory via `filepath.Rel` — rejects path traversal (`../../`).
+- **`FullPackageManifest` type** (#226): pure type in `internal/pkg/` for parsing `cn.package.json` with command entries. Deterministic ordering via `slices.Sort`.
+- **13 new tests** (#226): 8 in `discover/`, 5 in `pkg/`.
+
+### Changed
+
+- **`doctor.RunAll` signature** (#226): accepts optional `commandIssues` parameter for command integrity reporting.
+- **`DoctorCmd` struct** (#226): receives `Registry` pointer from `main.go` for cross-command validation.
 
 ---
 

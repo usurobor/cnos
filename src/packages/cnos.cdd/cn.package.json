@@ -1,10 +1,10 @@
 {
   "schema": "cn.package.v1",
   "name": "cnos.cdd",
-  "version": "0.1.0",
+  "version": "3.52.0",
   "kind": "package",
   "engines": {
-    "cnos": ">=3.50.0"
+    "cnos": "3.52.0"
   },
   "skills": {
     "exposed": [
