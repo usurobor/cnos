@@ -14,6 +14,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -360,4 +361,57 @@ func Errors(results []Result) []Result {
 		}
 	}
 	return errs
+}
+
+// LockResult records the outcome of lockfile generation.
+type LockResult struct {
+	LockPath string
+	Count    int
+}
+
+// GenerateLockFromIndex reads the package index and generates a lockfile
+// at <hubPath>/.cn/deps.lock.json. This is the domain logic for
+// `cn deps lock` — CLI wiring calls this, keeping cmd_deps.go thin.
+func GenerateLockFromIndex(hubPath, indexPath string) (*LockResult, error) {
+	idx, err := ReadPackageIndex(indexPath)
+	if err != nil {
+		return nil, fmt.Errorf("read index: %w", err)
+	}
+
+	lockPath := filepath.Join(hubPath, ".cn", "deps.lock.json")
+	if err := os.MkdirAll(filepath.Dir(lockPath), 0755); err != nil {
+		return nil, fmt.Errorf("create lockfile dir: %w", err)
+	}
+
+	// Build the lockfile JSON from the index entries.
+	type lockedDep struct {
+		Name    string `json:"name"`
+		Version string `json:"version"`
+		SHA256  string `json:"sha256"`
+	}
+	type lockfile struct {
+		Schema   string      `json:"schema"`
+		Packages []lockedDep `json:"packages"`
+	}
+
+	lf := lockfile{Schema: "cn.lock.v2"}
+	for name, versions := range idx.Packages {
+		for version, entry := range versions {
+			lf.Packages = append(lf.Packages, lockedDep{
+				Name:    name,
+				Version: version,
+				SHA256:  entry.SHA256,
+			})
+		}
+	}
+
+	data, err := json.MarshalIndent(lf, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("marshal lockfile: %w", err)
+	}
+	if err := os.WriteFile(lockPath, append(data, '\n'), 0644); err != nil {
+		return nil, fmt.Errorf("write lockfile: %w", err)
+	}
+
+	return &LockResult{LockPath: lockPath, Count: len(lf.Packages)}, nil
 }
