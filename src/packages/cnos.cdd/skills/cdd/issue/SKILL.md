@@ -100,6 +100,30 @@ Failure mode: issue requires back-and-forth to clarify scope, acceptance, or pri
   - ❌ Issue contains the full gap analysis, implementation steps, and per-file changes
   - ✅ Issue is the concise entry point that links to deeper artifacts
 
+### 2.6. Pre-publish consistency gate (mandatory)
+
+Before posting the issue, cross-check for internal contradictions:
+
+2.6.1. **Scope nouns check**
+  - List every noun (feature, subsystem, registry, concept) mentioned in work items and ACs
+  - Verify each is either in scope or out of scope — not both
+  - ❌ Step 4 work list says "activation index" while out-of-scope says "activation table implementation"
+  - ✅ Every noun in work/ACs appears only on one side of the scope boundary
+
+2.6.2. **Dependency check on parallelism claims**
+  - For any "can parallel" or "independent" claim, verify: does step N's done-when reference any output from step M?
+  - If yes, the steps are not parallel — state the dependency
+  - ❌ "Step 4 can parallel step 3" when Step 4 includes "command registry" which depends on Step 3 discovery
+  - ✅ "Step 4 can begin in parallel for X, but Y depends on Step 3"
+
+2.6.3. **Definition vs. body check**
+  - Re-read the opening definition/summary against the AC list and out-of-scope list
+  - If the definition claims something the ACs don't cover, or the out-of-scope list excludes, narrow the definition
+  - ❌ Definition says "discovers and exposes commands, skills, orchestrators" while orchestrator runtime is out of scope
+  - ✅ Definition matches what the ACs actually verify
+
+This gate exists because the scope section and implementation section are often written as if independent, then never cross-checked. The error class is internal contradiction, not missing information.
+
 ---
 
 ## 3. Rules
