@@ -14,6 +14,7 @@ package pkg
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 )
 
 // --- Manifest (deps.json) ---
@@ -91,6 +92,67 @@ func (idx *PackageIndex) Lookup(name, version string) *IndexEntry {
 		return nil
 	}
 	return &entry
+}
+
+// --- Package command entries ---
+
+// PackageCommandEntry is one command declared in a cn.package.json
+// under the "commands" object. Pure type — no IO.
+type PackageCommandEntry struct {
+	Name       string // command name (map key, e.g. "daily")
+	Entrypoint string // relative path to entrypoint script (e.g. "commands/daily/cn-daily")
+	Summary    string // brief description for help output
+}
+
+// FullPackageManifest is the extended shape of cn.package.json that
+// includes the commands object. Used by command discovery.
+type FullPackageManifest struct {
+	Schema   string                          `json:"schema"`
+	Name     string                          `json:"name"`
+	Version  string                          `json:"version"`
+	Kind     string                          `json:"kind"`
+	Commands map[string]PackageCommandJSON   `json:"commands"`
+}
+
+// PackageCommandJSON is the JSON shape of one command entry in
+// cn.package.json. Exported for deserialization only.
+type PackageCommandJSON struct {
+	Entrypoint string `json:"entrypoint"`
+	Summary    string `json:"summary"`
+}
+
+// ParseFullManifestData parses a cn.package.json and extracts the
+// package name and command declarations. Pure function — takes bytes, no IO.
+func ParseFullManifestData(data []byte) (*FullPackageManifest, error) {
+	var m FullPackageManifest
+	if err := json.Unmarshal(data, &m); err != nil {
+		return nil, fmt.Errorf("parse package manifest: %w", err)
+	}
+	if m.Name == "" {
+		return nil, fmt.Errorf("package manifest missing 'name' field")
+	}
+	return &m, nil
+}
+
+// CommandEntries returns the declared commands as a flat slice.
+// The map key becomes the command name.
+func (m *FullPackageManifest) CommandEntries() []PackageCommandEntry {
+	entries := make([]PackageCommandEntry, 0, len(m.Commands))
+	// Collect keys and sort for deterministic output (eng/go §2.13).
+	keys := make([]string, 0, len(m.Commands))
+	for name := range m.Commands {
+		keys = append(keys, name)
+	}
+	slices.Sort(keys)
+	for _, name := range keys {
+		cmd := m.Commands[name]
+		entries = append(entries, PackageCommandEntry{
+			Name:       name,
+			Entrypoint: cmd.Entrypoint,
+			Summary:    cmd.Summary,
+		})
+	}
+	return entries
 }
 
 // --- Helpers ---

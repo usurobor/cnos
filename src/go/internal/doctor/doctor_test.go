@@ -11,7 +11,7 @@ import (
 
 func TestRunAllHealthyHub(t *testing.T) {
 	hub := makeTestHub(t)
-	checks := RunAll(context.Background(), hub, "3.48.0")
+	checks := RunAll(context.Background(), hub, "3.48.0", nil)
 
 	if len(checks) == 0 {
 		t.Fatal("expected checks")
@@ -32,7 +32,7 @@ func TestRunAllMissingConfig(t *testing.T) {
 	hub := t.TempDir()
 	os.MkdirAll(filepath.Join(hub, ".cn"), 0755)
 
-	checks := RunAll(context.Background(), hub, "3.48.0")
+	checks := RunAll(context.Background(), hub, "3.48.0", nil)
 
 	found := false
 	for _, ch := range checks {
@@ -52,7 +52,7 @@ func TestRunAllPackageMissing(t *testing.T) {
 	lockfile := `{"schema":"cn.lock.v2","packages":[{"name":"cnos.core","version":"1.0.0","sha256":"aaa"},{"name":"cnos.eng","version":"1.0.0","sha256":"bbb"}]}`
 	os.WriteFile(filepath.Join(hub, ".cn", "deps.lock.json"), []byte(lockfile), 0644)
 
-	checks := RunAll(context.Background(), hub, "3.48.0")
+	checks := RunAll(context.Background(), hub, "3.48.0", nil)
 
 	found := false
 	for _, ch := range checks {
@@ -79,7 +79,7 @@ func TestRunAllRuntimeContract(t *testing.T) {
 	data, _ := json.MarshalIndent(contract, "", "  ")
 	os.WriteFile(filepath.Join(contractDir, "runtime-contract.json"), data, 0644)
 
-	checks := RunAll(context.Background(), hub, "3.48.0")
+	checks := RunAll(context.Background(), hub, "3.48.0", nil)
 
 	found := false
 	for _, ch := range checks {
@@ -105,7 +105,7 @@ func TestRunAllIncompleteContract(t *testing.T) {
 	data, _ := json.MarshalIndent(contract, "", "  ")
 	os.WriteFile(filepath.Join(contractDir, "runtime-contract.json"), data, 0644)
 
-	checks := RunAll(context.Background(), hub, "3.48.0")
+	checks := RunAll(context.Background(), hub, "3.48.0", nil)
 
 	found := false
 	for _, ch := range checks {

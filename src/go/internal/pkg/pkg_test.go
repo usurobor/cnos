@@ -156,6 +156,100 @@ func TestVendorPath(t *testing.T) {
 	}
 }
 
+func TestParseFullManifestData_Basic(t *testing.T) {
+	data := []byte(`{
+		"schema": "cn.package.v1",
+		"name": "cnos.core",
+		"version": "1.0.0",
+		"commands": {
+			"daily": {
+				"entrypoint": "commands/daily/cn-daily",
+				"summary": "Create or show today's daily"
+			},
+			"save": {
+				"entrypoint": "commands/save/cn-save",
+				"summary": "Commit + push"
+			}
+		}
+	}`)
+	m, err := ParseFullManifestData(data)
+	if err != nil {
+		t.Fatalf("ParseFullManifestData: %v", err)
+	}
+	if m.Name != "cnos.core" {
+		t.Errorf("name = %q, want %q", m.Name, "cnos.core")
+	}
+	if m.Version != "1.0.0" {
+		t.Errorf("version = %q, want %q", m.Version, "1.0.0")
+	}
+
+	entries := m.CommandEntries()
+	if len(entries) != 2 {
+		t.Fatalf("entries len = %d, want 2", len(entries))
+	}
+	// Sorted alphabetically: daily, save.
+	if entries[0].Name != "daily" {
+		t.Errorf("entries[0].Name = %q, want %q", entries[0].Name, "daily")
+	}
+	if entries[0].Entrypoint != "commands/daily/cn-daily" {
+		t.Errorf("entries[0].Entrypoint = %q", entries[0].Entrypoint)
+	}
+	if entries[1].Name != "save" {
+		t.Errorf("entries[1].Name = %q, want %q", entries[1].Name, "save")
+	}
+}
+
+func TestParseFullManifestData_NoCommands(t *testing.T) {
+	data := []byte(`{"schema": "cn.package.v1", "name": "empty-pkg", "version": "1.0.0"}`)
+	m, err := ParseFullManifestData(data)
+	if err != nil {
+		t.Fatalf("ParseFullManifestData: %v", err)
+	}
+	entries := m.CommandEntries()
+	if len(entries) != 0 {
+		t.Errorf("expected 0 entries, got %d", len(entries))
+	}
+}
+
+func TestParseFullManifestData_MissingName(t *testing.T) {
+	data := []byte(`{"schema": "cn.package.v1", "version": "1.0.0"}`)
+	_, err := ParseFullManifestData(data)
+	if err == nil {
+		t.Fatal("expected error for missing name")
+	}
+}
+
+func TestParseFullManifestData_InvalidJSON(t *testing.T) {
+	_, err := ParseFullManifestData([]byte(`{invalid`))
+	if err == nil {
+		t.Fatal("expected error for invalid JSON")
+	}
+}
+
+func TestCommandEntries_DeterministicOrder(t *testing.T) {
+	data := []byte(`{
+		"schema": "cn.package.v1",
+		"name": "test-pkg",
+		"version": "1.0.0",
+		"commands": {
+			"zebra": {"entrypoint": "cn-zebra", "summary": "z"},
+			"alpha": {"entrypoint": "cn-alpha", "summary": "a"},
+			"middle": {"entrypoint": "cn-middle", "summary": "m"}
+		}
+	}`)
+	m, err := ParseFullManifestData(data)
+	if err != nil {
+		t.Fatalf("ParseFullManifestData: %v", err)
+	}
+	entries := m.CommandEntries()
+	want := []string{"alpha", "middle", "zebra"}
+	for i, e := range entries {
+		if e.Name != want[i] {
+			t.Errorf("entries[%d].Name = %q, want %q", i, e.Name, want[i])
+		}
+	}
+}
+
 // --- helpers ---
 
 func findRepoRoot(t *testing.T) string {

@@ -27,10 +27,46 @@ func (c *HelpCmd) Run(_ context.Context, inv Invocation) error {
 
 	fmt.Fprintf(inv.Stdout, "cn — cnos kernel\n\n")
 	fmt.Fprintf(inv.Stdout, "Usage: cn <command> [args...]\n\n")
-	fmt.Fprintf(inv.Stdout, "Commands:\n")
+
+	// Group commands by source for clear tier attribution.
+	var kernelCmds, repoLocalCmds, packageCmds []Command
 	for _, cmd := range cmds {
-		spec := cmd.Spec()
-		fmt.Fprintf(inv.Stdout, "  %-12s %s\n", spec.Name, spec.Summary)
+		switch cmd.Spec().Source {
+		case SourceKernel:
+			kernelCmds = append(kernelCmds, cmd)
+		case SourceRepoLocal:
+			repoLocalCmds = append(repoLocalCmds, cmd)
+		case SourcePackage:
+			packageCmds = append(packageCmds, cmd)
+		}
+	}
+
+	if len(kernelCmds) > 0 {
+		fmt.Fprintf(inv.Stdout, "Kernel commands:\n")
+		for _, cmd := range kernelCmds {
+			spec := cmd.Spec()
+			fmt.Fprintf(inv.Stdout, "  %-12s %s\n", spec.Name, spec.Summary)
+		}
+	}
+
+	if len(repoLocalCmds) > 0 {
+		fmt.Fprintf(inv.Stdout, "\nRepo-local commands:\n")
+		for _, cmd := range repoLocalCmds {
+			spec := cmd.Spec()
+			fmt.Fprintf(inv.Stdout, "  %-12s %s\n", spec.Name, spec.Summary)
+		}
+	}
+
+	if len(packageCmds) > 0 {
+		fmt.Fprintf(inv.Stdout, "\nPackage commands:\n")
+		for _, cmd := range packageCmds {
+			spec := cmd.Spec()
+			fmt.Fprintf(inv.Stdout, "  %-12s %s", spec.Name, spec.Summary)
+			if spec.Package != "" {
+				fmt.Fprintf(inv.Stdout, "  [%s]", spec.Package)
+			}
+			fmt.Fprintln(inv.Stdout)
+		}
 	}
 
 	if !hasHub {
