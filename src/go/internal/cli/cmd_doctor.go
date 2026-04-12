@@ -9,7 +9,8 @@ import (
 
 // DoctorCmd implements the "doctor" command — validates hub health.
 type DoctorCmd struct {
-	Version string
+	Version  string
+	Registry *Registry // set by main.go so doctor can validate discovered commands
 }
 
 func (c *DoctorCmd) Spec() CommandSpec {
@@ -26,7 +27,13 @@ func (c *DoctorCmd) Run(ctx context.Context, inv Invocation) error {
 	fmt.Fprintf(inv.Stdout, "cn v%s\n", c.Version)
 	fmt.Fprintf(inv.Stdout, "Checking health...\n\n")
 
-	checks := doctor.RunAll(ctx, inv.HubPath, c.Version)
+	// Collect command integrity issues from the full registry.
+	var cmdIssues []doctor.CommandIssue
+	if c.Registry != nil {
+		cmdIssues = validateRegisteredCommands(c.Registry)
+	}
+
+	checks := doctor.RunAll(ctx, inv.HubPath, c.Version, cmdIssues)
 
 	for _, ch := range checks {
 		symbol := "✓"
@@ -43,4 +50,26 @@ func (c *DoctorCmd) Run(ctx context.Context, inv Invocation) error {
 	}
 	fmt.Fprintf(inv.Stdout, "✓ All checks passed.\n")
 	return nil
+}
+
+// validateRegisteredCommands extracts command descriptors from the
+// registry and passes them to doctor for integrity validation.
+// No os/filepath imports here — doctor owns the actual checks.
+func validateRegisteredCommands(reg *Registry) []doctor.CommandIssue {
+	var descs []doctor.CommandDescriptor
+	for _, cmd := range reg.All() {
+		spec := cmd.Spec()
+		desc := doctor.CommandDescriptor{
+			Name:    spec.Name,
+			Source:  string(spec.Source),
+			Tier:    int(spec.Tier),
+			Package: spec.Package,
+		}
+		// If the command has an entrypoint (exec-backed), extract it.
+		if v, ok := cmd.(interface{ Entrypoint() string }); ok {
+			desc.Entrypoint = v.Entrypoint()
+		}
+		descs = append(descs, desc)
+	}
+	return doctor.ValidateCommands(descs)
 }
