@@ -14,6 +14,7 @@ package pkg
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 )
 
 // --- Manifest (deps.json) ---
@@ -142,7 +143,7 @@ func (m *FullPackageManifest) CommandEntries() []PackageCommandEntry {
 	for name := range m.Commands {
 		keys = append(keys, name)
 	}
-	sortStrings(keys)
+	slices.Sort(keys)
 	for _, name := range keys {
 		cmd := m.Commands[name]
 		entries = append(entries, PackageCommandEntry{
@@ -152,16 +153,6 @@ func (m *FullPackageManifest) CommandEntries() []PackageCommandEntry {
 		})
 	}
 	return entries
-}
-
-// sortStrings sorts a string slice in place. Avoids importing "sort"
-// by using a simple insertion sort — command lists are tiny.
-func sortStrings(s []string) {
-	for i := 1; i < len(s); i++ {
-		for j := i; j > 0 && s[j] < s[j-1]; j-- {
-			s[j], s[j-1] = s[j-1], s[j]
-		}
-	}
 }
 
 // --- Helpers ---

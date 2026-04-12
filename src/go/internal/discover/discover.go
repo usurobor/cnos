@@ -14,7 +14,6 @@ package discover
 import (
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -68,6 +67,13 @@ func ScanPackageCommands(hubPath string) []cli.Command {
 
 		for _, ce := range manifest.CommandEntries() {
 			entrypointPath := filepath.Join(pkgDir, ce.Entrypoint)
+			// Validate entrypoint stays within package directory (path confinement).
+			if rel, err := filepath.Rel(pkgDir, entrypointPath); err != nil || strings.HasPrefix(rel, "..") {
+				slog.Debug("scan package commands: entrypoint escapes package dir",
+					slog.String("package", pkgName),
+					slog.String("entrypoint", ce.Entrypoint))
+				continue
+			}
 			cmds = append(cmds, &ExecCommand{
 				spec: cli.CommandSpec{
 					Name:     ce.Name,
@@ -165,104 +171,13 @@ func (c *ExecCommand) Run(ctx context.Context, inv cli.Invocation) error {
 	if err := cmd.Run(); err != nil {
 		// If the command exited with a non-zero status, surface that.
 		if exitErr, ok := err.(*exec.ExitError); ok {
-			return fmt.Errorf("command %q exited with status %d", c.spec.Name, exitErr.ExitCode())
+			return fmt.Errorf("command %q exited with status %d: %w", c.spec.Name, exitErr.ExitCode(), err)
 		}
 		return fmt.Errorf("command %q: %w", c.spec.Name, err)
 	}
 	return nil
 }
 
-// CommandIssue records a problem found during command integrity validation.
-type CommandIssue struct {
-	CommandName string
-	Package     string
-	Problem     string
-}
-
-func (i CommandIssue) String() string {
-	if i.Package != "" {
-		return fmt.Sprintf("%s (%s): %s", i.CommandName, i.Package, i.Problem)
-	}
-	return fmt.Sprintf("%s: %s", i.CommandName, i.Problem)
-}
-
-// ValidateCommands checks command integrity after discovery:
-//   - missing entrypoints
-//   - non-executable entrypoints
-//   - duplicate command names within a single tier
-func ValidateCommands(cmds []cli.Command) []CommandIssue {
-	var issues []CommandIssue
-
-	// Track names per tier for duplicate detection.
-	tierNames := make(map[cli.CommandTier]map[string]int)
-
-	for _, cmd := range cmds {
-		spec := cmd.Spec()
-		tier := spec.Tier
-
-		// Duplicate detection within same tier.
-		if tierNames[tier] == nil {
-			tierNames[tier] = make(map[string]int)
-		}
-		tierNames[tier][spec.Name]++
-
-		// Entrypoint checks only apply to exec-backed commands.
-		ec, ok := cmd.(*ExecCommand)
-		if !ok {
-			continue
-		}
-
-		info, err := os.Stat(ec.entrypoint)
-		if err != nil {
-			issues = append(issues, CommandIssue{
-				CommandName: spec.Name,
-				Package:     spec.Package,
-				Problem:     "missing entrypoint: " + ec.entrypoint,
-			})
-			continue
-		}
-
-		// Check executable bit (Unix).
-		if info.Mode()&0111 == 0 {
-			issues = append(issues, CommandIssue{
-				CommandName: spec.Name,
-				Package:     spec.Package,
-				Problem:     "entrypoint not executable: " + ec.entrypoint,
-			})
-		}
-	}
-
-	// Report duplicates within same tier.
-	for tier, names := range tierNames {
-		for name, count := range names {
-			if count > 1 {
-				tierLabel := "unknown"
-				switch tier {
-				case cli.TierKernel:
-					tierLabel = "kernel"
-				case cli.TierRepoLocal:
-					tierLabel = "repo-local"
-				case cli.TierPackage:
-					tierLabel = "package"
-				}
-				issues = append(issues, CommandIssue{
-					CommandName: name,
-					Problem:     fmt.Sprintf("duplicate command name in %s tier (%d definitions)", tierLabel, count),
-				})
-			}
-		}
-	}
-
-	return issues
-}
-
 // Entrypoint returns the entrypoint path for an ExecCommand.
 // Used by doctor checks to inspect command integrity.
 func (c *ExecCommand) Entrypoint() string { return c.entrypoint }
-
-// FormatIssues renders a slice of CommandIssues for output. Pure function.
-func FormatIssues(issues []CommandIssue, w io.Writer) {
-	for _, iss := range issues {
-		fmt.Fprintf(w, "  ✗ %s\n", iss)
-	}
-}

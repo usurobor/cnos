@@ -206,89 +206,35 @@ func TestScanRepoLocalCommands_SkipsDirectories(t *testing.T) {
 	}
 }
 
-func TestValidateCommands_MissingEntrypoint(t *testing.T) {
-	cmd := &ExecCommand{
-		spec: cli.CommandSpec{
-			Name:    "broken",
-			Source:  cli.SourcePackage,
-			Tier:    cli.TierPackage,
-			Package: "bad-pkg",
-		},
-		entrypoint: "/nonexistent/cn-broken",
-	}
+func TestScanPackageCommands_PathTraversal(t *testing.T) {
+	hub := makeTestHub(t)
 
-	issues := ValidateCommands([]cli.Command{cmd})
-	if len(issues) != 1 {
-		t.Fatalf("expected 1 issue, got %d", len(issues))
-	}
-	if issues[0].CommandName != "broken" {
-		t.Errorf("issue command = %q, want %q", issues[0].CommandName, "broken")
-	}
-}
-
-func TestValidateCommands_NotExecutable(t *testing.T) {
-	dir := t.TempDir()
-	ep := filepath.Join(dir, "cn-noexec")
-	os.WriteFile(ep, []byte("#!/bin/sh\necho hi"), 0o644) // not executable
-
-	cmd := &ExecCommand{
-		spec: cli.CommandSpec{
-			Name:   "noexec",
-			Source: cli.SourceRepoLocal,
-			Tier:   cli.TierRepoLocal,
-		},
-		entrypoint: ep,
-	}
-
-	issues := ValidateCommands([]cli.Command{cmd})
-	if len(issues) != 1 {
-		t.Fatalf("expected 1 issue, got %d", len(issues))
-	}
-	if issues[0].Problem != "entrypoint not executable: "+ep {
-		t.Errorf("unexpected problem: %q", issues[0].Problem)
-	}
-}
-
-func TestValidateCommands_DuplicateWithinTier(t *testing.T) {
-	cmds := []cli.Command{
-		&ExecCommand{
-			spec:       cli.CommandSpec{Name: "dup", Source: cli.SourcePackage, Tier: cli.TierPackage, Package: "pkg-a"},
-			entrypoint: "/tmp/not-checked-here", // entrypoint check is separate
-		},
-		&ExecCommand{
-			spec:       cli.CommandSpec{Name: "dup", Source: cli.SourcePackage, Tier: cli.TierPackage, Package: "pkg-b"},
-			entrypoint: "/tmp/not-checked-here",
-		},
-	}
-
-	issues := ValidateCommands(cmds)
-	hasDup := false
-	for _, iss := range issues {
-		if iss.CommandName == "dup" && iss.Problem != "" {
-			hasDup = true
+	// Manifest with entrypoint that attempts path traversal.
+	manifest := `{
+		"schema": "cn.package.v1",
+		"name": "evil-pkg",
+		"version": "1.0.0",
+		"commands": {
+			"escape": {
+				"entrypoint": "../../etc/malicious",
+				"summary": "Should be rejected"
+			},
+			"good": {
+				"entrypoint": "commands/good/cn-good",
+				"summary": "Legit command"
+			}
 		}
-	}
-	if !hasDup {
-		t.Error("expected duplicate name issue")
-	}
-}
+	}`
+	installTestPackage(t, hub, "evil-pkg", manifest, map[string]string{
+		"commands/good/cn-good": "#!/bin/sh\necho good",
+	})
 
-func TestValidateCommands_AllGood(t *testing.T) {
-	dir := t.TempDir()
-	ep := filepath.Join(dir, "cn-good")
-	os.WriteFile(ep, []byte("#!/bin/sh\necho good"), 0o755)
-
-	cmd := &ExecCommand{
-		spec: cli.CommandSpec{
-			Name:   "good",
-			Source: cli.SourcePackage,
-			Tier:   cli.TierPackage,
-		},
-		entrypoint: ep,
+	cmds := ScanPackageCommands(hub)
+	// Only the "good" command should be discovered; "escape" is rejected.
+	if len(cmds) != 1 {
+		t.Fatalf("len = %d, want 1 (path traversal command should be rejected)", len(cmds))
 	}
-
-	issues := ValidateCommands([]cli.Command{cmd})
-	if len(issues) != 0 {
-		t.Errorf("expected 0 issues, got %d: %v", len(issues), issues)
+	if cmds[0].Spec().Name != "good" {
+		t.Errorf("name = %q, want %q", cmds[0].Spec().Name, "good")
 	}
 }
