@@ -45,20 +45,23 @@ func TestRunAllMissingConfig(t *testing.T) {
 	}
 }
 
-func TestRunAllPackageDrift(t *testing.T) {
+func TestRunAllPackageMissing(t *testing.T) {
 	hub := makeTestHub(t)
-	os.MkdirAll(filepath.Join(hub, ".cn", "vendor", "packages", "cnos.core@3.40.0"), 0755)
+	// Install cnos.core but lockfile expects cnos.core + cnos.eng.
+	os.MkdirAll(filepath.Join(hub, ".cn", "vendor", "packages", "cnos.core"), 0755)
+	lockfile := `{"schema":"cn.lock.v2","packages":[{"name":"cnos.core","version":"1.0.0","sha256":"aaa"},{"name":"cnos.eng","version":"1.0.0","sha256":"bbb"}]}`
+	os.WriteFile(filepath.Join(hub, ".cn", "deps.lock.json"), []byte(lockfile), 0644)
 
 	checks := RunAll(context.Background(), hub, "3.48.0")
 
 	found := false
 	for _, ch := range checks {
-		if ch.Name == "packages" && strings.Contains(ch.Value, "version drift") {
+		if ch.Name == "packages" && strings.Contains(ch.Value, "missing from lockfile") {
 			found = true
 		}
 	}
 	if !found {
-		t.Error("expected version drift in packages check")
+		t.Error("expected missing package in packages check")
 	}
 }
 

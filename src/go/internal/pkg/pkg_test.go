@@ -149,8 +149,8 @@ func TestValidatePackageManifestData(t *testing.T) {
 }
 
 func TestVendorPath(t *testing.T) {
-	got := VendorPath("/home/hub", "cnos.core", "3.42.0")
-	want := "/home/hub/.cn/vendor/packages/cnos.core@3.42.0"
+	got := VendorPath("/home/hub", "cnos.core")
+	want := "/home/hub/.cn/vendor/packages/cnos.core"
 	if got != want {
 		t.Errorf("VendorPath = %q, want %q", got, want)
 	}
