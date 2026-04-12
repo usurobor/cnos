@@ -3,20 +3,20 @@
   "packages": {
     "cnos.cdd": {
       "0.1.0": {
-        "url": "dist/packages/cnos.cdd-0.1.0.tar.gz",
-        "sha256": "a4ab3eed8506792035e43be2a4917ba63adbf37e176e57df1df543e9821ab176"
+        "url": "cnos.cdd-0.1.0.tar.gz",
+        "sha256": "7225ece9aeb079b934bd2b89a9ff793151972a0065b12ffeef0fb76815910454"
       }
     },
     "cnos.core": {
       "1.0.0": {
-        "url": "dist/packages/cnos.core-1.0.0.tar.gz",
-        "sha256": "773dab501cd3ce096b7b025d170ffcaee5a0c1e5e16e22804e494ed074b9236b"
+        "url": "cnos.core-1.0.0.tar.gz",
+        "sha256": "7bc210d3864a720d997fc3812834ebafafb6da6a2ff0c426db657708bc663b93"
       }
     },
     "cnos.eng": {
       "1.0.0": {
-        "url": "dist/packages/cnos.eng-1.0.0.tar.gz",
-        "sha256": "0c9a16f3106b1fe20a872653b2e645d8b1deb30dc6e4ab9d1ab2e92e69b98ced"
+        "url": "cnos.eng-1.0.0.tar.gz",
+        "sha256": "e1bf022a21b8ed95f00ad0ca5865f2c410755485acf9067f9a8b4ce2811d21bf"
       }
     }
   }

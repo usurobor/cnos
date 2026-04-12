@@ -1,11 +1,12 @@
 // Package restore implements the cn deps restore flow in Go:
-// lockfile → index lookup → HTTP download → SHA-256 verify →
+// lockfile → index lookup → fetch (HTTP or local) → SHA-256 verify →
 // tar extract → validate cn.package.json.
 //
-// This is the Go equivalent of the restore path in
-// src/ocaml/cmd/cn_deps.ml. Phase 1 implements only the HTTP restore
-// path — local-source development restore (try_restore_local)
-// is out of scope.
+// Also provides lockfile generation from a package index
+// (GenerateLockFromIndex) for the `cn deps lock` command.
+//
+// Fetch supports both HTTP URLs (remote index) and relative file paths
+// (local dev workflow: cn build → dist/ → cn deps restore).
 package restore
 
 import (
@@ -14,6 +15,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -21,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -84,6 +87,10 @@ type Result struct {
 // Restore installs every package declared in the lockfile into
 // .cn/vendor/packages/. It collects all errors rather than stopping
 // at the first failure.
+//
+// indexPath is the path to the package index file. When the index
+// contains relative URLs (e.g. "cnos.core-1.0.0.tar.gz" from cn build),
+// they are resolved relative to the directory containing indexPath.
 func Restore(ctx context.Context, hubPath, indexPath string) ([]Result, error) {
 	lockPath := filepath.Join(hubPath, ".cn", "deps.lock.json")
 	lf, err := ReadLockfile(lockPath)
@@ -102,21 +109,30 @@ func Restore(ctx context.Context, hubPath, indexPath string) ([]Result, error) {
 		return nil, fmt.Errorf("load package index: %w", err)
 	}
 
+	indexDir := filepath.Dir(indexPath)
+
 	var results []Result
 	for _, dep := range lf.Packages {
-		r := restoreOne(ctx, hubPath, idx, dep)
+		r := restoreOne(ctx, hubPath, idx, dep, indexDir)
 		results = append(results, r)
 	}
 	return results, nil
 }
 
 // restoreOne installs a single package from its lockfile entry.
-func restoreOne(ctx context.Context, hubPath string, idx *pkg.PackageIndex, dep pkg.LockedDep) Result {
+// indexDir is the directory containing the package index; relative
+// URLs in the index are resolved against it.
+func restoreOne(ctx context.Context, hubPath string, idx *pkg.PackageIndex, dep pkg.LockedDep, indexDir string) Result {
 	r := Result{Name: dep.Name, Version: dep.Version}
 
-	pkgDir := pkg.VendorPath(hubPath, dep.Name, dep.Version)
+	pkgDir := pkg.VendorPath(hubPath, dep.Name)
 
 	// Already installed — skip.
+	// NOTE: With version-less VendorPath, this check does not detect
+	// version upgrades (v1 installed, lockfile updated to v2 → directory
+	// exists from v1, skip fires). Version upgrade requires comparing
+	// the installed cn.package.json version against the lockfile version,
+	// or comparing SHA-256 of installed state. Tracked in #230.
 	if _, err := os.Stat(pkgDir); err == nil {
 		slog.DebugContext(ctx, "package already installed, skipping",
 			slog.String("package", dep.Name),
@@ -142,8 +158,8 @@ func restoreOne(ctx context.Context, hubPath string, idx *pkg.PackageIndex, dep 
 		os.Remove(tmpTar)
 	}()
 
-	if err := downloadFile(ctx, entry.URL, tmpTar); err != nil {
-		r.Err = fmt.Errorf("download %s@%s from %s: %w",
+	if err := fetchTarball(ctx, entry.URL, tmpTar, indexDir); err != nil {
+		r.Err = fmt.Errorf("fetch %s@%s from %s: %w",
 			dep.Name, dep.Version, entry.URL, err)
 		return r
 	}
@@ -184,13 +200,54 @@ func restoreOne(ctx context.Context, hubPath string, idx *pkg.PackageIndex, dep 
 	return r
 }
 
+// isRemoteURL returns true if the URL has an http:// or https:// scheme.
+func isRemoteURL(url string) bool {
+	return strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://")
+}
+
+// fetchTarball retrieves a tarball to dest. If the URL is remote (http/https),
+// it downloads via HTTP. If the URL is a relative path, it resolves against
+// indexDir and copies locally. This enables the local dev workflow:
+// cn build → dist/packages/ → cn deps restore without a server.
+func fetchTarball(ctx context.Context, url, dest, indexDir string) error {
+	if isRemoteURL(url) {
+		return downloadFile(ctx, url, dest)
+	}
+	// Local file: resolve relative to the index directory.
+	src := url
+	if !filepath.IsAbs(url) {
+		src = filepath.Join(indexDir, url)
+	}
+	return copyFile(src, dest)
+}
+
+// copyFile copies src to dest. Used for local package restore.
+func copyFile(src, dest string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("open %s: %w", src, err)
+	}
+	defer in.Close()
+
+	out, err := os.Create(dest)
+	if err != nil {
+		return fmt.Errorf("create %s: %w", dest, err)
+	}
+	defer out.Close()
+
+	if _, err := io.Copy(out, in); err != nil {
+		return fmt.Errorf("copy: %w", err)
+	}
+	return out.Close()
+}
+
 // httpClient is the shared HTTP client for package downloads.
 // Timeout mirrors OCaml's curl flags: --connect-timeout 10 --max-time 300.
 var httpClient = &http.Client{
 	Timeout: 300 * time.Second,
 }
 
-// downloadFile fetches url and writes it to dest.
+// downloadFile fetches url and writes it to dest via HTTP.
 func downloadFile(ctx context.Context, url, dest string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -311,4 +368,56 @@ func Errors(results []Result) []Result {
 		}
 	}
 	return errs
+}
+
+// LockResult records the outcome of lockfile generation.
+type LockResult struct {
+	LockPath string
+	Count    int
+}
+
+// GenerateLockFromIndex reads the package index and generates a lockfile
+// at <hubPath>/.cn/deps.lock.json. This is the domain logic for
+// `cn deps lock` — CLI wiring calls this, keeping cmd_deps.go thin.
+// Uses canonical pkg.Lockfile/pkg.LockedDep types. Output is sorted
+// by name then version for deterministic lockfile content.
+func GenerateLockFromIndex(hubPath, indexPath string) (*LockResult, error) {
+	idx, err := ReadPackageIndex(indexPath)
+	if err != nil {
+		return nil, fmt.Errorf("read index: %w", err)
+	}
+
+	lockPath := filepath.Join(hubPath, ".cn", "deps.lock.json")
+	if err := os.MkdirAll(filepath.Dir(lockPath), 0755); err != nil {
+		return nil, fmt.Errorf("create lockfile dir: %w", err)
+	}
+
+	lf := pkg.Lockfile{Schema: "cn.lock.v2"}
+	for name, versions := range idx.Packages {
+		for version, entry := range versions {
+			lf.Packages = append(lf.Packages, pkg.LockedDep{
+				Name:    name,
+				Version: version,
+				SHA256:  entry.SHA256,
+			})
+		}
+	}
+
+	// Sort for deterministic output — map iteration order is random.
+	sort.Slice(lf.Packages, func(i, j int) bool {
+		if lf.Packages[i].Name != lf.Packages[j].Name {
+			return lf.Packages[i].Name < lf.Packages[j].Name
+		}
+		return lf.Packages[i].Version < lf.Packages[j].Version
+	})
+
+	data, err := json.MarshalIndent(lf, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("marshal lockfile: %w", err)
+	}
+	if err := os.WriteFile(lockPath, append(data, '\n'), 0644); err != nil {
+		return nil, fmt.Errorf("write lockfile: %w", err)
+	}
+
+	return &LockResult{LockPath: lockPath, Count: len(lf.Packages)}, nil
 }

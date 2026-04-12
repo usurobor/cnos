@@ -24,6 +24,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/usurobor/cnos/src/go/internal/pkg"
 )
 
 // ContentClasses lists the 7 content classes that a package may contain.
@@ -342,6 +344,43 @@ func CheckOne(pkg DiscoveredPackage) CheckResult {
 	}
 
 	return r
+}
+
+// --- Lockfile generation ---
+
+// GenerateLockfileData produces a cn.lock.v2 lockfile from build results.
+// Uses canonical pkg.Lockfile/pkg.LockedDep types — single schema definition.
+// Pure — no IO.
+func GenerateLockfileData(results []BuildResult) ([]byte, error) {
+	lf := pkg.Lockfile{Schema: "cn.lock.v2"}
+	for _, r := range results {
+		if r.Err != nil {
+			continue
+		}
+		lf.Packages = append(lf.Packages, pkg.LockedDep{
+			Name:    r.Name,
+			Version: r.Version,
+			SHA256:  r.SHA256,
+		})
+	}
+
+	data, err := json.MarshalIndent(lf, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("marshal lockfile: %w", err)
+	}
+	return append(data, '\n'), nil
+}
+
+// GenerateLockfile writes a lockfile to dest from build results.
+func GenerateLockfile(dest string, results []BuildResult) error {
+	data, err := GenerateLockfileData(results)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
+		return fmt.Errorf("create lockfile dir: %w", err)
+	}
+	return os.WriteFile(dest, data, 0644)
 }
 
 // --- Clean mode ---
