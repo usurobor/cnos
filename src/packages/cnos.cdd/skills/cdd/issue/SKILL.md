@@ -97,21 +97,35 @@ Failure mode: issue requires back-and-forth to clarify scope, acceptance, or pri
   - ❌ "Step 4 can parallel step 3" when Step 4 includes "command registry" depending on Step 3 discovery
   - ✅ "Step 4 can begin for X, but Y depends on Step 3"
 
-### 2.4. Related artifacts
+### 2.4. Skills and constraints (mandatory for implementation issues)
 
-2.4.1. **Link to design doc and plan if they exist**
+2.4.1. **Name the skills the implementer must load before coding**
+  - If the issue involves writing code, name the engineering skills and their paths
+  - The implementer may be a different agent who has never seen your constraints
+  - ❌ Omit skills — implementer writes code that violates architectural boundaries, caught only by CI or review
+  - ✅ "Load `eng/go/SKILL.md` before writing any Go — dispatch boundary (§2.18), purity boundary (§2.17)"
+
+2.4.2. **Name the active invariants**
+  - Link to INVARIANTS.md entries that govern the work
+  - State the key rule in plain text so the implementer doesn't have to load the doc to know the constraint exists
+  - ❌ "Follow project conventions"
+  - ✅ "T-002: cmd_*.go must be thin wrappers — no os/filepath/json imports. CI enforces."
+
+### 2.5. Related artifacts
+
+2.5.1. **Link to design doc and plan if they exist**
   - Issue is the entry point. Design and plan are the depth.
   - ❌ Issue restates the design to be "self-contained"
   - ✅ "Design: [PACKAGE-SYSTEM.md]. Plan: [PLAN-package-system.md]."
 
-2.4.2. **Link to related issues**
+2.5.2. **Link to related issues**
   - Cross-reference overlapping or dependent issues
   - ❌ "This is related to some other issues"
   - ✅ "Related: #73 (runtime extensions), #59 (doctor hardening)"
 
-### 2.5. Artifact boundaries
+### 2.6. Artifact boundaries
 
-2.5.1. **Issue owns problem + ACs + priority. Nothing else.**
+2.6.1. **Issue owns problem + ACs + priority. Nothing else.**
   - Design doc owns: gap analysis, constraints, proposal, impact graph
   - Plan owns: step order, per-step ACs, file changes
   - Issue owns: problem summary, outcome-level ACs, priority, scope boundaries
