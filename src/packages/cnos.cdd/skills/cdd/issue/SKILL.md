@@ -72,12 +72,30 @@ Failure mode: issue requires back-and-forth to clarify scope, acceptance, or pri
   - ❌ Issue lists per-step acceptance criteria from the plan
   - ✅ Issue lists outcome-level criteria; plan lists step-level criteria
 
+2.2.4. **Every noun in ACs and work items must be in scope**
+  - When writing ACs or step work lists, each feature/subsystem/concept named is either in scope or doesn't appear
+  - If you're about to write a noun that's out of scope, stop — you're overclaiming
+  - ❌ Step 4 work list says "activation index" while out-of-scope says "activation table"
+  - ✅ Out-of-scope items never appear in work lists or ACs
+
 ### 2.3. Scope and non-goals
 
 2.3.1. **Name what's out of scope**
   - Prevents scope creep and clarifies boundaries for the implementer
   - ❌ Omit non-goals (implementer guesses at boundaries)
   - ✅ "Non-goals: registry publication, marketplace UX, ambient runtime install"
+
+2.3.2. **Cross-check scope against definition and ACs immediately**
+  - After writing the out-of-scope list, re-read the issue definition and ACs — if any out-of-scope noun appears there, fix it now
+  - This is not a review step — it's part of writing the scope section
+  - ❌ Write scope section, move on, hope to catch contradictions later
+  - ✅ Scope section is written in dialog with the definition and ACs
+
+2.3.3. **Parallelism and dependency claims are structural, not vibes**
+  - If the issue claims steps are parallel or independent, verify: does step N's done-when reference any output from step M?
+  - State dependencies explicitly when writing the sprint structure, not after
+  - ❌ "Step 4 can parallel step 3" when Step 4 includes "command registry" depending on Step 3 discovery
+  - ✅ "Step 4 can begin for X, but Y depends on Step 3"
 
 ### 2.4. Related artifacts
 
@@ -99,30 +117,6 @@ Failure mode: issue requires back-and-forth to clarify scope, acceptance, or pri
   - Issue owns: problem summary, outcome-level ACs, priority, scope boundaries
   - ❌ Issue contains the full gap analysis, implementation steps, and per-file changes
   - ✅ Issue is the concise entry point that links to deeper artifacts
-
-### 2.6. Pre-publish consistency gate (mandatory)
-
-Before posting the issue, cross-check for internal contradictions:
-
-2.6.1. **Scope nouns check**
-  - List every noun (feature, subsystem, registry, concept) mentioned in work items and ACs
-  - Verify each is either in scope or out of scope — not both
-  - ❌ Step 4 work list says "activation index" while out-of-scope says "activation table implementation"
-  - ✅ Every noun in work/ACs appears only on one side of the scope boundary
-
-2.6.2. **Dependency check on parallelism claims**
-  - For any "can parallel" or "independent" claim, verify: does step N's done-when reference any output from step M?
-  - If yes, the steps are not parallel — state the dependency
-  - ❌ "Step 4 can parallel step 3" when Step 4 includes "command registry" which depends on Step 3 discovery
-  - ✅ "Step 4 can begin in parallel for X, but Y depends on Step 3"
-
-2.6.3. **Definition vs. body check**
-  - Re-read the opening definition/summary against the AC list and out-of-scope list
-  - If the definition claims something the ACs don't cover, or the out-of-scope list excludes, narrow the definition
-  - ❌ Definition says "discovers and exposes commands, skills, orchestrators" while orchestrator runtime is out of scope
-  - ✅ Definition matches what the ACs actually verify
-
-This gate exists because the scope section and implementation section are often written as if independent, then never cross-checked. The error class is internal contradiction, not missing information.
 
 ---
 
