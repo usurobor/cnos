@@ -2,6 +2,7 @@ package pkgbuild
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -154,6 +155,72 @@ func TestUpdateChecksums(t *testing.T) {
 	}
 	if !strings.Contains(content, "bbb222  b.pkg-2.0.0.tar.gz") {
 		t.Error("expected b.pkg checksum entry")
+	}
+}
+
+func TestGenerateLockfileData(t *testing.T) {
+	results := []BuildResult{
+		{Name: "cnos.core", Version: "1.0.0", SHA256: "abc123"},
+		{Name: "cnos.eng", Version: "1.0.0", SHA256: "def456"},
+		{Name: "cnos.fail", Version: "0.1.0", Err: fmt.Errorf("build failed")},
+	}
+
+	data, err := GenerateLockfileData(results)
+	if err != nil {
+		t.Fatalf("GenerateLockfileData: %v", err)
+	}
+
+	content := string(data)
+	if !strings.Contains(content, `"cn.lock.v2"`) {
+		t.Error("expected cn.lock.v2 schema")
+	}
+	if !strings.Contains(content, `"cnos.core"`) {
+		t.Error("expected cnos.core in lockfile")
+	}
+	if !strings.Contains(content, `"cnos.eng"`) {
+		t.Error("expected cnos.eng in lockfile")
+	}
+	// Failed packages should be excluded.
+	if strings.Contains(content, "cnos.fail") {
+		t.Error("failed package should not appear in lockfile")
+	}
+}
+
+func TestGenerateLockfile(t *testing.T) {
+	dir := t.TempDir()
+	lockPath := filepath.Join(dir, ".cn", "deps.lock.json")
+	results := []BuildResult{
+		{Name: "test.pkg", Version: "2.0.0", SHA256: "deadbeef"},
+	}
+
+	if err := GenerateLockfile(lockPath, results); err != nil {
+		t.Fatalf("GenerateLockfile: %v", err)
+	}
+
+	data, err := os.ReadFile(lockPath)
+	if err != nil {
+		t.Fatalf("read lockfile: %v", err)
+	}
+
+	var lf struct {
+		Schema   string `json:"schema"`
+		Packages []struct {
+			Name    string `json:"name"`
+			Version string `json:"version"`
+			SHA256  string `json:"sha256"`
+		} `json:"packages"`
+	}
+	if err := json.Unmarshal(data, &lf); err != nil {
+		t.Fatalf("parse lockfile: %v", err)
+	}
+	if lf.Schema != "cn.lock.v2" {
+		t.Errorf("schema = %q, want %q", lf.Schema, "cn.lock.v2")
+	}
+	if len(lf.Packages) != 1 {
+		t.Fatalf("expected 1 package, got %d", len(lf.Packages))
+	}
+	if lf.Packages[0].Name != "test.pkg" {
+		t.Errorf("package name = %q, want %q", lf.Packages[0].Name, "test.pkg")
 	}
 }
 

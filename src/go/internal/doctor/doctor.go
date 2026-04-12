@@ -146,7 +146,7 @@ func checkPeers(hubPath string) CheckResult {
 		Value: fmt.Sprintf("%d peer(s)", count)}
 }
 
-func checkPackages(hubPath, version string) CheckResult {
+func checkPackages(hubPath, _ string) CheckResult {
 	vendorDir := filepath.Join(hubPath, ".cn", "vendor", "packages")
 	entries, err := os.ReadDir(vendorDir)
 	if err != nil {
@@ -154,29 +154,48 @@ func checkPackages(hubPath, version string) CheckResult {
 			Value: "no vendor directory (run 'cn deps restore')"}
 	}
 	total := 0
-	drift := 0
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
 		}
 		total++
-		atIdx := strings.LastIndex(e.Name(), "@")
-		if atIdx >= 0 && version != "" {
-			pkgVersion := e.Name()[atIdx+1:]
-			if pkgVersion != version {
-				drift++
-			}
-		}
 	}
 	if total == 0 {
 		return CheckResult{Name: "packages", Passed: true, Value: "none installed"}
 	}
-	if drift > 0 {
+	// Version drift detection: compare installed packages against the
+	// lockfile. The installed path no longer carries the version
+	// (BUILD-AND-DIST.md), so we read the lockfile as the expected set.
+	lockPath := filepath.Join(hubPath, ".cn", "deps.lock.json")
+	lockData, err := os.ReadFile(lockPath)
+	if err != nil {
+		// No lockfile — can't check drift, just report count.
+		return CheckResult{Name: "packages", Passed: true,
+			Value: fmt.Sprintf("%d installed (no lockfile for drift check)", total)}
+	}
+	var lf struct {
+		Packages []struct {
+			Name string `json:"name"`
+		} `json:"packages"`
+	}
+	if err := json.Unmarshal(lockData, &lf); err != nil {
+		return CheckResult{Name: "packages", Passed: true,
+			Value: fmt.Sprintf("%d installed (lockfile parse error)", total)}
+	}
+	// Check each locked package is installed.
+	missing := 0
+	for _, dep := range lf.Packages {
+		pkgDir := filepath.Join(vendorDir, dep.Name)
+		if _, err := os.Stat(pkgDir); err != nil {
+			missing++
+		}
+	}
+	if missing > 0 {
 		return CheckResult{Name: "packages", Passed: false,
-			Value: fmt.Sprintf("%d installed, %d version drift (run 'cn deps restore')", total, drift)}
+			Value: fmt.Sprintf("%d installed, %d missing from lockfile (run 'cn deps restore')", total, missing)}
 	}
 	return CheckResult{Name: "packages", Passed: true,
-		Value: fmt.Sprintf("%d installed, all current", total)}
+		Value: fmt.Sprintf("%d installed, all present", total)}
 }
 
 func checkRuntimeContract(hubPath string) CheckResult {

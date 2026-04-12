@@ -127,9 +127,13 @@ func ValidatePackageManifestData(data []byte, expectedName string) error {
 }
 
 // VendorPath returns the install path for a package in the vendor tree.
-// Format: <hubPath>/.cn/vendor/packages/<name>@<version>/
-func VendorPath(hubPath, name, version string) string {
-	return hubPath + "/.cn/vendor/packages/" + name + "@" + version
+// Format: <hubPath>/.cn/vendor/packages/<name>/
+// Per BUILD-AND-DIST.md: "the installed path does not [carry the version]
+// (.cn/vendor/packages/cnos.core/). This keeps the active runtime simple."
+// The version parameter is accepted for API compatibility but not used
+// in the path — version identity lives in the lockfile and tarball filename.
+func VendorPath(hubPath, name, _ string) string {
+	return hubPath + "/.cn/vendor/packages/" + name
 }
 
 // TmpTarballPath returns the temp download path for a package tarball.

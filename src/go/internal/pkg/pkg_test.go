@@ -150,9 +150,19 @@ func TestValidatePackageManifestData(t *testing.T) {
 
 func TestVendorPath(t *testing.T) {
 	got := VendorPath("/home/hub", "cnos.core", "3.42.0")
-	want := "/home/hub/.cn/vendor/packages/cnos.core@3.42.0"
+	want := "/home/hub/.cn/vendor/packages/cnos.core"
 	if got != want {
 		t.Errorf("VendorPath = %q, want %q", got, want)
+	}
+}
+
+func TestVendorPathVersionIgnored(t *testing.T) {
+	// VendorPath must produce the same path regardless of version —
+	// per BUILD-AND-DIST.md, installed path does not carry the version.
+	a := VendorPath("/hub", "cnos.core", "1.0.0")
+	b := VendorPath("/hub", "cnos.core", "2.0.0")
+	if a != b {
+		t.Errorf("VendorPath should not depend on version: %q != %q", a, b)
 	}
 }
 

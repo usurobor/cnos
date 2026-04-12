@@ -84,6 +84,10 @@ type Result struct {
 // Restore installs every package declared in the lockfile into
 // .cn/vendor/packages/. It collects all errors rather than stopping
 // at the first failure.
+//
+// indexPath is the path to the package index file. When the index
+// contains relative URLs (e.g. "cnos.core-1.0.0.tar.gz" from cn build),
+// they are resolved relative to the directory containing indexPath.
 func Restore(ctx context.Context, hubPath, indexPath string) ([]Result, error) {
 	lockPath := filepath.Join(hubPath, ".cn", "deps.lock.json")
 	lf, err := ReadLockfile(lockPath)
@@ -102,16 +106,20 @@ func Restore(ctx context.Context, hubPath, indexPath string) ([]Result, error) {
 		return nil, fmt.Errorf("load package index: %w", err)
 	}
 
+	indexDir := filepath.Dir(indexPath)
+
 	var results []Result
 	for _, dep := range lf.Packages {
-		r := restoreOne(ctx, hubPath, idx, dep)
+		r := restoreOne(ctx, hubPath, idx, dep, indexDir)
 		results = append(results, r)
 	}
 	return results, nil
 }
 
 // restoreOne installs a single package from its lockfile entry.
-func restoreOne(ctx context.Context, hubPath string, idx *pkg.PackageIndex, dep pkg.LockedDep) Result {
+// indexDir is the directory containing the package index; relative
+// URLs in the index are resolved against it.
+func restoreOne(ctx context.Context, hubPath string, idx *pkg.PackageIndex, dep pkg.LockedDep, indexDir string) Result {
 	r := Result{Name: dep.Name, Version: dep.Version}
 
 	pkgDir := pkg.VendorPath(hubPath, dep.Name, dep.Version)
@@ -142,8 +150,8 @@ func restoreOne(ctx context.Context, hubPath string, idx *pkg.PackageIndex, dep 
 		os.Remove(tmpTar)
 	}()
 
-	if err := downloadFile(ctx, entry.URL, tmpTar); err != nil {
-		r.Err = fmt.Errorf("download %s@%s from %s: %w",
+	if err := fetchTarball(ctx, entry.URL, tmpTar, indexDir); err != nil {
+		r.Err = fmt.Errorf("fetch %s@%s from %s: %w",
 			dep.Name, dep.Version, entry.URL, err)
 		return r
 	}
@@ -184,13 +192,54 @@ func restoreOne(ctx context.Context, hubPath string, idx *pkg.PackageIndex, dep 
 	return r
 }
 
+// isRemoteURL returns true if the URL has an http:// or https:// scheme.
+func isRemoteURL(url string) bool {
+	return strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://")
+}
+
+// fetchTarball retrieves a tarball to dest. If the URL is remote (http/https),
+// it downloads via HTTP. If the URL is a relative path, it resolves against
+// indexDir and copies locally. This enables the local dev workflow:
+// cn build → dist/packages/ → cn deps restore without a server.
+func fetchTarball(ctx context.Context, url, dest, indexDir string) error {
+	if isRemoteURL(url) {
+		return downloadFile(ctx, url, dest)
+	}
+	// Local file: resolve relative to the index directory.
+	src := url
+	if !filepath.IsAbs(url) {
+		src = filepath.Join(indexDir, url)
+	}
+	return copyFile(src, dest)
+}
+
+// copyFile copies src to dest. Used for local package restore.
+func copyFile(src, dest string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("open %s: %w", src, err)
+	}
+	defer in.Close()
+
+	out, err := os.Create(dest)
+	if err != nil {
+		return fmt.Errorf("create %s: %w", dest, err)
+	}
+	defer out.Close()
+
+	if _, err := io.Copy(out, in); err != nil {
+		return fmt.Errorf("copy: %w", err)
+	}
+	return out.Close()
+}
+
 // httpClient is the shared HTTP client for package downloads.
 // Timeout mirrors OCaml's curl flags: --connect-timeout 10 --max-time 300.
 var httpClient = &http.Client{
 	Timeout: 300 * time.Second,
 }
 
-// downloadFile fetches url and writes it to dest.
+// downloadFile fetches url and writes it to dest via HTTP.
 func downloadFile(ctx context.Context, url, dest string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
