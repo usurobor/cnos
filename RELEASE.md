@@ -2,40 +2,41 @@
 
 ## Outcome
 
-Coherence delta: C_Σ A+ (`α A+`, `β A+`, `γ A+`) · **Level:** L7
+Coherence delta: C_Σ A (`α A`, `β A`, `γ A-`) · **Level:** L5
 
-**Go kernel Phase 3 complete.** All 8 kernel commands implemented. The kernel can now bootstrap, manage, diagnose, build, and update itself. Design principles are a mechanical review gate, not just advice.
+**Distribution pipeline proved end-to-end.** The `src/packages/ → cn build → dist/packages/ → cn deps restore → .cn/vendor/packages/` chain now works. Build and restore modules exchange real data for the first time. VendorPath aligned to BUILD-AND-DIST.md.
 
 ## Why it matters
 
-This release completes the Go kernel's command surface — every command from the OCaml runtime has a Go equivalent. `cn update` enables self-updating binaries with SHA-256 verification. `cn setup` makes hubs wake-ready. The design-principles skill and architecture review gate (§2.2.14) turn architectural coherence from human judgment into a structured, gateable check.
+The build and restore modules were written to the same spec (BUILD-AND-DIST.md) but had never exchanged real data. Three format mismatches existed between what `pkgbuild` produces and what `restore` expects. Until this cycle, the distribution pipeline was theoretical — now it's proven with automated round-trip tests.
+
+## Fixed
+
+- **VendorPath aligned to BUILD-AND-DIST.md** (#227): vendor path changed from `<name>@<version>` to `<name>/` — installed path no longer carries version. Version identity lives in the lockfile. Dead version parameter removed from `VendorPath` signature.
+- **Lockfile types consolidated** (#227): inline `lockedDep`/`lockfile` structs in pkgbuild and restore replaced with canonical `pkg.Lockfile`/`pkg.LockedDep`. Single schema definition.
+- **Non-deterministic lockfile output** (#227): `GenerateLockFromIndex` now sorts packages by name then version before marshaling. Deterministic output guaranteed.
+- **Doctor drift detection updated** (#227): lockfile-based package presence check replaces `@version` parsing. Reports "no lockfile for drift check" when lockfile absent.
 
 ## Added
 
-- **Go kernel `update` command** (#212 Slice D, PR #225): fetches latest GitHub release, compares version + commit, downloads platform binary, SHA-256 verifies against checksums.txt, atomic rename install. `--check` for dry run. Same-version patch detection (mirrors OCaml).
-- **Go kernel `setup` command** (#212 Slice D, PR #225): creates .cn/, agent/, default deps.json (engineer profile), .gitignore entry. Idempotent. Does not run restore — keeps setup scoped to "prepare the hub."
-- **eng/design-principles skill** (L6): architectural decomposition — Parnas (information hiding), Martin (dependency direction), Liskov (truthful substitutability), plus cnos-specific rules for runtime surfaces, registries, source/artifact/install discipline.
-- **CDD review §2.2.14**: architecture check with 7 structured questions (reason to change, policy above detail, truthful interfaces, registry normalization, source/artifact/installed clarity, surface separation, degraded-path visibility).
-- **CDD review §2.3.5**: verdict gate — any "no" in architecture check blocks approval.
-- **BUILD-AND-DIST migration steps**: explicit current → target path for #224.
-- **T-004 fix**: current vs target layout both named explicitly (design-principles §3.8 transition honesty).
-
-## Changed
-
-- **INVARIANTS.md v1.2.0**: title normalized, stale references cleaned.
-- **cnos.eng manifest**: eng/design-principles added (caught by I1 — first real coherence CI catch on main).
+- **Local file restore** (#227): `fetchTarball` auto-detects local vs remote URLs. Relative paths in the index resolve against the index directory. Enables `cn build → cn deps restore` without a server.
+- **`cn deps lock` subcommand** (#227): reads `dist/packages/index.json`, generates `.cn/deps.lock.json`. Decouples lockfile generation from the build step.
+- **`TestBuildRestoreRoundTrip`** (#227): full pipeline test — build → index → lockfile → local restore → verify content + SHA-256. Primary round-trip proof.
+- **4 additional tests** (#227): `TestRestoreLocalFile`, `TestGenerateLockfileData`, `TestGenerateLockfile`, `TestVendorPathVersionIgnored`.
+- **Design and self-coherence docs** (#227): `DESIGN-227-distribution-pipeline.md`, `SELF-COHERENCE-227.md`.
 
 ## Validation
 
-- Go binary builds: `cn help` lists 8 kernel commands (help, init, setup, deps, status, doctor, build, update).
-- All 63 Go tests pass across 8 packages.
-- `cn update --check` reports version status.
-- `cn setup` creates hub structure with default deps.json.
-- CI dispatch boundary check passes.
+- All 9 Go test packages pass (66+ tests).
+- `cn build` produces 3 tarballs + index + checksums in `dist/packages/`.
+- `cn deps lock` generates lockfile from index.
+- `cn deps restore` installs all 3 packages from local dist.
+- Round-trip SHA-256 verified: tarball hash matches index entry.
+- CI green (5/5: go, I1, I2, notify ×2).
 
 ## Known Issues
 
-- #224 — src/packages layout migration (filed this session)
-- #193 — encoding lag (growing, 12 cycles)
-- #186 — encoding lag (design doc shipped)
-- #175 — encoding lag (growing)
+- #230 — `cn deps restore` skips version upgrades silently (version-less VendorPath, filed this cycle)
+- #226 — Package command discovery + dispatch (MVA Step 3, next)
+- #224 — Layout migration remaining ACs
+- `scripts/check-version-consistency.sh` references stale `packages/` paths (pre-migration)
