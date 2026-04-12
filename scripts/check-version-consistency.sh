@@ -28,8 +28,8 @@ CN_JSON_VER=$(python3 -c "import json; print(json.load(open('$REPO_ROOT/cn.json'
 check "cn.json" "$CN_JSON_VER" "cn.json version"
 
 # 2. Package manifests
-for pkg in cnos.core cnos.eng; do
-  PKG_FILE="$REPO_ROOT/packages/$pkg/cn.package.json"
+for pkg in cnos.core cnos.cdd cnos.eng; do
+  PKG_FILE="$REPO_ROOT/src/packages/$pkg/cn.package.json"
   if [ -f "$PKG_FILE" ]; then
     PKG_VER=$(python3 -c "import json; print(json.load(open('$PKG_FILE'))['version'])" 2>/dev/null || echo "PARSE_ERROR")
     check "$PKG_FILE" "$PKG_VER" "$pkg version"

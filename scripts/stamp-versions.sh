@@ -5,7 +5,7 @@
 # check-version-consistency.sh is the "validate" half.
 #
 # Usage: scripts/stamp-versions.sh
-#   Reads VERSION, rewrites cn.json and packages/*/cn.package.json.
+#   Reads VERSION, rewrites cn.json and src/packages/*/cn.package.json.
 #   Run this after editing VERSION, then commit the result.
 
 set -euo pipefail
@@ -38,8 +38,8 @@ if [ -f "$CN_JSON" ]; then
 fi
 
 # 2. Package manifests — "version" and "cnos" inside "engines"
-for pkg in cnos.core cnos.eng; do
-  PKG_FILE="$REPO_ROOT/packages/$pkg/cn.package.json"
+for pkg in cnos.core cnos.cdd cnos.eng; do
+  PKG_FILE="$REPO_ROOT/src/packages/$pkg/cn.package.json"
   if [ -f "$PKG_FILE" ]; then
     OLD_VER=$(python3 -c "import json; print(json.load(open('$PKG_FILE'))['version'])" 2>/dev/null || echo "?")
     OLD_ENG=$(python3 -c "import json; print(json.load(open('$PKG_FILE'))['engines']['cnos'])" 2>/dev/null || echo "?")
