@@ -22,8 +22,18 @@ type CheckResult struct {
 	Value  string
 }
 
+// CommandIssue is a command integrity problem found during validation.
+// Imported from discover package for doctor reporting.
+type CommandIssue struct {
+	CommandName string
+	Package     string
+	Problem     string
+}
+
 // RunAll executes all doctor checks and returns the results.
-func RunAll(ctx context.Context, hubPath, version string) []CheckResult {
+// commandIssues is an optional list of command integrity problems
+// found during command discovery (pass nil if no discovery was done).
+func RunAll(ctx context.Context, hubPath, version string, commandIssues []CommandIssue) []CheckResult {
 	var checks []CheckResult
 
 	// Prerequisites.
@@ -45,6 +55,9 @@ func RunAll(ctx context.Context, hubPath, version string) []CheckResult {
 	checks = append(checks, checkFilePresent(hubPath, ".cn/deps.lock.json",
 		"missing (run 'cn setup')"))
 	checks = append(checks, checkPackages(hubPath, version))
+
+	// Command integrity.
+	checks = append(checks, checkCommandIntegrity(commandIssues))
 
 	// Runtime contract.
 	checks = append(checks, checkRuntimeContract(hubPath))
@@ -231,4 +244,92 @@ func checkGitRemote(ctx context.Context, hubPath string) CheckResult {
 		return CheckResult{Name: "origin remote", Passed: false, Value: "not configured"}
 	}
 	return CheckResult{Name: "origin remote", Passed: true, Value: "configured"}
+}
+
+// CommandDescriptor is a plain data record describing one registered
+// command. Passed from cli/ to doctor/ to avoid circular imports.
+type CommandDescriptor struct {
+	Name       string
+	Source     string // "kernel", "repo-local", "package"
+	Tier       int    // 0=kernel, 1=repo-local, 2=package
+	Package    string // package name (empty for kernel/repo-local)
+	Entrypoint string // absolute path to entrypoint script (empty for kernel)
+}
+
+// ValidateCommands checks command integrity from a list of descriptors:
+//   - missing entrypoints
+//   - non-executable entrypoints
+//   - duplicate command names within a single tier
+func ValidateCommands(descs []CommandDescriptor) []CommandIssue {
+	var issues []CommandIssue
+
+	tierNames := make(map[int]map[string]int)
+	for _, d := range descs {
+		if tierNames[d.Tier] == nil {
+			tierNames[d.Tier] = make(map[string]int)
+		}
+		tierNames[d.Tier][d.Name]++
+
+		if d.Entrypoint == "" {
+			continue
+		}
+
+		info, err := os.Stat(d.Entrypoint)
+		if err != nil {
+			issues = append(issues, CommandIssue{
+				CommandName: d.Name,
+				Package:     d.Package,
+				Problem:     "missing entrypoint: " + d.Entrypoint,
+			})
+			continue
+		}
+		if info.Mode()&0111 == 0 {
+			issues = append(issues, CommandIssue{
+				CommandName: d.Name,
+				Package:     d.Package,
+				Problem:     "entrypoint not executable: " + d.Entrypoint,
+			})
+		}
+	}
+
+	for tier, names := range tierNames {
+		for name, count := range names {
+			if count > 1 {
+				tierLabel := "unknown"
+				switch tier {
+				case 0:
+					tierLabel = "kernel"
+				case 1:
+					tierLabel = "repo-local"
+				case 2:
+					tierLabel = "package"
+				}
+				issues = append(issues, CommandIssue{
+					CommandName: name,
+					Problem:     fmt.Sprintf("duplicate in %s tier (%d definitions)", tierLabel, count),
+				})
+			}
+		}
+	}
+
+	return issues
+}
+
+func checkCommandIntegrity(issues []CommandIssue) CheckResult {
+	if len(issues) == 0 {
+		return CheckResult{Name: "command integrity", Passed: true, Value: "all commands valid"}
+	}
+	msgs := make([]string, len(issues))
+	for i, iss := range issues {
+		if iss.Package != "" {
+			msgs[i] = fmt.Sprintf("%s (%s): %s", iss.CommandName, iss.Package, iss.Problem)
+		} else {
+			msgs[i] = fmt.Sprintf("%s: %s", iss.CommandName, iss.Problem)
+		}
+	}
+	return CheckResult{
+		Name:   "command integrity",
+		Passed: false,
+		Value:  fmt.Sprintf("%d issue(s): %s", len(issues), strings.Join(msgs, "; ")),
+	}
 }

@@ -98,7 +98,7 @@ func TestHelpCmdOutput(t *testing.T) {
 	reg := NewRegistry()
 	help := &HelpCmd{Registry: reg}
 	reg.Register(help)
-	reg.Register(&stubCmd{spec: CommandSpec{Name: "deps", Summary: "Manage dependencies", NeedsHub: true}})
+	reg.Register(&stubCmd{spec: CommandSpec{Name: "deps", Summary: "Manage dependencies", Source: SourceKernel, NeedsHub: true}})
 
 	var stdout bytes.Buffer
 	inv := Invocation{
@@ -114,6 +114,9 @@ func TestHelpCmdOutput(t *testing.T) {
 	if !strings.Contains(out, "cn — cnos kernel") {
 		t.Error("expected header in help output")
 	}
+	if !strings.Contains(out, "Kernel commands:") {
+		t.Error("expected 'Kernel commands:' section header")
+	}
 	if !strings.Contains(out, "deps") {
 		t.Error("expected 'deps' in help output")
 	}
@@ -126,7 +129,7 @@ func TestHelpCmdNoHub(t *testing.T) {
 	reg := NewRegistry()
 	help := &HelpCmd{Registry: reg}
 	reg.Register(help)
-	reg.Register(&stubCmd{spec: CommandSpec{Name: "deps", Summary: "Manage dependencies", NeedsHub: true}})
+	reg.Register(&stubCmd{spec: CommandSpec{Name: "deps", Summary: "Manage dependencies", Source: SourceKernel, NeedsHub: true}})
 
 	var stdout bytes.Buffer
 	inv := Invocation{
@@ -142,5 +145,36 @@ func TestHelpCmdNoHub(t *testing.T) {
 	}
 	if !strings.Contains(out, "No hub found") {
 		t.Error("expected no-hub warning")
+	}
+}
+
+func TestHelpCmdTieredOutput(t *testing.T) {
+	reg := NewRegistry()
+	help := &HelpCmd{Registry: reg}
+	reg.Register(help)
+	reg.Register(&stubCmd{spec: CommandSpec{Name: "deps", Summary: "Manage dependencies", Source: SourceKernel, NeedsHub: true}})
+	reg.Register(&stubCmd{spec: CommandSpec{Name: "deploy", Summary: "Deploy to prod", Source: SourceRepoLocal, Tier: TierRepoLocal, NeedsHub: true}})
+	reg.Register(&stubCmd{spec: CommandSpec{Name: "daily", Summary: "Daily reflection", Source: SourcePackage, Tier: TierPackage, Package: "cnos.core", NeedsHub: true}})
+
+	var stdout bytes.Buffer
+	inv := Invocation{
+		HubPath: "/some/hub",
+		Stdout:  &stdout,
+		Stderr:  &bytes.Buffer{},
+	}
+	help.Run(context.Background(), inv)
+
+	out := stdout.String()
+	if !strings.Contains(out, "Kernel commands:") {
+		t.Error("expected 'Kernel commands:' section")
+	}
+	if !strings.Contains(out, "Repo-local commands:") {
+		t.Error("expected 'Repo-local commands:' section")
+	}
+	if !strings.Contains(out, "Package commands:") {
+		t.Error("expected 'Package commands:' section")
+	}
+	if !strings.Contains(out, "[cnos.core]") {
+		t.Error("expected package attribution '[cnos.core]'")
 	}
 }

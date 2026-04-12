@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/usurobor/cnos/src/go/internal/cli"
+	"github.com/usurobor/cnos/src/go/internal/discover"
 )
 
 // version and commit are set at build time via -ldflags. They default
@@ -33,12 +34,26 @@ func main() {
 	reg.Register(&cli.SetupCmd{Version: version})
 	reg.Register(&cli.DepsCmd{})
 	reg.Register(&cli.StatusCmd{Version: version})
-	reg.Register(&cli.DoctorCmd{Version: version})
+	doctorCmd := &cli.DoctorCmd{Version: version, Registry: reg}
+	reg.Register(doctorCmd)
 	reg.Register(&cli.BuildCmd{})
 	reg.Register(&cli.UpdateCmd{Version: version, Commit: commit})
 
 	// Discover hub: walk up from cwd to find .cn/.
 	hubPath := discoverHub()
+
+	// Discover repo-local and package commands (GO-KERNEL-COMMANDS.md §2.6).
+	// Kernel commands are already registered above — they always win by tier.
+	if hubPath != "" {
+		// Step 4: repo-local commands (.cn/commands/cn-<name>).
+		for _, cmd := range discover.ScanRepoLocalCommands(hubPath) {
+			reg.Register(cmd)
+		}
+		// Step 5: vendor package commands (.cn/vendor/packages/*/cn.package.json).
+		for _, cmd := range discover.ScanPackageCommands(hubPath) {
+			reg.Register(cmd)
+		}
+	}
 
 	// No args → help.
 	if len(os.Args) < 2 {
