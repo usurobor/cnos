@@ -172,9 +172,22 @@ This is not a special mechanism — it's just commands + bundled data. The packa
 
 Every package should be provable. The question each package must answer: **"What can the system do with this package installed that it couldn't do without it?"**
 
-For `cnos.core`: `cn daily` dispatches, skills are loadable
-For `cnos.cdd`: CDD review/release/issue skills are available
-For `cnos.cdd.kata`: `cn kata-run M1-design` produces a judged run bundle
+Create a companion `.kata` package for your package:
+
+| Package | Kata package |
+|---|---|
+| `cnos.core` | `cnos.core.kata` |
+| `cnos.cdd` | `cnos.cdd.kata` |
+| `cnos.eng` | `cnos.eng.kata` |
+
+The kata package ships commands (`kata-list`, `kata-run`, `kata-judge`) with bundled test scenarios, rubrics, and judge prompts. It proves the parent package's capabilities work.
+
+Examples:
+- `cnos.core.kata`: `cn daily` dispatches, skills are loadable, `cn weekly` creates a thread
+- `cnos.cdd.kata`: CDD review produces evidence-bound findings, release produces coherence delta
+- `cnos.eng.kata`: Go skill constraints are followed, design principles are applied
+
+The kata package is separate from the parent so it can be installed independently — you can run katas without the overhead of the parent's dev tooling, and you can skip katas in production installs.
 
 ## 8. Build and distribution
 
@@ -220,7 +233,7 @@ Package names use dots as namespace separators. The name in the manifest must ma
 - [ ] Every declared skill directory contains a SKILL.md
 - [ ] `cn build --check` passes
 - [ ] `cn build && cn deps restore` round-trips successfully
-- [ ] Package capability is demonstrable (kata or manual verification)
+- [ ] Package capability is demonstrable — create a `<name>.kata` companion package
 
 ## 11. Anti-patterns
 
