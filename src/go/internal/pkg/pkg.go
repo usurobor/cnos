@@ -104,14 +104,54 @@ type PackageCommandEntry struct {
 	Summary    string // brief description for help output
 }
 
+// EnginesJSON is the "engines" object in cn.package.json.
+// Currently only cnos compatibility is declared.
+type EnginesJSON struct {
+	Cnos string `json:"cnos"`
+}
+
+// SkillsJSON is the "skills" object in cn.package.json.
+type SkillsJSON struct {
+	Exposed  []string `json:"exposed"`
+	Internal []string `json:"internal"`
+}
+
 // FullPackageManifest is the extended shape of cn.package.json that
-// includes the commands object. Used by command discovery.
+// includes commands, engines, and content class objects. Used by
+// command discovery and status display.
 type FullPackageManifest struct {
-	Schema   string                          `json:"schema"`
-	Name     string                          `json:"name"`
-	Version  string                          `json:"version"`
-	Kind     string                          `json:"kind"`
-	Commands map[string]PackageCommandJSON   `json:"commands"`
+	Schema        string                        `json:"schema"`
+	Name          string                        `json:"name"`
+	Version       string                        `json:"version"`
+	Kind          string                        `json:"kind"`
+	Engines       EnginesJSON                   `json:"engines"`
+	Commands      map[string]PackageCommandJSON `json:"commands"`
+	Skills        *SkillsJSON                   `json:"skills"`
+	Orchestrators json.RawMessage               `json:"orchestrators"`
+	Extensions    json.RawMessage               `json:"extensions"`
+	Providers     json.RawMessage               `json:"providers"`
+}
+
+// ContentClasses returns the list of content classes present in this
+// package, in a stable order. Pure — no IO.
+func (m *FullPackageManifest) ContentClasses() []string {
+	var classes []string
+	if m.Skills != nil && (len(m.Skills.Exposed) > 0 || len(m.Skills.Internal) > 0) {
+		classes = append(classes, "skills")
+	}
+	if len(m.Commands) > 0 {
+		classes = append(classes, "commands")
+	}
+	if len(m.Orchestrators) > 0 && string(m.Orchestrators) != "null" {
+		classes = append(classes, "orchestrators")
+	}
+	if len(m.Extensions) > 0 && string(m.Extensions) != "null" {
+		classes = append(classes, "extensions")
+	}
+	if len(m.Providers) > 0 && string(m.Providers) != "null" {
+		classes = append(classes, "providers")
+	}
+	return classes
 }
 
 // PackageCommandJSON is the JSON shape of one command entry in

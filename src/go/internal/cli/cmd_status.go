@@ -6,9 +6,11 @@ import (
 	"github.com/usurobor/cnos/src/go/internal/hubstatus"
 )
 
-// StatusCmd implements the "status" command — shows hub info + installed packages.
+// StatusCmd implements the "status" command — shows hub info, installed
+// packages, and command registry. Thin wrapper per eng/go §2.18 (T-002).
 type StatusCmd struct {
-	Version string
+	Version  string
+	Registry *Registry // set by main.go for command registry display
 }
 
 func (c *StatusCmd) Spec() CommandSpec {
@@ -22,5 +24,29 @@ func (c *StatusCmd) Spec() CommandSpec {
 }
 
 func (c *StatusCmd) Run(_ context.Context, inv Invocation) error {
-	return hubstatus.Run(inv.HubPath, c.Version, inv.Stdout)
+	return hubstatus.Run(inv.HubPath, c.Version, registryToCommandInfo(c.Registry), inv.Stdout)
+}
+
+// registryToCommandInfo converts the cli Registry into the pure data
+// type hubstatus expects. This keeps hubstatus free of cli/ imports.
+func registryToCommandInfo(reg *Registry) []hubstatus.CommandInfo {
+	if reg == nil {
+		return nil
+	}
+	tierLabel := map[CommandTier]string{
+		TierKernel:    "kernel",
+		TierRepoLocal: "repo-local",
+		TierPackage:   "package",
+	}
+	var cmds []hubstatus.CommandInfo
+	for _, cmd := range reg.All() {
+		spec := cmd.Spec()
+		cmds = append(cmds, hubstatus.CommandInfo{
+			Name:    spec.Name,
+			Summary: spec.Summary,
+			Tier:    tierLabel[spec.Tier],
+			Package: spec.Package,
+		})
+	}
+	return cmds
 }

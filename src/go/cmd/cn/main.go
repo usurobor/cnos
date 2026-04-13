@@ -33,7 +33,8 @@ func main() {
 	reg.Register(&cli.InitCmd{})
 	reg.Register(&cli.SetupCmd{Version: version})
 	reg.Register(&cli.DepsCmd{})
-	reg.Register(&cli.StatusCmd{Version: version})
+	statusCmd := &cli.StatusCmd{Version: version, Registry: reg}
+	reg.Register(statusCmd)
 	doctorCmd := &cli.DoctorCmd{Version: version, Registry: reg}
 	reg.Register(doctorCmd)
 	reg.Register(&cli.BuildCmd{})
