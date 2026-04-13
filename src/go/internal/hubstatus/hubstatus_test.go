@@ -8,36 +8,101 @@ import (
 	"testing"
 )
 
+// writeManifest creates a cn.package.json in the vendor dir for the
+// given package name. Helper — keeps test setup concise.
+func writeManifest(t *testing.T, hub, name, manifest string) {
+	t.Helper()
+	dir := filepath.Join(hub, ".cn", "vendor", "packages", name)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "cn.package.json"), []byte(manifest), 0644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestRunShowsPackages(t *testing.T) {
 	hub := t.TempDir()
-	for _, pkg := range []string{"cnos.core@3.48.0", "cnos.eng@3.48.0"} {
-		os.MkdirAll(filepath.Join(hub, ".cn", "vendor", "packages", pkg), 0755)
-	}
+	writeManifest(t, hub, "cnos.core", `{
+		"schema": "cn.package.v1",
+		"name": "cnos.core",
+		"version": "3.52.0",
+		"kind": "package",
+		"engines": {"cnos": "3.52.0"},
+		"skills": {"exposed": ["agent/cap"]},
+		"commands": {"daily": {"entrypoint": "commands/daily/cn-daily", "summary": "Daily"}}
+	}`)
+	writeManifest(t, hub, "cnos.eng", `{
+		"schema": "cn.package.v1",
+		"name": "cnos.eng",
+		"version": "3.52.0",
+		"kind": "package",
+		"engines": {"cnos": "3.52.0"},
+		"skills": {"exposed": ["eng/go"]}
+	}`)
 
 	var stdout bytes.Buffer
-	if err := Run(hub, "3.48.0", &stdout); err != nil {
+	if err := Run(hub, "3.52.0", nil, &stdout); err != nil {
 		t.Fatalf("status: %v", err)
 	}
 
 	out := stdout.String()
 	if !strings.Contains(out, "cnos.core") {
-		t.Error("expected cnos.core")
+		t.Error("expected cnos.core in output")
 	}
-	if !strings.Contains(out, "✓ 3.48.0") {
-		t.Error("expected ✓ for matching version")
+	if !strings.Contains(out, "cnos.eng") {
+		t.Error("expected cnos.eng in output")
+	}
+	if !strings.Contains(out, "3.52.0") {
+		t.Error("expected version 3.52.0")
+	}
+	if !strings.Contains(out, "\u2713") {
+		t.Error("expected check mark for matching version")
+	}
+}
+
+func TestRunContentClasses(t *testing.T) {
+	hub := t.TempDir()
+	writeManifest(t, hub, "cnos.core", `{
+		"schema": "cn.package.v1",
+		"name": "cnos.core",
+		"version": "3.52.0",
+		"kind": "package",
+		"engines": {"cnos": "3.52.0"},
+		"skills": {"exposed": ["agent/cap"]},
+		"commands": {"daily": {"entrypoint": "commands/daily/cn-daily", "summary": "Daily"}}
+	}`)
+
+	var stdout bytes.Buffer
+	if err := Run(hub, "3.52.0", nil, &stdout); err != nil {
+		t.Fatalf("status: %v", err)
+	}
+
+	out := stdout.String()
+	if !strings.Contains(out, "[skills, commands]") {
+		t.Errorf("expected content classes [skills, commands] in output, got:\n%s", out)
 	}
 }
 
 func TestRunVersionDrift(t *testing.T) {
 	hub := t.TempDir()
-	os.MkdirAll(filepath.Join(hub, ".cn", "vendor", "packages", "cnos.core@3.42.0"), 0755)
+	writeManifest(t, hub, "cnos.core", `{
+		"schema": "cn.package.v1",
+		"name": "cnos.core",
+		"version": "3.48.0",
+		"kind": "package",
+		"engines": {"cnos": "3.48.0"}
+	}`)
 
 	var stdout bytes.Buffer
-	Run(hub, "3.48.0", &stdout)
+	Run(hub, "3.52.0", nil, &stdout)
 
 	out := stdout.String()
-	if !strings.Contains(out, "✗ 3.42.0") {
-		t.Error("expected ✗ for mismatch")
+	if !strings.Contains(out, "\u2717") {
+		t.Error("expected cross mark for drift")
+	}
+	if !strings.Contains(out, "engines.cnos 3.48.0") {
+		t.Error("expected engines.cnos drift info")
 	}
 	if !strings.Contains(out, "version_drift") {
 		t.Error("expected version_drift warning")
@@ -48,11 +113,80 @@ func TestRunNoPackages(t *testing.T) {
 	hub := t.TempDir()
 
 	var stdout bytes.Buffer
-	if err := Run(hub, "3.48.0", &stdout); err != nil {
+	if err := Run(hub, "3.52.0", nil, &stdout); err != nil {
 		t.Fatalf("status: %v", err)
 	}
 
 	if !strings.Contains(stdout.String(), "No packages installed") {
 		t.Error("expected 'No packages installed'")
+	}
+}
+
+func TestRunCommandRegistry(t *testing.T) {
+	hub := t.TempDir()
+	// Create a minimal vendor dir so we get past the package section.
+	writeManifest(t, hub, "cnos.core", `{
+		"schema": "cn.package.v1",
+		"name": "cnos.core",
+		"version": "3.52.0",
+		"kind": "package",
+		"engines": {"cnos": "3.52.0"}
+	}`)
+
+	commands := []CommandInfo{
+		{Name: "help", Summary: "Show available commands", Tier: "kernel"},
+		{Name: "deploy", Summary: "Deploy to prod", Tier: "repo-local"},
+		{Name: "daily", Summary: "Daily reflection", Tier: "package", Package: "cnos.core"},
+	}
+
+	var stdout bytes.Buffer
+	if err := Run(hub, "3.52.0", commands, &stdout); err != nil {
+		t.Fatalf("status: %v", err)
+	}
+
+	out := stdout.String()
+	if !strings.Contains(out, "Commands:") {
+		t.Error("expected Commands: header")
+	}
+	if !strings.Contains(out, "kernel:") {
+		t.Error("expected kernel: tier group")
+	}
+	if !strings.Contains(out, "repo-local:") {
+		t.Error("expected repo-local: tier group")
+	}
+	if !strings.Contains(out, "package:") {
+		t.Error("expected package: tier group")
+	}
+	if !strings.Contains(out, "daily") {
+		t.Error("expected daily command listed")
+	}
+	if !strings.Contains(out, "(cnos.core)") {
+		t.Error("expected package attribution for daily command")
+	}
+}
+
+func TestRunSkipsDirsWithoutManifest(t *testing.T) {
+	hub := t.TempDir()
+	// Create a dir without cn.package.json — should be silently skipped.
+	os.MkdirAll(filepath.Join(hub, ".cn", "vendor", "packages", "junk"), 0755)
+	writeManifest(t, hub, "cnos.core", `{
+		"schema": "cn.package.v1",
+		"name": "cnos.core",
+		"version": "3.52.0",
+		"kind": "package",
+		"engines": {"cnos": "3.52.0"}
+	}`)
+
+	var stdout bytes.Buffer
+	if err := Run(hub, "3.52.0", nil, &stdout); err != nil {
+		t.Fatalf("status: %v", err)
+	}
+
+	out := stdout.String()
+	if strings.Contains(out, "junk") {
+		t.Error("junk dir without manifest should not appear")
+	}
+	if !strings.Contains(out, "cnos.core") {
+		t.Error("expected cnos.core in output")
 	}
 }
