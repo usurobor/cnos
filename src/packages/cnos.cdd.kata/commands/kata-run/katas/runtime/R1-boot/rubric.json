@@ -1,0 +1,16 @@
+{
+  "id": "R1",
+  "name": "Boot",
+  "class": "runtime",
+  "version": "0.1.0",
+  "pass_conditions": {
+    "all_commands_exit_zero": true,
+    "vendor_tree_present": true,
+    "installed_packages_visible_in_status": true
+  },
+  "fail_if": [
+    "missing_vendor_tree",
+    "status_omits_installed_packages",
+    "silent_fallback_detected"
+  ]
+}

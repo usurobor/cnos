@@ -1,0 +1,17 @@
+{
+  "id": "R4",
+  "name": "Doctor",
+  "class": "runtime",
+  "version": "0.1.0",
+  "requires": ">=3.52.0",
+  "pass_conditions": {
+    "clean_install_passes": true,
+    "missing_entrypoint_caught": true,
+    "corrupted_manifest_caught": true
+  },
+  "fail_if": [
+    "doctor_false_positive_on_clean",
+    "missing_entrypoint_undetected",
+    "corrupted_manifest_undetected"
+  ]
+}

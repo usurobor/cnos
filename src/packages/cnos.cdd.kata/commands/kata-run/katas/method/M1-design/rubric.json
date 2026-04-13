@@ -1,0 +1,17 @@
+{
+  "id": "M1",
+  "name": "Design",
+  "class": "method",
+  "version": "0.1.0",
+  "required_artifacts": [
+    "named_incoherence",
+    "impact_graph",
+    "acceptance_criteria",
+    "cdd_trace"
+  ],
+  "level_evidence": {
+    "L5": ["acceptance_criteria_testable", "change_locally_correct"],
+    "L6": ["cross_surface_impact_named", "sibling_consistency_checked"],
+    "L7": ["architecture_boundary_moved", "future_work_class_eliminated"]
+  }
+}

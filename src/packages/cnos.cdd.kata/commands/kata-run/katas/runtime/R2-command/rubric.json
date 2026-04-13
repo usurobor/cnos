@@ -1,0 +1,19 @@
+{
+  "id": "R2",
+  "name": "Command",
+  "class": "runtime",
+  "version": "0.1.0",
+  "requires": ">=3.52.0",
+  "pass_conditions": {
+    "build_produces_tarballs": true,
+    "restore_installs_packages": true,
+    "help_shows_package_commands": true,
+    "daily_dispatches": true
+  },
+  "fail_if": [
+    "build_no_tarballs",
+    "restore_fails",
+    "help_missing_daily",
+    "daily_unknown_command"
+  ]
+}

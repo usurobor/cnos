@@ -1,0 +1,23 @@
+{
+  "id": "M3",
+  "name": "Post-release",
+  "class": "method",
+  "version": "0.1.0",
+  "required_artifacts": [
+    "coherence_measurement",
+    "encoding_lag_table",
+    "mci_mca_balance_decision",
+    "process_learning",
+    "review_quality_metrics",
+    "cdd_self_coherence",
+    "production_verification",
+    "cdd_closeout_trace",
+    "next_move_commitment",
+    "hub_memory"
+  ],
+  "level_evidence": {
+    "L5": ["assessment_exists", "scores_assigned"],
+    "L6": ["lag_table_complete", "mci_mca_justified", "production_verification_concrete", "immediate_outputs_executed"],
+    "L7": ["skill_patches_shipped", "level_evidence_from_rubric", "closure_evidence_with_links"]
+  }
+}
