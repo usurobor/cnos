@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# cn-kata-run — Run one CDD kata and capture a run bundle
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+KATAS_DIR="$SCRIPT_DIR/katas"
+
+usage() {
+  echo "Usage: cn kata-run <kata-id> [--mode baseline|cdd] [--all] [--runtime] [--method]"
+  echo ""
+  echo "Examples:"
+  echo "  cn kata-run R1-boot"
+  echo "  cn kata-run --runtime        # run all runtime katas"
+  echo "  cn kata-run --all            # run everything"
+  exit 1
+}
+
+run_kata() {
+  local kata_dir="$1"
+  local id=$(basename "$kata_dir")
+
+  if [ ! -f "$kata_dir/run.sh" ]; then
+    echo "SKIP: $id — no run.sh (stub only)"
+    return 0
+  fi
+
+  bash "$kata_dir/run.sh"
+  return $?
+}
+
+run_family() {
+  local family="$1"
+  local family_dir="$KATAS_DIR/$family"
+  [ -d "$family_dir" ] || return 0
+
+  local total_fail=0
+  for kata_dir in "$family_dir"/*/; do
+    [ -d "$kata_dir" ] || continue
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    run_kata "$kata_dir" || total_fail=$((total_fail + 1))
+  done
+  return $total_fail
+}
+
+# Parse args
+if [ $# -eq 0 ]; then
+  usage
+fi
+
+case "$1" in
+  --all)
+    FAIL=0
+    run_family runtime || FAIL=$((FAIL + $?))
+    run_family method || FAIL=$((FAIL + $?))
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    [ $FAIL -eq 0 ] && echo "KATA SUITE: all passed" || echo "KATA SUITE: $FAIL kata(s) had failures"
+    exit $FAIL
+    ;;
+  --runtime)
+    run_family runtime
+    ;;
+  --method)
+    run_family method
+    ;;
+  -h|--help)
+    usage
+    ;;
+  *)
+    # Find kata by ID
+    KATA_ID="$1"
+    FOUND=""
+    for family in runtime method; do
+      if [ -d "$KATAS_DIR/$family/$KATA_ID" ]; then
+        FOUND="$KATAS_DIR/$family/$KATA_ID"
+        break
+      fi
+    done
+
+    if [ -z "$FOUND" ]; then
+      echo "ERROR: kata '$KATA_ID' not found"
+      echo "Available: $(ls "$KATAS_DIR"/runtime/ "$KATAS_DIR"/method/ 2>/dev/null | tr '\n' ' ')"
+      exit 1
+    fi
+
+    run_kata "$FOUND"
+    ;;
+esac

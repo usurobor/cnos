@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# cn-kata-list — List available CDD runtime and method katas
+set -euo pipefail
+
+# Find katas dir relative to this command
+KATAS_DIR="$(cd "$(dirname "$0")/../kata-run/katas" 2>/dev/null && pwd)" || {
+  # Installed path: look relative to package root
+  KATAS_DIR="${CN_PACKAGE_ROOT:-.}/commands/kata-run/katas"
+}
+
+echo "CDD Kata Suite"
+echo ""
+
+for family in runtime method; do
+  FAMILY_DIR="$KATAS_DIR/$family"
+  [ -d "$FAMILY_DIR" ] || continue
+
+  echo "  $family:"
+  for kata_dir in "$FAMILY_DIR"/*/; do
+    [ -d "$kata_dir" ] || continue
+    id=$(basename "$kata_dir")
+
+    # Read name from rubric if available
+    name=""
+    if [ -f "$kata_dir/rubric.json" ]; then
+      name=$(python3 -c "import json; print(json.load(open('$kata_dir/rubric.json')).get('name',''))" 2>/dev/null || true)
+    fi
+
+    # Read requires
+    requires=""
+    if [ -f "$kata_dir/rubric.json" ]; then
+      requires=$(python3 -c "import json; r=json.load(open('$kata_dir/rubric.json')).get('requires',''); print(f' (cn {r})' if r else '')" 2>/dev/null || true)
+    fi
+
+    has_run="●"
+    [ -f "$kata_dir/run.sh" ] || has_run="○"
+
+    printf "    %s %-20s %s%s\n" "$has_run" "$id" "${name}" "${requires}"
+  done
+  echo ""
+done
+
+echo "● = executable  ○ = stub"
+echo ""
+echo "Run: cn kata-run <id>"

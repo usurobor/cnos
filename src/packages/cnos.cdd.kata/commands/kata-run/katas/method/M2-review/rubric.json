@@ -1,0 +1,18 @@
+{
+  "id": "M2",
+  "name": "Review",
+  "class": "method",
+  "version": "0.1.0",
+  "required_artifacts": [
+    "verdict",
+    "evidence_per_finding",
+    "architecture_check",
+    "active_skill_consistency",
+    "finding_taxonomy"
+  ],
+  "level_evidence": {
+    "L5": ["findings_exist", "locally_correct"],
+    "L6": ["architecture_check_performed", "sibling_consistency", "evidence_depth_matches_claim"],
+    "L7": ["higher_leverage_alternative", "process_improvement_shipped"]
+  }
+}

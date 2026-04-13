@@ -1,0 +1,22 @@
+{
+  "id": "R3",
+  "name": "Round-trip",
+  "class": "runtime",
+  "version": "0.1.0",
+  "requires": ">=3.52.0",
+  "pass_conditions": {
+    "command_authored": true,
+    "build_succeeds": true,
+    "restore_succeeds": true,
+    "dispatch_succeeds": true,
+    "env_vars_set": true,
+    "cleanup_restores_manifest": true
+  },
+  "fail_if": [
+    "manifest_injection_failed",
+    "build_fails_with_new_command",
+    "dispatch_unknown_command",
+    "env_vars_missing",
+    "manifest_not_restored"
+  ]
+}
