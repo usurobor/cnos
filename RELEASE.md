@@ -2,38 +2,35 @@
 
 ## Outcome
 
-Coherence delta: C_Sigma A (`alpha A`, `beta A`, `gamma A-`) · **Level:** L6
+Coherence delta: C_Sigma A (`alpha A`, `beta A`, `gamma A`) · **Level:** L5
 
-**Package and repo-local command discovery closes the "one model" gap.** Three source forms (kernel, repo-local, package-vendored) now normalize into the same `CommandSpec`, register into the same `Registry`, and dispatch through the same `Command` interface. The kernel's command model is no longer a special case — it's an instance of its own runtime command descriptor.
+**cn status now surfaces truthful package and command state from manifests.** Installed packages display name, version, and content classes read from cn.package.json — not parsed from directory names. Command registry shows all registered commands grouped by tier (kernel / repo-local / package) with source attribution. Version drift compares engines.cnos from manifest against the running binary.
 
 ## Why it matters
 
-Since v3.37.0, package commands (daily, weekly, save) have been installable through `cn deps restore` but invisible to the Go kernel — the CLI only knew about its 8 built-in kernel commands. This meant `cn daily` failed even though the command was correctly installed at `.cn/vendor/packages/cnos.core/commands/daily/cn-daily`. This cycle closes the gap described in GO-KERNEL-COMMANDS.md Phase 4: the kernel discovers all installed commands and dispatches them uniformly.
+Since #229 changed vendor paths from `name@version/` to `name/`, `cn status` was broken — it parsed directory names for version info that was no longer there. This cycle fixes the broken path and simultaneously upgrades the status display to show richer package metadata and the full command registry. This is MVA Step 4 (#228), the final step of the minimum viable agent sprint, and satisfies #192 AC4 (Go kernel rewrite: cn status surfaces installed packages and commands).
+
+## Fixed
+
+- **Broken vendor path parsing** (#233): `hubstatus.go` no longer parses `name@version` from directory names. Reads cn.package.json manifests from each vendor dir for name, version, engines.cnos, and content classes.
+- **Version drift detection** (#233): now compares `engines.cnos` from manifest against running binary version, not directory name parsing.
 
 ## Added
 
-- **Package command scanning** (#226): `discover.ScanPackageCommands` walks `.cn/vendor/packages/*/cn.package.json`, parses `commands` entries, creates exec-backed `Command` implementations.
-- **Repo-local command scanning** (#226): `discover.ScanRepoLocalCommands` walks `.cn/commands/cn-*`, creates `Command` from filename convention.
-- **External command dispatch** (#226): `ExecCommand.Run()` execs entrypoint scripts with `CN_HUB_PATH`, `CN_PACKAGE_ROOT`, `CN_COMMAND_NAME` env vars.
-- **Tiered help output** (#226): `cn help` groups by Kernel / Repo-local / Package with `[pkg-name]` attribution.
-- **Command integrity validation** (#226): `cn doctor` reports missing entrypoints, non-executable files, duplicate names within tier.
-- **Path confinement** (#226): entrypoints validated to stay within package directory.
-
-## Changed
-
-- **`doctor.RunAll` signature** (#226): accepts optional `commandIssues` for integrity reporting.
+- **Installed package content summary** (#233): each package displays content classes present (skills, commands, orchestrators, extensions, providers).
+- **Command registry display** (#233): `cn status` lists all registered commands grouped by tier (kernel / repo-local / package) with source attribution.
+- **pkg.ContentClasses()** (#233): pure method on FullPackageManifest that returns content classes in stable order.
+- **pkg.EnginesJSON / SkillsJSON types** (#233): manifest schema types for engines and skills objects.
 
 ## Validation
 
-- All 11 Go test packages pass (79+ tests).
-- `go build ./...` clean.
-- Round-trip: `cn build` -> `cn deps restore` -> `cn daily` dispatches correctly.
-- `cn help` shows all three tiers with correct attribution.
-- `cn doctor` shows "command integrity: all commands valid".
+- All 11 Go test packages pass (80+ tests).
+- `go build ./...`, `go vet ./...` clean.
+- 6 new tests in hubstatus: packages, content classes, version drift, no-packages, command registry, skip-junk-dirs.
 - CI green on merge (5/5 checks: go, I1, I2, notify x2).
 
 ## Known Issues
 
-- Repo-local commands show generic `(repo-local command)` summary — no sidecar metadata yet (GO-KERNEL-COMMANDS.md defers to future version)
 - #230 — `cn deps restore` skips version upgrades silently
 - #224 — Layout migration remaining ACs
+- ContentClasses() detects 5 of 8 content classes (doctrine, mindsets, templates lack cn.package.json schema fields)
