@@ -53,7 +53,52 @@ Every package has a manifest (`cn.package.json`) that declares what it contains,
 - `skills.internal` — skills used internally by the package
 - `commands` — commands the package exposes to the CLI
 
-## 3. Content classes
+## 3. When to create a package
+
+A package boundary should follow a **reason to change**, not just a topic label.
+
+### The question
+
+> "If this content changes, does the rest of the system need to change too?"
+
+If yes → same package. If no → different package.
+
+### Core vs package
+
+Policy belongs in the kernel. Implementations belong in packages.
+
+| Belongs in kernel/core | Belongs in a package |
+|---|---|
+| Command precedence rules | Command implementations |
+| Discovery/dispatch logic | Discovered content |
+| Doctor/status/help rendering | What doctor checks, status shows |
+| Package format and schema | Package content |
+
+A package should **never** widen its own authority or rewrite kernel policy. The kernel decides whether and how the package's content is used.
+
+### Package splitting
+
+Split when two parts of a package change for different reasons:
+
+- ❌ `cnos.core` contains CDD skills — CDD process changes force a core release
+- ✅ `cnos.cdd` separated — CDD evolves independently from core ops
+
+Split when install profiles differ:
+
+- ❌ Kata framework bundled with production skills — every hub installs test tooling
+- ✅ `cnos.cdd.kata` separate — install only when you want to run katas
+
+### What makes a good package boundary (L7)
+
+A system-shaping package boundary eliminates a class of future work:
+
+- Future CDD method changes don't touch core → `cnos.cdd`
+- Future engineering skills don't touch CDD → `cnos.eng`
+- Future kata scenarios don't touch any production package → `cnos.cdd.kata`
+
+If the boundary only moves code around without changing what future work looks like, it's L5 convenience, not L7 architecture.
+
+## 4. Content classes
 
 A package may contain any combination of these content class directories:
 
@@ -68,6 +113,23 @@ A package may contain any combination of these content class directories:
 | `extensions/` | Extensions | Runtime extensions |
 
 At least one content class directory must be present and non-empty.
+
+### Choosing the right content class
+
+Each runtime surface has a different contract. Do not collapse them:
+
+| If your content... | Use | Not |
+|---|---|---|
+| Teaches an agent judgment or procedure | Skill | Command |
+| Dispatches an action for an operator | Command | Skill |
+| Orchestrates multi-step execution | Orchestrator | Command |
+| Provides a runtime capability (transport, storage) | Extension | Command |
+| Defines agent identity or behavior | Doctrine/Mindset | Skill |
+| Generates files from a template | Template | Command |
+
+- ❌ Trigger commands by keyword like skills (smears dispatch into cognition)
+- ❌ Treat providers as hidden commands (different contracts)
+- ✅ Each surface has its own registry, contract, and policy boundary
 
 There is **no generic `docs/` or `data/` content class.** If you need to ship data with a package, bundle it inside a command directory tree or a skill directory. The content class model is finite and explicit.
 
@@ -189,7 +251,29 @@ Examples:
 
 The kata package is separate from the parent so it can be installed independently — you can run katas without the overhead of the parent's dev tooling, and you can skip katas in production installs.
 
-## 8. Build and distribution
+## 8. Source, artifact, and installed state
+
+Three layers. Keep them explicit.
+
+| Layer | Location | Who produces it | Editable? |
+|---|---|---|---|
+| **Source** | `src/packages/<name>/` | Human author | Yes |
+| **Artifact** | `dist/packages/<name>-<version>.tar.gz` | `cn build` | No — derived |
+| **Installed** | `.cn/vendor/packages/<name>/` | `cn deps restore` | No — derived |
+
+- ❌ Edit files in `.cn/vendor/` (installed state treated as source — will be overwritten on next restore)
+- ❌ Edit tarballs in `dist/` (artifact treated as source — will be overwritten on next build)
+- ✅ Edit in `src/packages/`, build, restore. Source → artifact → installed.
+
+The manifest (`cn.package.json`) is a **contract**. It declares what the package provides. The runtime holds it to that contract:
+- `cn help` derives command listings from the manifest
+- `cn doctor` validates that declared entrypoints and skills exist
+- `cn status` derives package inventory from installed manifests
+- `cn build --check` validates source structure against manifest claims
+
+If the manifest says it, it must be true. If it's not in the manifest, the runtime doesn't know about it.
+
+## 9. Build and distribution
 
 ### Pipeline
 
@@ -244,3 +328,8 @@ Package names use dots as namespace separators. The name in the manifest must ma
 - ❌ Declaring commands in manifest without creating the entrypoint
 - ❌ Non-executable entrypoint files
 - ❌ Version in vendor path (`name@version/`) — vendor path is `name/` only
+- ❌ Package that widens its own authority or overrides kernel policy
+- ❌ Smearing runtime surfaces (skills that dispatch, commands that choose, providers that orchestrate)
+- ❌ Editing installed state in `.cn/vendor/` — it's derived, not source
+- ❌ Splitting by topic label instead of reason to change
+- ❌ Manifest declares content that doesn't exist on disk
