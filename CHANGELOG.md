@@ -24,6 +24,7 @@ See [RELEASE-LEVEL-CLASSIFICATION.md](docs/gamma/essays/RELEASE-LEVEL-CLASSIFICA
 
 | Version | C_Σ | α | β | γ | Level | Coherence note |
 |---------|-----|---|---|---|-------|----------------|
+| 3.54.0 | A | A | A | A | L6 | **Tier 1 bare-binary kata suite + CI gate** (#236, PR #239). Six executable kata scripts (`scripts/kata/0{1..6}-*.sh`) prove the `cn` binary works end-to-end before any package is installed: help → init → status → doctor → build → install. `run-all.sh` stops on first failure; CI job `kata-tier1` (needs `go`) gates merges. Three-tier kata catalog: Tier 1 bare binary (this release), Tier 2 runtime/package (#237), Tier 3 method/CDD (`cnos.cdd.kata`). Two Go preconditions: `cn help` always lists the 8 kernel commands with `(requires hub)` annotation when no hub; `cn doctor` gains three-way Status (Pass/Info/Fail → ✓/○/✗) so fresh-hub pending artifacts (deps.lock.json, runtime contract, origin remote, vendor before any lock) report informationally instead of failing. Dead `Registry.Available()` removed. 1 review round, 0 D/C findings, all architecture checks pass (§2.2.14.G improved — degraded paths now visible via `○` glyph). T-002 preserved (cmd_doctor/cmd_help remain thin wrappers, CI dispatch-boundary grep green). T-003 preserved (stdlib-only). γ+β collapse per CDD §1.4 (operator-authorized). |
 | 3.53.0 | A | A | A | A | L5 | **cn status surfaces installed packages and command registry** (#233, PR #234). Go kernel Phase 4 completion: `cn status` reads cn.package.json manifests from vendor dirs (not dir names), displays name/version/content classes, shows command registry grouped by tier (kernel/repo-local/package) with source attribution. Version drift compares `engines.cnos` from manifest against running binary. `hubstatus` accepts pure `CommandInfo` data type from cli layer — no import cycle. 6 tests. 1 review round, 0 blockers (2 A-level), all architecture checks pass. T-002 preserved (cmd_status.go thin wrapper). T-004 preserved (installed state read from manifests). INV-003 preserved (commands/skills/orchestrators distinct in content class display). MVA Step 4 (#228) complete; #192 AC4 met. |
 | 3.52.0 | A | A | A | A- | L6 | **Package and repo-local command discovery + dispatch** (#226, PR #231). Go kernel Phase 4: three source forms (kernel, repo-local, package) normalized into one registry, one dispatch. `internal/discover/` owns scanning + exec. `ExecCommand` dispatches via subprocess with `CN_HUB_PATH`/`CN_PACKAGE_ROOT` env vars. `cn help` shows tiered output with `[pkg-name]` attribution. `cn doctor` validates command integrity (missing/non-exec entrypoints, duplicates). Path confinement on manifest entrypoints. 13 new tests. 1 review round, 4 findings (0D, 1B mechanical, 3B/A judgment), all fixed on-branch. T-002 preserved (cmd_*.go thin wrappers, CI-enforced). INV-003 preserved (commands dispatch, no surface conflation). INV-004 preserved (kernel owns precedence). |
 | 3.51.0 | A | A | A | A- | L5 | **Distribution pipeline proved end-to-end** (#227, PR #229). `src/packages/ → cn build → dist/ → cn deps restore → .cn/vendor/packages/` round-trip verified with `TestBuildRestoreRoundTrip`. 3 mismatches fixed: VendorPath aligned to BUILD-AND-DIST.md (version-less), local file restore for dev workflow, `cn deps lock` subcommand. Lockfile types consolidated on `pkg.Lockfile`/`pkg.LockedDep`. T-004 tightened. 2 review rounds, 5 findings all resolved. Known debt: #230 (version upgrade skip). |
@@ -114,6 +115,28 @@ See [RELEASE-LEVEL-CLASSIFICATION.md](docs/gamma/essays/RELEASE-LEVEL-CLASSIFICA
 | v1.1.0 | B | B+ | B | B | L5 | Template layout; git-CN naming; CLI added. |
 | v1.0.0 | B− | B− | C+ | B− | L5 | First public template; git-CN hub + self-cohere. |
 | v0.1.0 | C− | C | C− | D+ | L4 | Moltbook-coupled prototype with SQLite. |
+
+---
+
+## 3.54.0 (2026-04-14)
+
+### Added
+
+- **Tier 1 bare-binary kata suite** (#236): six executable scripts at `scripts/kata/0{1..6}-*.sh` proving the `cn` binary works end-to-end before any package is installed — `01-binary` (help listing), `02-init` (hub creation), `03-status` (hub state read), `04-doctor` (clean-hub validation), `05-build` (dist production), `06-install` (package restore). Each script's header comment names exactly what it proves; no overclaiming.
+- **`scripts/kata/run-all.sh` stop-on-first-failure** (#236): iterates `[0-9]*.sh` in filename order, exits non-zero on the first failure so CI surfaces the earliest break.
+- **CI `kata-tier1` job** (#236): `.github/workflows/ci.yml` runs the suite on every PR, depends on `go` so it sees the freshly-built binary, and gates merges.
+- **Three-tier kata catalog** (`docs/gamma/cdd/KATAS.md`, #236): Tier 1 = bare binary (this release), Tier 2 = runtime/package in `cnos.kata` (#237), Tier 3 = method/CDD in `cnos.cdd.kata`. `scripts/smoke/` remains separate for release-bootstrap compatibility.
+
+### Changed
+
+- **`cn help` always lists the 8 kernel commands** (#236): `cmd_help.go` now emits the Kernel section unconditionally, annotating hub-requiring commands with `(requires hub)` when no hub is discovered. Enables kata 01 to run before `cn init`.
+- **`cn doctor` three-way Status** (#236): `internal/doctor/doctor.go` replaces the binary pass/fail with `StatusPass` (✓), `StatusInfo` (○), `StatusFail` (✗). Only `StatusFail` drives the exit code; `HasFailures` checks only `StatusFail`. Fresh-hub pending artifacts (`deps.lock.json`, runtime contract, state/runtime-contract.json, git origin remote, `.cn/vendor/packages/` before any lock) report informationally rather than fatally. `deps.json` after `cn setup` remains fatal when missing. Present-but-invalid artifacts still fail.
+- **`cmd_doctor.go` glyph renderer**: three-way glyph selection matches the three-way Status; `cli/` stays a thin wrapper per T-002.
+
+### Removed
+
+- **`Registry.Available()` dead code** (#236): previously gated pre-hub vs post-hub command lists; the always-list help policy makes it unused. Removed to keep the registry accessor surface minimal.
+- **`scripts/kata/01-boot.sh`, `02-command.sh`, `03-roundtrip.sh`** (#236): post-package behavior moved to Tier 2 (`cnos.kata`, #237). Old `04-doctor.sh` rewritten as the clean-hub doctor check that Tier 1 actually needs.
 
 ---
 
