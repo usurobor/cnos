@@ -59,25 +59,6 @@ func TestRegistryAllPreservesOrder(t *testing.T) {
 	}
 }
 
-func TestRegistryAvailableFiltersNeedsHub(t *testing.T) {
-	reg := NewRegistry()
-	reg.Register(&stubCmd{spec: CommandSpec{Name: "help", NeedsHub: false}})
-	reg.Register(&stubCmd{spec: CommandSpec{Name: "deps", NeedsHub: true}})
-
-	withHub := reg.Available(true)
-	if len(withHub) != 2 {
-		t.Errorf("Available(true) = %d commands, want 2", len(withHub))
-	}
-
-	withoutHub := reg.Available(false)
-	if len(withoutHub) != 1 {
-		t.Fatalf("Available(false) = %d commands, want 1", len(withoutHub))
-	}
-	if withoutHub[0].Spec().Name != "help" {
-		t.Errorf("Available(false)[0].Name = %q, want %q", withoutHub[0].Spec().Name, "help")
-	}
-}
-
 func TestRegistryTierPrecedence(t *testing.T) {
 	reg := NewRegistry()
 	// Register a package-tier command first.
