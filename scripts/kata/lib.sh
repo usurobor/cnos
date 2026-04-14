@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
-# lib.sh — shared helpers for kata scripts
+# lib.sh — shared helpers for Tier 1 (bare binary) kata scripts.
+#
+# Tier 1 kata prove the `cn` binary works end-to-end before any package
+# is installed: help → init → status → doctor → build → install.
+# These helpers are deliberately small. Version gating, metadata
+# emission, and richer reporting belong in Tier 2 (cnos.kata).
+
 set -euo pipefail
 
 RED='\033[0;31m'
@@ -16,6 +22,7 @@ fail() { echo -e "${RED}FAIL${NC}: $1"; FAILURES=$((FAILURES + 1)); }
 skip() { echo -e "${YELLOW}SKIP${NC}: $1"; SKIPS=$((SKIPS + 1)); }
 info() { echo "     $1"; }
 
+# require_cn aborts the kata if `cn` is not on PATH.
 require_cn() {
   if ! command -v cn &>/dev/null; then
     echo "ERROR: cn binary not found in PATH"
@@ -23,49 +30,23 @@ require_cn() {
   fi
 }
 
-cn_version_int() {
-  cn --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 | awk -F. '{printf "%d%03d%03d", $1, $2, $3}'
+# repo_root returns the absolute path of the repository root (where
+# src/packages/ and .git/ live). Used by 05-build and 06-install.
+repo_root() {
+  (cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 }
 
-cn_version_str() {
-  cn --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1
-}
-
-require_version() {
-  local required="$1" feature="$2"
-  local req_int=$(echo "$required" | awk -F. '{printf "%d%03d%03d", $1, $2, $3}')
-  local cur_int=$(cn_version_int)
-  if [ "$cur_int" -lt "$req_int" ]; then
-    skip "$feature requires cn >= $required (have $(cn_version_str))"
-    return 1
-  fi
-  return 0
-}
-
+# setup_temp_hub creates an isolated workdir under $TMPDIR, registers
+# a cleanup trap, and sets $KATA_HUB to the workdir path. The caller
+# cds into $KATA_HUB and runs `cn init` from there.
 setup_temp_hub() {
   KATA_HUB=$(mktemp -d "${TMPDIR:-/tmp}/kata-hub-XXXXXX")
   trap 'rm -rf "$KATA_HUB"' EXIT
-  info "temp hub: $KATA_HUB"
+  info "temp workdir: $KATA_HUB"
 }
 
-# Write run metadata
-write_metadata() {
-  local run_dir="$1" kata_id="$2" mode="${3:-standalone}"
-  mkdir -p "$run_dir"
-  cat > "$run_dir/metadata.json" << EOF
-{
-  "kata_id": "$kata_id",
-  "mode": "$mode",
-  "cn_version": "$(cn_version_str)",
-  "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "platform": "$(uname -s)-$(uname -m)",
-  "passes": $PASSES,
-  "failures": $FAILURES,
-  "skips": $SKIPS
-}
-EOF
-}
-
+# kata_summary prints a one-line pass/fail summary and exits non-zero
+# if any assertion failed. Called at the end of every kata script.
 kata_summary() {
   echo ""
   if [ "$FAILURES" -gt 0 ]; then

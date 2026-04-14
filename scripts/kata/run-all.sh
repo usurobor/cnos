@@ -1,31 +1,29 @@
 #!/usr/bin/env bash
-# run-all.sh — Run all kata scripts in sequence
+# run-all.sh — Run Tier 1 kata scripts in numeric order.
 #
 # Usage: scripts/kata/run-all.sh
 #
-# Each kata is independent. Failures in one don't prevent others from running.
-# Exit code is non-zero if any kata failed.
+# Stops on the first failure (AC2 in #236). Exit non-zero if any kata
+# fails. CI gates merges on this script's exit code.
 
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-TOTAL_FAIL=0
 
 for kata in "$SCRIPT_DIR"/[0-9]*.sh; do
   [ -f "$kata" ] || continue
   echo ""
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   bash "$kata"
-  if [ $? -ne 0 ]; then
-    TOTAL_FAIL=$((TOTAL_FAIL + 1))
+  rc=$?
+  if [ "$rc" -ne 0 ]; then
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "KATA SUITE: $(basename "$kata") failed (rc=$rc) — stopping"
+    exit "$rc"
   fi
 done
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-if [ "$TOTAL_FAIL" -gt 0 ]; then
-  echo "KATA SUITE: $TOTAL_FAIL kata(s) had failures"
-  exit 1
-else
-  echo "KATA SUITE: all passed"
-fi
+echo "KATA SUITE: all passed"

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# 04-doctor.sh — Doctor kata
+# 04-doctor.sh — Tier 1 kata 04.
 #
-# Proves: cn doctor catches broken packages and commands.
-# Requires: cn >= 3.52.0
+# Proves: `cn doctor` validates a clean hub.
+# Pass condition: exits 0 on a freshly-init'd hub with no warnings.
 #
-# Scenario: install packages, break things, verify doctor catches them
-# Before: clean hub with installed packages
-# After: cn doctor reports specific integrity failures
+# A Tier 1 doctor run checks that the hub structure is intact.
+# Package/lockfile/wake artifacts belong to later lifecycle stages
+# and are reported informationally by doctor (see doctor.go).
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib.sh"
@@ -15,73 +15,36 @@ echo "=== Kata 04: Doctor ==="
 echo ""
 
 require_cn
-require_version 3.52.0 "doctor command integrity" || { kata_summary; exit 0; }
-
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-if [ ! -f "$REPO_ROOT/VERSION" ]; then
-  fail "cannot find repo root"
-  kata_summary; exit
-fi
-
-# 1. Build and set up hub
-cd "$REPO_ROOT"
-cn build 2>/dev/null
-
 setup_temp_hub
 cd "$KATA_HUB"
-cn init kata-hub 2>/dev/null
-cd kata-hub
 
-cn deps lock 2>/dev/null && cn deps restore 2>/dev/null
+cn init kata-hub >/dev/null 2>&1 || { fail "cn init failed (precondition)"; kata_summary; }
+cd cn-kata-hub
 
-# 2. Doctor on clean state should pass
-info "running: cn doctor (clean state)"
-DOCTOR_CLEAN=$(cn doctor 2>&1 || true)
-if echo "$DOCTOR_CLEAN" | grep -qi "error\|fail\|✗"; then
-  fail "cn doctor reports issues on clean install"
-  info "$DOCTOR_CLEAN"
+# `cn setup` is part of the minimal fresh-hub preparation: it writes
+# .cn/deps.json and the .gitignore entry. Without it, doctor flags
+# deps.json as missing. Running setup here keeps the kata scoped to
+# "doctor on a prepared fresh hub".
+cn setup >/dev/null 2>&1 || { fail "cn setup failed (precondition)"; kata_summary; }
+
+info "running: cn doctor"
+DOCTOR_OUTPUT=$(cn doctor 2>&1)
+DOCTOR_RC=$?
+
+if [ "$DOCTOR_RC" -eq 0 ]; then
+  pass "cn doctor exits 0 on a freshly-init'd hub"
 else
-  pass "cn doctor clean on fresh install"
+  fail "cn doctor exited $DOCTOR_RC"
+  info "$DOCTOR_OUTPUT"
 fi
 
-# 3. Break an entrypoint — delete it
-DAILY_ENTRYPOINT=".cn/vendor/packages/cnos.core/commands/daily/cn-daily"
-if [ -f "$DAILY_ENTRYPOINT" ]; then
-  rm "$DAILY_ENTRYPOINT"
-  info "deleted $DAILY_ENTRYPOINT"
-
-  info "running: cn doctor (missing entrypoint)"
-  DOCTOR_BROKEN=$(cn doctor 2>&1 || true)
-  if echo "$DOCTOR_BROKEN" | grep -qi "missing\|not found\|entrypoint\|✗"; then
-    pass "cn doctor caught missing entrypoint"
-  else
-    fail "cn doctor did not catch missing entrypoint"
-    info "$DOCTOR_BROKEN"
-  fi
+# A clean fresh hub should have zero failing lines (✗) in doctor output.
+if echo "$DOCTOR_OUTPUT" | grep -q "^✗"; then
+  fail "cn doctor reports warnings on a freshly-init'd hub"
+  info "$DOCTOR_OUTPUT"
 else
-  skip "daily entrypoint not found — cannot test missing entrypoint detection"
+  pass "cn doctor has no warnings on a freshly-init'd hub"
 fi
-
-# 4. Break a manifest — corrupt JSON
-CORE_MANIFEST=".cn/vendor/packages/cnos.core/cn.package.json"
-if [ -f "$CORE_MANIFEST" ]; then
-  echo "NOT JSON" > "$CORE_MANIFEST"
-  info "corrupted $CORE_MANIFEST"
-
-  info "running: cn doctor (corrupted manifest)"
-  DOCTOR_CORRUPT=$(cn doctor 2>&1 || true)
-  if echo "$DOCTOR_CORRUPT" | grep -qi "parse\|invalid\|malformed\|error\|✗"; then
-    pass "cn doctor caught corrupted manifest"
-  else
-    fail "cn doctor did not catch corrupted manifest"
-    info "$DOCTOR_CORRUPT"
-  fi
-else
-  skip "cnos.core manifest not found — cannot test corruption detection"
-fi
-
-# Clean up dist
-rm -rf "$REPO_ROOT/dist"
 
 echo ""
 kata_summary
