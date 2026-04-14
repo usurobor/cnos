@@ -52,8 +52,11 @@ func RunAll(ctx context.Context, hubPath, version string, commandIssues []Comman
 	// Package system.
 	checks = append(checks, checkFilePresent(hubPath, ".cn/deps.json",
 		"missing (run 'cn setup')"))
-	checks = append(checks, checkFilePresent(hubPath, ".cn/deps.lock.json",
-		"missing (run 'cn setup')"))
+	// deps.lock.json and .cn/vendor/ only exist after `cn deps lock` /
+	// `cn deps restore`. On a freshly-set-up hub they are legitimately
+	// absent — report the state informationally rather than failing.
+	checks = append(checks, checkFileInformational(hubPath, ".cn/deps.lock.json",
+		"pending (run 'cn deps lock')"))
 	checks = append(checks, checkPackages(hubPath, version))
 
 	// Command integrity.
@@ -143,6 +146,18 @@ func checkFilePresent(hubPath, rel, missingMsg string) CheckResult {
 	return CheckResult{Name: rel, Passed: false, Value: missingMsg}
 }
 
+// checkFileInformational reports a file's presence without flagging
+// a missing file as a failure. Use for artifacts that are expected
+// to arrive later in the hub lifecycle (e.g. deps.lock.json only
+// exists after `cn deps lock`).
+func checkFileInformational(hubPath, rel, missingMsg string) CheckResult {
+	path := filepath.Join(hubPath, rel)
+	if _, err := os.Stat(path); err == nil {
+		return CheckResult{Name: rel, Passed: true, Value: "present"}
+	}
+	return CheckResult{Name: rel, Passed: true, Value: missingMsg}
+}
+
 func checkPeers(hubPath string) CheckResult {
 	path := filepath.Join(hubPath, "state", "peers.md")
 	data, err := os.ReadFile(path)
@@ -163,6 +178,14 @@ func checkPackages(hubPath, _ string) CheckResult {
 	vendorDir := filepath.Join(hubPath, ".cn", "vendor", "packages")
 	entries, err := os.ReadDir(vendorDir)
 	if err != nil {
+		// No vendor directory is expected before the first restore.
+		// Only flag as a failure if a lockfile exists (which implies
+		// packages were locked and should have been installed).
+		lockPath := filepath.Join(hubPath, ".cn", "deps.lock.json")
+		if _, lockErr := os.Stat(lockPath); lockErr != nil {
+			return CheckResult{Name: "packages", Passed: true,
+				Value: "none installed (pending 'cn deps restore')"}
+		}
 		return CheckResult{Name: "packages", Passed: false,
 			Value: "no vendor directory (run 'cn deps restore')"}
 	}
@@ -215,8 +238,12 @@ func checkRuntimeContract(hubPath string) CheckResult {
 	path := filepath.Join(hubPath, "state", "runtime-contract.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return CheckResult{Name: "runtime contract", Passed: false,
-			Value: "missing (generated at wake)"}
+		// The contract is produced at wake. Before the first wake it
+		// is legitimately absent on a freshly-set-up hub — reported
+		// informationally. A present-but-invalid contract is a real
+		// failure (handled below).
+		return CheckResult{Name: "runtime contract", Passed: true,
+			Value: "pending (generated at wake)"}
 	}
 	var doc map[string]any
 	if err := json.Unmarshal(data, &doc); err != nil {
@@ -241,7 +268,9 @@ func checkGitRemote(ctx context.Context, hubPath string) CheckResult {
 	cmd := exec.CommandContext(ctx, "git", "remote", "get-url", "origin")
 	cmd.Dir = hubPath
 	if _, err := cmd.Output(); err != nil {
-		return CheckResult{Name: "origin remote", Passed: false, Value: "not configured"}
+		// A hub may operate without an origin remote (offline / local).
+		// Report the state without failing the check.
+		return CheckResult{Name: "origin remote", Passed: true, Value: "not configured (optional)"}
 	}
 	return CheckResult{Name: "origin remote", Passed: true, Value: "configured"}
 }

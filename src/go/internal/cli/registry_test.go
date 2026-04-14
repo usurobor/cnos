@@ -130,6 +130,7 @@ func TestHelpCmdNoHub(t *testing.T) {
 	help := &HelpCmd{Registry: reg}
 	reg.Register(help)
 	reg.Register(&stubCmd{spec: CommandSpec{Name: "deps", Summary: "Manage dependencies", Source: SourceKernel, NeedsHub: true}})
+	reg.Register(&stubCmd{spec: CommandSpec{Name: "deploy", Summary: "Deploy to prod", Source: SourceRepoLocal, Tier: TierRepoLocal, NeedsHub: true}})
 
 	var stdout bytes.Buffer
 	inv := Invocation{
@@ -140,8 +141,17 @@ func TestHelpCmdNoHub(t *testing.T) {
 	help.Run(context.Background(), inv)
 
 	out := stdout.String()
-	if strings.Contains(out, "deps") {
-		t.Error("deps should be hidden when no hub")
+	// Kernel commands are always listed so users can see the full
+	// kernel surface without needing to create a hub first.
+	if !strings.Contains(out, "deps") {
+		t.Error("kernel 'deps' should be listed even when no hub")
+	}
+	if !strings.Contains(out, "(requires hub)") {
+		t.Error("expected '(requires hub)' annotation on hub-needing kernel commands")
+	}
+	// Non-kernel commands are still filtered out when no hub exists.
+	if strings.Contains(out, "deploy") {
+		t.Error("repo-local 'deploy' should be hidden when no hub")
 	}
 	if !strings.Contains(out, "No hub found") {
 		t.Error("expected no-hub warning")
