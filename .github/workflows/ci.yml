@@ -57,8 +57,37 @@ jobs:
         run: |
           ./cn help
 
-  notify:
+  kata-tier1:
+    runs-on: ubuntu-latest
     needs: [go]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache-dependency-path: src/go/go.sum
+
+      - name: Build binary
+        working-directory: src/go
+        run: go build -o ../../cn ./cmd/cn
+
+      - name: Configure git identity
+        # `cn doctor` checks git user.name / user.email. GitHub runners
+        # have no default identity — set one so the Tier 1 doctor kata
+        # sees a clean config.
+        run: |
+          git config --global user.name "ci"
+          git config --global user.email "ci@cnos.local"
+
+      - name: Run Tier 1 kata
+        run: |
+          export PATH="$PWD:$PATH"
+          scripts/kata/run-all.sh
+
+  notify:
+    needs: [go, kata-tier1]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -69,7 +98,13 @@ jobs:
         run: |
           if [ -z "$TG_BOT_TOKEN" ] || [ -z "$TG_CHAT_ID" ]; then exit 0; fi
           STATUS="${{ needs.go.result }}"
-          ICON="✅"; [ "$STATUS" != "success" ] && ICON="❌"
+          KATA="${{ needs.kata-tier1.result }}"
+          if [ "$STATUS" = "success" ] && [ "$KATA" = "success" ]; then
+            ICON="✅"
+          else
+            ICON="❌"
+            STATUS="$STATUS (kata: $KATA)"
+          fi
           REF="${{ github.head_ref || github.ref_name }}"
           MSG="$ICON CI $STATUS: ${{ github.repository }}@${REF}"
           [ -n "${{ github.event.pull_request.number }}" ] && MSG="$MSG (PR #${{ github.event.pull_request.number }})"

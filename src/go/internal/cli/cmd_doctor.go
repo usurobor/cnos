@@ -35,9 +35,14 @@ func (c *DoctorCmd) Run(ctx context.Context, inv Invocation) error {
 
 	checks := doctor.RunAll(ctx, inv.HubPath, c.Version, cmdIssues)
 
+	// Three-way glyph: ✓ validated, ○ pending/optional, ✗ broken.
+	// Only ✗ drives the exit code — see doctor.HasFailures.
 	for _, ch := range checks {
 		symbol := "✓"
-		if !ch.Passed {
+		switch ch.Status {
+		case doctor.StatusInfo:
+			symbol = "○"
+		case doctor.StatusFail:
 			symbol = "✗"
 		}
 		fmt.Fprintf(inv.Stdout, "%s %-25s %s\n", symbol, ch.Name, ch.Value)
