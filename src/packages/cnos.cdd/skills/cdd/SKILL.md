@@ -60,46 +60,106 @@ CDD fails through pipeline without selection or release without closure. Typical
 
 CDD is triadic at the role level:
 
-- **α** produces
-- **γ** judges
-- **β** integrates and assesses
+- **α** implements
+- **β** reviews and releases
+- **γ** coordinates and unblocks
 
-| Role | Axis | What they own | Identity constraint |
-|------|------|---------------|---------------------|
-| **α (Implementor)** | α | Code, tests, fixes, self-coherence, pre-review readiness | Must be separate from γ |
-| **β (Integrator)** | β | Merge, tag, deploy, release mechanics, post-release verification | Must be separate from α |
-| **γ (Reviewer)** | γ | Review, **RC** / **A** decision, independent judgment | Must be separate from α |
+| Role | Function | What they own | Identity constraint |
+|------|----------|---------------|---------------------|
+| **α (Implementer)** | Produce | Code, tests, fixes, self-coherence, pre-review readiness, PR | Must be separate from β |
+| **β (Reviewer + Releaser)** | Judge and integrate | Review (RC/A decision), merge, tag, deploy, post-release assessment | Must be separate from α |
+| **γ (Coordinator)** | Orchestrate | Issue creation, dispatch prompts, unblocking, cross-agent context, compliance verification | Must hold full cycle context |
 
 #### Flow
 
 ```
-α (code) → γ (review) → RC → α (fix)
-                       → A  → β (merge, tag, deploy, assess)
+γ (issue + dispatch) → α (implement + PR) → β (review) → RC → α (fix) → β (re-review)
+                                                        → A  → β (merge, tag, deploy, assess)
+                       γ (unblocks α or β when stuck)
 ```
+
+#### Why these roles
+
+The structure is a **dyad plus coordinator**: α and β are two workers that interact through artifacts, isolated from each other. γ coordinates the dyad — sees both sides, does neither.
+
+- α cannot see β's review reasoning or conversation state
+- β cannot see α's implementation rationale or conversation state
+- γ sees both — that is its function
+
+β owns both review and release because the reviewer already has full artifact context when it's time to merge — splitting review from release creates a handoff that adds no value. γ owns coordination because issue quality determines implementation quality, dispatch prompts are the control surface, and unblocking requires cross-agent context that only the coordinator holds.
+
+- **α** owns the artifact — their output is what α scores
+- **β** owns judgment and what the system becomes after integration — what β scores
+- **γ** owns cycle coherence — issue clarity, prompt completeness, inter-agent flow
+
+#### γ algorithm
+
+1. Observe and select the gap (§2.0)
+2. Create the issue with full implementation guidance (issue skill §2.4), including Tier 3 skills
+3. Write α dispatch prompt (see format below)
+4. When α opens PR and CI is green, write β dispatch prompt (see format below)
+5. If α or β is blocked, diagnose and unblock: clarify requirements, resolve ambiguity, provide missing context
+6. After β releases, verify post-release assessment completeness
+
+#### γ dispatch prompt format
+
+**To α:**
+```
+You are α. Hub: <hub>.
+Load src/packages/cnos.cdd/skills/cdd/SKILL.md and follow the α algorithm (§1.4).
+Issue: gh issue view <number>
+```
+
+**To β:**
+```
+You are β. Hub: <hub>.
+Load src/packages/cnos.cdd/skills/cdd/SKILL.md and follow the β algorithm (§1.4).
+PR: gh pr view <number>
+Issue: gh issue view <number>
+```
+
+Parameters: `<hub>` is the hub name without the `cn-` prefix (e.g. `sigma`, `omega`, `pi`). The hub directory is `cn-<hub>` but git identity uses `<hub>-<role>` (e.g. `sigma-alpha`, `sigma-alpha@cnos.xyz`). `<number>` is the GitHub issue or PR number.
+
+The prompt names the role, provides parameters, and points to the issue or PR. The CDD skill tells each role what to load (§4.4 tiers) and what to do (§1.4 algorithm). γ does not enumerate skills or steps in the prompt — that is the skill's job. If the prompt needs to restate the algorithm, the algorithm is not clear enough — fix the skill.
+
+#### α algorithm
+
+1. Receive dispatch prompt from γ
+2. Configure git identity using the hub name from the dispatch prompt: `git config user.name "<hub>-alpha"` and `git config user.email "<hub>-alpha@cnos.xyz"`
+3. Load CDD skill (this file), load all Tier 1 + Tier 2 skills (§2.4), load Tier 3 skills from the issue
+4. Read the issue fully, read source files referenced in implementation guidance
+5. Implement: branch, code, tests, self-coherence
+6. Open PR (draft if CI unavailable locally), wait for CI green
+7. Request review from β
+8. If β returns RC: fix findings, push, re-request review
+9. Done when β approves
+
+#### β algorithm
+
+1. Receive dispatch prompt from γ (or pick up from α's review request)
+2. Configure git identity using the hub name from the dispatch prompt: `git config user.name "<hub>-beta"` and `git config user.email "<hub>-beta@cnos.xyz"`
+3. Load CDD skill (this file), load all Tier 1 + Tier 2 skills (§2.4), load Tier 3 skills from the issue
+4. Read the PR diff, read the issue
+5. Review: produce CR with findings per review skill, or approve
+6. If RC: post findings as PR comment, wait for α's fix
+7. If A: merge, tag, deploy per release skill
+8. Write post-release assessment per post-release skill
+9. Done when assessment is committed
 
 #### Minimum configuration
 
-Two agents: one for α, one for γ. When only two agents are available, **γ may also serve as β**. The sequence becomes: α → γ (review) → γ (release + assess).
-
-#### Why triadic
-
-Review judgment and release/assessment are different coherence functions:
-
-- **α** owns the artifact — their output is what α scores
-- **β** owns what the system actually becomes after integration — what β scores
-- **γ** owns independent judgment — what γ scores
+Two agents: one for α, one for β. γ may be the operator or a third agent. When only two agents are available, the operator serves as γ (issue creation, dispatch, unblocking).
 
 #### Operator override
 
-The operator may reassign any role explicitly. Implicit role drift is not permitted — if γ requests changes, α executes the fix.
+The operator may reassign any role explicitly. Implicit role drift is not permitted — if β requests changes, α executes the fix.
 
 **Small-change exception:** A small-change cycle (§1.2) may be completed by one agent if the change qualifies under §1.2, no claim of independent review is made, and the artifact states that small-change mode was used.
 
-See CDD.md §1.4 for the full role specification.
-
   - ❌ One agent authors, reviews, merges, and assesses its own substantial change.
   - ❌ Author self-approves and self-releases under the guise of triadic roles.
-  - ✅ α produces → γ judges (RC/A) → β integrates and assesses.
+  - ❌ γ implements or reviews — γ coordinates.
+  - ✅ γ dispatches → α implements → β reviews and releases.
 
 ## 2. Unfold
 
@@ -183,14 +243,25 @@ State:
 
 State why MCI is required if action is blocked.
 
-Name 2–3 skills as hard generation constraints for this change. Choose them by:
-1. work shape
-2. level of impact
-3. dominant risk
+#### Skill loading tiers
 
-Use `src/agent/skills/eng/README.md` § "Default active skills by work shape and level" for default sets. Levels do not replace skill names. A level label such as L5 / L6 / L7 is only valid here when paired with the work shape and the concrete active skills. Review, ship, and post-release are lifecycle skills — they govern later CDD phases, not generation. Do not overload this step with lifecycle skills.
+Skills are loaded in three tiers. All tiers are mandatory for substantial changes.
 
-**Read each SKILL.md file before beginning any work step.** Naming a skill without reading it is not loading it. All others are reference only. Fewer constraints deeply applied > many constraints lightly checked. (CDD §4.4)
+**Tier 1 — CDD lifecycle (always loaded):**
+All skills under `cdd/` — the master CDD skill plus sub-skills (issue, design, review, release, post-release). These define the lifecycle every role follows.
+
+**Tier 2 — General engineering (always loaded):**
+All general skills under `eng/` that apply regardless of domain: coding, design-principles, ship, testing, documenting, process-economics, rca, follow-up, writing, skill. These constrain how any code is written.
+
+**Tier 3 — Issue-specific (selected per issue):**
+Skills that depend on what the work touches. The issue's "Skills and constraints" section (issue skill §2.4) names these explicitly. Examples:
+- Language: `eng/go`, `eng/ocaml`, `eng/typescript`
+- Domain: `eng/ux-cli`, `eng/performance-reliability`, `eng/tool-writing`
+- Architecture: `eng/architecture-evolution`, `eng/functional`
+
+The issue must name Tier 3 skills. If the issue doesn't name them, α identifies them from the work shape before coding.
+
+**Read each SKILL.md file before beginning any work step.** Naming a skill without reading it is not loading it. (CDD §4.4)
 
 **Load project invariants.** If the project maintains an architectural invariants document (e.g. `INVARIANTS.md`), load it and identify which active invariants and transition constraints are touched by this change. Name them explicitly. The reviewer will verify them (review §2.2.13).
 
