@@ -1,8 +1,19 @@
 // Package doctor implements hub health validation checks.
 //
-// Each check returns a CheckResult. The caller (cli/cmd_doctor.go)
-// collects results and renders them. This separation keeps cli/
-// as a thin dispatch layer per eng/go §2.18 (INVARIANTS.md T-002).
+// Each check returns a CheckResult with an explicit Status: Pass,
+// Info, or Fail. The caller (cli/cmd_doctor.go) renders a glyph per
+// status and treats only Fail as a non-zero exit. Info is reserved
+// for legitimate "not yet applicable" hub state (e.g. the lockfile
+// is absent before the first `cn deps lock`) — it is visible to the
+// operator but does not gate merges or wake.
+//
+// The three-way status separation keeps doctor's contract truthful
+// (eng/design-principles §2.4): ✓ means validated, ○ means pending,
+// ✗ means broken. Collapsing "pending" into "validated" would hide
+// lifecycle state from status/help/doctor parity.
+//
+// This separation also keeps cli/ as a thin dispatch layer per
+// eng/go §2.18 (INVARIANTS.md T-002).
 package doctor
 
 import (
@@ -15,12 +26,36 @@ import (
 	"strings"
 )
 
+// Status classifies a CheckResult.
+type Status int
+
+const (
+	// StatusPass — the check validated: artifact present, tool installed,
+	// config sane. Rendered as ✓.
+	StatusPass Status = iota
+	// StatusInfo — the artifact is legitimately absent at this lifecycle
+	// stage, or the feature is optional by policy. Not a failure, but
+	// visible to the operator. Rendered as ○.
+	StatusInfo
+	// StatusFail — the hub is unhealthy or a required prerequisite is
+	// missing. Doctor exits non-zero if any result has this status.
+	// Rendered as ✗.
+	StatusFail
+)
+
 // CheckResult records the outcome of one health check.
 type CheckResult struct {
 	Name   string
-	Passed bool
+	Status Status
 	Value  string
 }
+
+// Passed reports whether the result does not represent a failure.
+// Both StatusPass and StatusInfo count as "not failing"; only
+// StatusFail is a failure. Provided as an ergonomic helper for
+// tests and renderers that care about the pass/fail split rather
+// than the three-way status.
+func (r CheckResult) Passed() bool { return r.Status != StatusFail }
 
 // CommandIssue is a command integrity problem found during validation.
 // Imported from discover package for doctor reporting.
@@ -36,45 +71,53 @@ type CommandIssue struct {
 func RunAll(ctx context.Context, hubPath, version string, commandIssues []CommandIssue) []CheckResult {
 	var checks []CheckResult
 
-	// Prerequisites.
+	// Prerequisites — environmental tooling a hub genuinely needs.
+	// git identity is kept fatal: commits without it fail at the git
+	// layer, which is invisible to doctor's caller. curl is fatal
+	// because `cn update` and `cn deps restore` (remote indexes) need
+	// it. These are one-time user setup, not per-hub state.
 	checks = append(checks, checkTool(ctx, "git", "git", "--version"))
 	checks = append(checks, checkGitConfig(ctx, "git user.name", "user.name"))
 	checks = append(checks, checkGitConfig(ctx, "git user.email", "user.email"))
 	checks = append(checks, checkTool(ctx, "curl", "curl", "--version"))
 
-	// Hub structure.
+	// Hub structure — must hold for any hub to function.
 	checks = append(checks, checkExists(hubPath, "hub directory"))
 	checks = append(checks, checkConfig(hubPath))
-	checks = append(checks, checkFileOptional(hubPath, "spec/SOUL.md"))
+	checks = append(checks, checkFile(hubPath, "spec/SOUL.md", "missing (optional)", StatusInfo))
 	checks = append(checks, checkPeers(hubPath))
 	checks = append(checks, checkExists(filepath.Join(hubPath, "agent"), "agent/"))
 
 	// Package system.
-	checks = append(checks, checkFilePresent(hubPath, ".cn/deps.json",
-		"missing (run 'cn setup')"))
-	// deps.lock.json and .cn/vendor/ only exist after `cn deps lock` /
-	// `cn deps restore`. On a freshly-set-up hub they are legitimately
-	// absent — report the state informationally rather than failing.
-	checks = append(checks, checkFileInformational(hubPath, ".cn/deps.lock.json",
-		"pending (run 'cn deps lock')"))
+	//
+	// deps.json — required after `cn setup`; missing = user skipped setup.
+	// deps.lock.json — only after `cn deps lock`; legitimately pending on a fresh hub.
+	// packages (vendor) — only after `cn deps restore`; legitimately pending.
+	checks = append(checks, checkFile(hubPath, ".cn/deps.json",
+		"missing (run 'cn setup')", StatusFail))
+	checks = append(checks, checkFile(hubPath, ".cn/deps.lock.json",
+		"pending (run 'cn deps lock')", StatusInfo))
 	checks = append(checks, checkPackages(hubPath, version))
 
-	// Command integrity.
+	// Command integrity — broken vendor commands are fatal.
 	checks = append(checks, checkCommandIntegrity(commandIssues))
 
-	// Runtime contract.
+	// Runtime contract — generated at wake; legitimately pending before
+	// the first wake. A present-but-malformed contract is fatal.
 	checks = append(checks, checkRuntimeContract(hubPath))
 
-	// Git remote.
+	// Git remote — optional by policy: a hub may be local-only, offline,
+	// or have its remote added later. Missing = informational, not fatal.
 	checks = append(checks, checkGitRemote(ctx, hubPath))
 
 	return checks
 }
 
-// HasFailures returns true if any check failed.
+// HasFailures returns true if any check has Status == StatusFail.
+// StatusInfo results are non-fatal and do not count.
 func HasFailures(checks []CheckResult) bool {
 	for _, ch := range checks {
-		if !ch.Passed {
+		if ch.Status == StatusFail {
 			return true
 		}
 	}
@@ -87,7 +130,7 @@ func checkTool(ctx context.Context, name string, args ...string) CheckResult {
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 	out, err := cmd.Output()
 	if err != nil {
-		return CheckResult{Name: name, Passed: false, Value: "not installed"}
+		return CheckResult{Name: name, Status: StatusFail, Value: "not installed"}
 	}
 	line := strings.SplitN(strings.TrimSpace(string(out)), "\n", 2)[0]
 	if strings.HasPrefix(line, "git version ") {
@@ -99,70 +142,54 @@ func checkTool(ctx context.Context, name string, args ...string) CheckResult {
 			line = parts[1]
 		}
 	}
-	return CheckResult{Name: name, Passed: true, Value: line}
+	return CheckResult{Name: name, Status: StatusPass, Value: line}
 }
 
 func checkGitConfig(ctx context.Context, label, key string) CheckResult {
 	cmd := exec.CommandContext(ctx, "git", "config", key)
 	out, err := cmd.Output()
 	if err != nil {
-		return CheckResult{Name: label, Passed: false, Value: "not set"}
+		return CheckResult{Name: label, Status: StatusFail, Value: "not set"}
 	}
-	return CheckResult{Name: label, Passed: true, Value: strings.TrimSpace(string(out))}
+	return CheckResult{Name: label, Status: StatusPass, Value: strings.TrimSpace(string(out))}
 }
 
 func checkExists(path, label string) CheckResult {
 	if _, err := os.Stat(path); err == nil {
-		return CheckResult{Name: label, Passed: true, Value: "exists"}
+		return CheckResult{Name: label, Status: StatusPass, Value: "exists"}
 	}
-	return CheckResult{Name: label, Passed: false, Value: "not found"}
+	return CheckResult{Name: label, Status: StatusFail, Value: "not found"}
 }
 
 func checkConfig(hubPath string) CheckResult {
 	jsonPath := filepath.Join(hubPath, ".cn", "config.json")
 	yamlPath := filepath.Join(hubPath, ".cn", "config.yaml")
 	if _, err := os.Stat(jsonPath); err == nil {
-		return CheckResult{Name: ".cn/config", Passed: true, Value: "config.json"}
+		return CheckResult{Name: ".cn/config", Status: StatusPass, Value: "config.json"}
 	}
 	if _, err := os.Stat(yamlPath); err == nil {
-		return CheckResult{Name: ".cn/config", Passed: true, Value: "config.yaml"}
+		return CheckResult{Name: ".cn/config", Status: StatusPass, Value: "config.yaml"}
 	}
-	return CheckResult{Name: ".cn/config", Passed: false, Value: "missing"}
+	return CheckResult{Name: ".cn/config", Status: StatusFail, Value: "missing"}
 }
 
-func checkFileOptional(hubPath, rel string) CheckResult {
+// checkFile reports whether a hub-relative file is present. If the
+// file is absent, missingStatus controls how that absence is recorded:
+//   - StatusFail: the file is required (e.g. deps.json after setup)
+//   - StatusInfo: the file is pending or optional by policy
+func checkFile(hubPath, rel, missingMsg string, missingStatus Status) CheckResult {
 	path := filepath.Join(hubPath, rel)
 	if _, err := os.Stat(path); err == nil {
-		return CheckResult{Name: rel, Passed: true, Value: "exists"}
+		return CheckResult{Name: rel, Status: StatusPass, Value: "present"}
 	}
-	return CheckResult{Name: rel, Passed: true, Value: "missing (optional)"}
-}
-
-func checkFilePresent(hubPath, rel, missingMsg string) CheckResult {
-	path := filepath.Join(hubPath, rel)
-	if _, err := os.Stat(path); err == nil {
-		return CheckResult{Name: rel, Passed: true, Value: "present"}
-	}
-	return CheckResult{Name: rel, Passed: false, Value: missingMsg}
-}
-
-// checkFileInformational reports a file's presence without flagging
-// a missing file as a failure. Use for artifacts that are expected
-// to arrive later in the hub lifecycle (e.g. deps.lock.json only
-// exists after `cn deps lock`).
-func checkFileInformational(hubPath, rel, missingMsg string) CheckResult {
-	path := filepath.Join(hubPath, rel)
-	if _, err := os.Stat(path); err == nil {
-		return CheckResult{Name: rel, Passed: true, Value: "present"}
-	}
-	return CheckResult{Name: rel, Passed: true, Value: missingMsg}
+	return CheckResult{Name: rel, Status: missingStatus, Value: missingMsg}
 }
 
 func checkPeers(hubPath string) CheckResult {
 	path := filepath.Join(hubPath, "state", "peers.md")
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return CheckResult{Name: "state/peers.md", Passed: false, Value: "missing"}
+		return CheckResult{Name: "state/peers.md", Status: StatusFail, Value: "missing"}
 	}
 	count := 0
 	for _, line := range strings.Split(string(data), "\n") {
@@ -170,7 +197,7 @@ func checkPeers(hubPath string) CheckResult {
 			count++
 		}
 	}
-	return CheckResult{Name: "state/peers.md", Passed: true,
+	return CheckResult{Name: "state/peers.md", Status: StatusPass,
 		Value: fmt.Sprintf("%d peer(s)", count)}
 }
 
@@ -178,15 +205,15 @@ func checkPackages(hubPath, _ string) CheckResult {
 	vendorDir := filepath.Join(hubPath, ".cn", "vendor", "packages")
 	entries, err := os.ReadDir(vendorDir)
 	if err != nil {
-		// No vendor directory is expected before the first restore.
-		// Only flag as a failure if a lockfile exists (which implies
-		// packages were locked and should have been installed).
+		// No vendor directory is pending state before the first restore.
+		// It becomes a failure only when a lockfile claims packages
+		// should be present.
 		lockPath := filepath.Join(hubPath, ".cn", "deps.lock.json")
 		if _, lockErr := os.Stat(lockPath); lockErr != nil {
-			return CheckResult{Name: "packages", Passed: true,
+			return CheckResult{Name: "packages", Status: StatusInfo,
 				Value: "none installed (pending 'cn deps restore')"}
 		}
-		return CheckResult{Name: "packages", Passed: false,
+		return CheckResult{Name: "packages", Status: StatusFail,
 			Value: "no vendor directory (run 'cn deps restore')"}
 	}
 	total := 0
@@ -197,7 +224,7 @@ func checkPackages(hubPath, _ string) CheckResult {
 		total++
 	}
 	if total == 0 {
-		return CheckResult{Name: "packages", Passed: true, Value: "none installed"}
+		return CheckResult{Name: "packages", Status: StatusPass, Value: "none installed"}
 	}
 	// Version drift detection: compare installed packages against the
 	// lockfile. The installed path no longer carries the version
@@ -205,8 +232,7 @@ func checkPackages(hubPath, _ string) CheckResult {
 	lockPath := filepath.Join(hubPath, ".cn", "deps.lock.json")
 	lockData, err := os.ReadFile(lockPath)
 	if err != nil {
-		// No lockfile — can't check drift, just report count.
-		return CheckResult{Name: "packages", Passed: true,
+		return CheckResult{Name: "packages", Status: StatusPass,
 			Value: fmt.Sprintf("%d installed (no lockfile for drift check)", total)}
 	}
 	var lf struct {
@@ -215,10 +241,9 @@ func checkPackages(hubPath, _ string) CheckResult {
 		} `json:"packages"`
 	}
 	if err := json.Unmarshal(lockData, &lf); err != nil {
-		return CheckResult{Name: "packages", Passed: true,
+		return CheckResult{Name: "packages", Status: StatusPass,
 			Value: fmt.Sprintf("%d installed (lockfile parse error)", total)}
 	}
-	// Check each locked package is installed.
 	missing := 0
 	for _, dep := range lf.Packages {
 		pkgDir := filepath.Join(vendorDir, dep.Name)
@@ -227,10 +252,10 @@ func checkPackages(hubPath, _ string) CheckResult {
 		}
 	}
 	if missing > 0 {
-		return CheckResult{Name: "packages", Passed: false,
+		return CheckResult{Name: "packages", Status: StatusFail,
 			Value: fmt.Sprintf("%d installed, %d missing from lockfile (run 'cn deps restore')", total, missing)}
 	}
-	return CheckResult{Name: "packages", Passed: true,
+	return CheckResult{Name: "packages", Status: StatusPass,
 		Value: fmt.Sprintf("%d installed, all present", total)}
 }
 
@@ -238,16 +263,13 @@ func checkRuntimeContract(hubPath string) CheckResult {
 	path := filepath.Join(hubPath, "state", "runtime-contract.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
-		// The contract is produced at wake. Before the first wake it
-		// is legitimately absent on a freshly-set-up hub — reported
-		// informationally. A present-but-invalid contract is a real
-		// failure (handled below).
-		return CheckResult{Name: "runtime contract", Passed: true,
+		// Generated at wake — legitimately pending on a fresh hub.
+		return CheckResult{Name: "runtime contract", Status: StatusInfo,
 			Value: "pending (generated at wake)"}
 	}
 	var doc map[string]any
 	if err := json.Unmarshal(data, &doc); err != nil {
-		return CheckResult{Name: "runtime contract", Passed: false, Value: "invalid JSON"}
+		return CheckResult{Name: "runtime contract", Status: StatusFail, Value: "invalid JSON"}
 	}
 	layers := []string{"identity", "cognition", "body", "medium"}
 	var missing []string
@@ -257,10 +279,10 @@ func checkRuntimeContract(hubPath string) CheckResult {
 		}
 	}
 	if len(missing) > 0 {
-		return CheckResult{Name: "runtime contract", Passed: false,
+		return CheckResult{Name: "runtime contract", Status: StatusFail,
 			Value: fmt.Sprintf("incomplete (missing: %s)", strings.Join(missing, ", "))}
 	}
-	return CheckResult{Name: "runtime contract", Passed: true,
+	return CheckResult{Name: "runtime contract", Status: StatusPass,
 		Value: "valid (identity + cognition + body + medium)"}
 }
 
@@ -268,11 +290,10 @@ func checkGitRemote(ctx context.Context, hubPath string) CheckResult {
 	cmd := exec.CommandContext(ctx, "git", "remote", "get-url", "origin")
 	cmd.Dir = hubPath
 	if _, err := cmd.Output(); err != nil {
-		// A hub may operate without an origin remote (offline / local).
-		// Report the state without failing the check.
-		return CheckResult{Name: "origin remote", Passed: true, Value: "not configured (optional)"}
+		// Optional by policy: a hub may be local-only or add a remote later.
+		return CheckResult{Name: "origin remote", Status: StatusInfo, Value: "not configured (optional)"}
 	}
-	return CheckResult{Name: "origin remote", Passed: true, Value: "configured"}
+	return CheckResult{Name: "origin remote", Status: StatusPass, Value: "configured"}
 }
 
 // CommandDescriptor is a plain data record describing one registered
@@ -346,7 +367,7 @@ func ValidateCommands(descs []CommandDescriptor) []CommandIssue {
 
 func checkCommandIntegrity(issues []CommandIssue) CheckResult {
 	if len(issues) == 0 {
-		return CheckResult{Name: "command integrity", Passed: true, Value: "all commands valid"}
+		return CheckResult{Name: "command integrity", Status: StatusPass, Value: "all commands valid"}
 	}
 	msgs := make([]string, len(issues))
 	for i, iss := range issues {
@@ -358,7 +379,7 @@ func checkCommandIntegrity(issues []CommandIssue) CheckResult {
 	}
 	return CheckResult{
 		Name:   "command integrity",
-		Passed: false,
+		Status: StatusFail,
 		Value:  fmt.Sprintf("%d issue(s): %s", len(issues), strings.Join(msgs, "; ")),
 	}
 }

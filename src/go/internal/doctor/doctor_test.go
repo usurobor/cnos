@@ -19,11 +19,11 @@ func TestRunAllHealthyHub(t *testing.T) {
 
 	// Hub-structure checks should pass for makeTestHub.
 	for _, ch := range checks {
-		if ch.Name == ".cn/config" && !ch.Passed {
-			t.Error(".cn/config should pass")
+		if ch.Name == ".cn/config" && ch.Status != StatusPass {
+			t.Errorf(".cn/config should pass, got status=%d value=%q", ch.Status, ch.Value)
 		}
-		if ch.Name == "spec/SOUL.md" && !ch.Passed {
-			t.Error("spec/SOUL.md should pass")
+		if ch.Name == "spec/SOUL.md" && ch.Status == StatusFail {
+			t.Errorf("spec/SOUL.md should not fail, got status=%d value=%q", ch.Status, ch.Value)
 		}
 	}
 }
@@ -36,7 +36,7 @@ func TestRunAllMissingConfig(t *testing.T) {
 
 	found := false
 	for _, ch := range checks {
-		if ch.Name == ".cn/config" && !ch.Passed {
+		if ch.Name == ".cn/config" && ch.Status == StatusFail {
 			found = true
 		}
 	}
@@ -56,7 +56,7 @@ func TestRunAllPackageMissing(t *testing.T) {
 
 	found := false
 	for _, ch := range checks {
-		if ch.Name == "packages" && strings.Contains(ch.Value, "missing from lockfile") {
+		if ch.Name == "packages" && ch.Status == StatusFail && strings.Contains(ch.Value, "missing from lockfile") {
 			found = true
 		}
 	}
@@ -83,7 +83,7 @@ func TestRunAllRuntimeContract(t *testing.T) {
 
 	found := false
 	for _, ch := range checks {
-		if ch.Name == "runtime contract" && ch.Passed && strings.Contains(ch.Value, "identity") {
+		if ch.Name == "runtime contract" && ch.Status == StatusPass && strings.Contains(ch.Value, "identity") {
 			found = true
 		}
 	}
@@ -109,12 +109,54 @@ func TestRunAllIncompleteContract(t *testing.T) {
 
 	found := false
 	for _, ch := range checks {
-		if ch.Name == "runtime contract" && !ch.Passed && strings.Contains(ch.Value, "medium") {
+		if ch.Name == "runtime contract" && ch.Status == StatusFail && strings.Contains(ch.Value, "medium") {
 			found = true
 		}
 	}
 	if !found {
 		t.Error("expected incomplete contract with missing medium")
+	}
+}
+
+// TestFreshHubLifecycleChecksAreInfo is the Tier 1 kata contract
+// (issue #236 AC4): a freshly-init'd + set-up hub has pending
+// lifecycle artifacts (deps.lock.json, runtime contract, vendor
+// dir pre-lock, origin remote). These must report as StatusInfo,
+// not StatusFail — otherwise `cn doctor` exits non-zero on a
+// healthy fresh hub.
+//
+// The test is scoped to hub-lifecycle state; environmental
+// prerequisites (git/curl/identity) depend on the host and are
+// tested separately.
+func TestFreshHubLifecycleChecksAreInfo(t *testing.T) {
+	hub := makeTestHub(t)
+	// `cn setup` writes deps.json. The rest is as hubinit leaves it.
+	os.WriteFile(filepath.Join(hub, ".cn", "deps.json"),
+		[]byte(`{"schema":"cn.deps.v1","profile":"engineer","packages":[]}`), 0644)
+
+	checks := RunAll(context.Background(), hub, "3.48.0", nil)
+
+	wantInfo := map[string]bool{
+		".cn/deps.lock.json": true,
+		"packages":           true,
+		"runtime contract":   true,
+		"origin remote":      true,
+	}
+	seen := map[string]Status{}
+	for _, ch := range checks {
+		if wantInfo[ch.Name] {
+			seen[ch.Name] = ch.Status
+		}
+	}
+	for name := range wantInfo {
+		s, ok := seen[name]
+		if !ok {
+			t.Errorf("expected lifecycle check %q in results", name)
+			continue
+		}
+		if s != StatusInfo {
+			t.Errorf("lifecycle check %q on fresh hub: want StatusInfo, got %d", name, s)
+		}
 	}
 }
 
