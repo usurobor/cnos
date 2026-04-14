@@ -1,48 +1,25 @@
 #!/usr/bin/env bash
-# cn-kata-judge — Judge a kata run bundle against a fixed rubric
-#
-# This is a stub. Full implementation requires an LLM judge call.
-# For now: reads the run bundle and applies mechanical rubric checks.
 set -euo pipefail
 
 if [ $# -eq 0 ]; then
   echo "Usage: cn kata-judge <run-dir>"
-  echo ""
-  echo "Judges a kata run bundle against its fixed rubric."
-  echo "For runtime katas: mechanical pass/fail from exit codes and output."
-  echo "For method katas: requires LLM judge (not yet implemented)."
   exit 1
 fi
 
 RUN_DIR="$1"
 
-if [ ! -f "$RUN_DIR/metadata.json" ]; then
-  echo "ERROR: $RUN_DIR/metadata.json not found — not a valid run bundle"
-  exit 1
-fi
+[ -f "$RUN_DIR/metadata.json" ] || { echo "ERROR: $RUN_DIR/metadata.json not found"; exit 1; }
 
-echo "Judging: $RUN_DIR"
-echo ""
+KATA_ID="$(python3 -c "import json; print(json.load(open('$RUN_DIR/metadata.json'))['kata_id'])")"
+MODE="$(python3 -c "import json; print(json.load(open('$RUN_DIR/metadata.json')).get('mode','unknown'))")"
+STATUS="$(python3 -c "import json; print(json.load(open('$RUN_DIR/metadata.json')).get('status','unknown'))")"
 
-# Read metadata
-KATA_ID=$(python3 -c "import json; print(json.load(open('$RUN_DIR/metadata.json'))['kata_id'])" 2>/dev/null || echo "unknown")
-FAILURES=$(python3 -c "import json; print(json.load(open('$RUN_DIR/metadata.json')).get('failures', -1))" 2>/dev/null || echo "-1")
-PASSES=$(python3 -c "import json; print(json.load(open('$RUN_DIR/metadata.json')).get('passes', 0))" 2>/dev/null || echo "0")
-
-if [ "$FAILURES" = "0" ]; then
-  VERDICT="pass"
-elif [ "$FAILURES" = "-1" ]; then
-  VERDICT="unknown"
-else
-  VERDICT="fail"
-fi
-
-cat << EOF
+cat <<EOF
 {
   "kata_id": "$KATA_ID",
-  "verdict": "$VERDICT",
-  "passes": $PASSES,
-  "failures": $FAILURES,
-  "note": "mechanical judgment from run metadata — LLM judge not yet wired"
+  "mode": "$MODE",
+  "status": "$STATUS",
+  "verdict": "not-yet-implemented",
+  "note": "CDD method judge contract exists, but fixed LLM judge wiring is not yet landed"
 }
 EOF

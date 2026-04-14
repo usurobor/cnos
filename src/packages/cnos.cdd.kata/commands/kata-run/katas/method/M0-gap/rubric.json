@@ -1,0 +1,19 @@
+{
+  "id": "M0",
+  "name": "Gap",
+  "class": "method",
+  "version": "0.1.0",
+  "required_artifacts": [
+    "selected_gap",
+    "named_incoherence",
+    "why_it_matters",
+    "what_fails_if_skipped",
+    "mode_selection",
+    "active_skills"
+  ],
+  "level_evidence": {
+    "L5": ["local_problem_correctly_named"],
+    "L6": ["system_context_considered", "constraints_named", "mode_justified"],
+    "L7": ["boundary_level_incoherence_named", "future_work_shape_changed"]
+  }
+}

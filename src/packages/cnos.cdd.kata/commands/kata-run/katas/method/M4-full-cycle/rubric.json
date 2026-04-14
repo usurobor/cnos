@@ -1,0 +1,19 @@
+{
+  "id": "M4",
+  "name": "Full Cycle",
+  "class": "method",
+  "version": "0.1.0",
+  "required_artifacts": [
+    "gap",
+    "design",
+    "review",
+    "release",
+    "post_release_assessment",
+    "closeout"
+  ],
+  "level_evidence": {
+    "L5": ["bounded_change_completed"],
+    "L6": ["artifact_chain_complete", "review_evidence_bound", "release_and_assessment_aligned", "closure_explicit"],
+    "L7": ["boundary_move_proved", "future_work_simplified", "negative_leverage_priced"]
+  }
+}
