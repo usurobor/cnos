@@ -45,6 +45,25 @@ jobs:
           cp src/go/cn dist/cn-${{ matrix.target }}
           chmod +x dist/cn-${{ matrix.target }}
 
+      - name: Configure git identity
+        # `cn doctor` (kata 04) checks git user.name / user.email.
+        # GitHub runners have no default identity — set one so the
+        # Tier 1 doctor kata sees a clean config.
+        run: |
+          git config --global user.name "release-ci"
+          git config --global user.email "release-ci@cnos.local"
+
+      - name: Run Tier 1 kata (shipped binary)
+        # Prove the packaged binary — the one being shipped — works
+        # end-to-end (help → init → status → doctor → build → install)
+        # on this platform before uploading. If any kata fails here,
+        # the matrix position fails, the `release` job's `needs: build`
+        # gate fails, and no artifacts are published.
+        run: |
+          cp dist/cn-${{ matrix.target }} cn
+          export PATH="$PWD:$PATH"
+          scripts/kata/run-all.sh
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
