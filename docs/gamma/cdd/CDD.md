@@ -68,52 +68,111 @@ CDD exists to close that gap through coherent action.
 
 ### 1.4 Roles
 
-CDD is triadic at the role level. A substantial cycle needs three distinct **verdict surfaces** over one system:
+CDD is triadic at the role level. A substantial cycle needs three distinct functions:
 
-- **α** — implementation coherence
-- **β** — integration/release coherence
-- **γ** — independent review/method coherence
+- **α** — implements
+- **β** — reviews and releases
+- **γ** — coordinates and unblocks
 
-These are operational roles aligned with the three coherence directions. They are not a claim that every cycle always uses three different humans.
+These are operational roles. They are not a claim that every cycle always uses three different humans.
 
-| Role | Axis | Steps owned | Responsibility | Identity constraint |
-|------|------|-------------|----------------|---------------------|
-| **Author / Implementor** | α | 0–7a | Select the gap, design the fix, build the implementation, write tests, produce self-coherence, pass pre-review gate | Must be separate from γ |
-| **Integrator / Releaser** | β | 9–13 | Merge, tag, deploy, validate release state, perform post-release assessment, close the cycle | Must be separate from α |
-| **Reviewer** | γ | 8 | Review the change independently and decide **RC** (Request Changes) or **A** (Approved) | Must be separate from α |
+| Role | Function | Steps owned | Responsibility | Identity constraint |
+|------|----------|-------------|----------------|---------------------|
+| **α (Implementer)** | Produce | 0–7a | Code, tests, fixes, self-coherence, pre-review readiness, PR | Must be separate from β |
+| **β (Reviewer + Releaser)** | Judge and integrate | 8–13 | Review (RC/A decision), merge, tag, deploy, post-release assessment, close the cycle | Must be separate from α |
+| **γ (Coordinator)** | Orchestrate | cycle-wide | Issue creation, dispatch prompts to α and β, unblocking when stuck, cross-agent context, compliance verification | Must hold full cycle context |
 
 #### Triadic rule
 
 - α produces the change.
-- γ judges the change before release.
-- β integrates the change and measures what actually shipped.
+- β judges the change and integrates it.
+- γ orchestrates the cycle and ensures coherence across handoffs.
 
-That is the triadic coherence pattern in CDD.
+The structure is a **dyad plus coordinator**: α and β are two workers that interact through artifacts, isolated from each other. γ coordinates the dyad — sees both sides, does neither.
+
+- α cannot see β's review reasoning or conversation state
+- β cannot see α's implementation rationale or conversation state
+- γ sees both — that is its function
+
+β owns both review and release because the reviewer already has full artifact context when it's time to merge — splitting review from release creates a handoff that adds no value. γ owns coordination because issue quality determines implementation quality, dispatch prompts are the control surface, and unblocking requires cross-agent context that only the coordinator holds.
 
 #### Default flow
 
 ```text
-α (author/implementor) → γ (review) → RC → back to α
-                                     → A  → forward to β (merge, tag, deploy, assess)
+γ (issue + dispatch) → α (implement + PR) → β (review) → RC → α (fix) → β (re-review)
+                                                        → A  → β (merge, tag, deploy, assess)
+                       γ (unblocks α or β when stuck)
 ```
+
+#### γ algorithm
+
+1. Observe and select the gap (§2)
+2. Create the issue with full implementation guidance, including Tier 3 skills (§4.4)
+3. Write α dispatch prompt (see format below)
+4. When α opens PR and CI is green, write β dispatch prompt (see format below)
+5. If α or β is blocked, diagnose and unblock: clarify requirements, resolve ambiguity, provide missing context
+6. After β releases, verify post-release assessment completeness
+
+#### γ dispatch prompt format
+
+**To α:**
+```
+You are α. Hub: <hub>.
+Load src/packages/cnos.cdd/skills/cdd/SKILL.md and follow the α algorithm (§1.4).
+Issue: gh issue view <number>
+```
+
+**To β:**
+```
+You are β. Hub: <hub>.
+Load src/packages/cnos.cdd/skills/cdd/SKILL.md and follow the β algorithm (§1.4).
+PR: gh pr view <number>
+Issue: gh issue view <number>
+```
+
+Parameters: `<hub>` is the hub name without the `cn-` prefix (e.g. `sigma`, `omega`, `pi`). The hub directory is `cn-<hub>` but git identity uses `<hub>-<role>` (e.g. `sigma-alpha`, `sigma-alpha@cnos.xyz`). `<number>` is the GitHub issue or PR number.
+
+The prompt names the role, provides parameters, and points to the issue or PR. The CDD skill tells each role what to load (§4.4) and what to do (§1.4). γ does not enumerate skills or steps in the prompt — that is the skill's job. If the prompt needs to restate the algorithm, the algorithm is not clear enough — fix the skill.
+
+#### α algorithm
+
+1. Receive dispatch prompt from γ
+2. Configure git identity using the hub name from the dispatch prompt: `git config user.name "<hub>-alpha"` and `git config user.email "<hub>-alpha@cnos.xyz"`
+3. Load CDD skill, load all Tier 1 + Tier 2 skills (§4.4), load Tier 3 skills from the issue
+4. Read the issue fully, read source files referenced in implementation guidance
+5. Implement: branch, code, tests, self-coherence
+6. Open PR (draft if CI unavailable locally), wait for CI green
+7. Request review from β
+8. If β returns RC: fix findings, push, re-request review
+9. Done when β approves
+
+#### β algorithm
+
+1. Receive dispatch prompt from γ (or pick up from α's review request)
+2. Configure git identity using the hub name from the dispatch prompt: `git config user.name "<hub>-beta"` and `git config user.email "<hub>-beta@cnos.xyz"`
+3. Load CDD skill, load all Tier 1 + Tier 2 skills (§4.4), load Tier 3 skills from the issue
+4. Read the PR diff, read the issue
+5. Review: produce CR with findings per review skill, or approve
+6. If RC: post findings as PR comment, wait for α's fix
+7. If A: merge, tag, deploy per release skill
+8. Write post-release assessment per post-release skill
+9. Done when assessment is committed
 
 #### Minimum configuration
 
-A substantial cycle requires at least two agents: one for α and one for γ. When only two agents are available, **γ may also serve as β** — and this is the preferred default. The sequence becomes:
+A substantial cycle requires at least two agents: one for α and one for β. γ may be the operator or a third agent. When only two agents are available, the operator serves as γ (issue creation, dispatch, unblocking).
 
-```text
-α → γ (review) → A → γ (release + assess)
-```
+#### Why triadic
 
-This preserves independent review while keeping release and assessment a single responsibility.
+Implementation, judgment, and coordination are different coherence functions:
 
-#### Why this split
+- α owns the artifact — their output is what α scores
+- β owns judgment and what the system actually becomes after integration — what β scores
+- γ owns cycle coherence — issue clarity, prompt completeness, inter-agent flow
 
-Two-agent author+review is sufficient for many cycles, but review judgment and release/assessment responsibility are different coherence functions. The triadic model names that difference explicitly:
+#### Coherence axes vs. agent roles
 
-- α owns the artifact
-- β owns what the system actually becomes after integration
-- γ owns independent judgment before release
+The triadic scoring axes used in post-release assessment (CDD α / CDD β / CDD γ) measure **artifact integrity**, **surface agreement**, and **cycle economics** respectively. These are coherence dimensions, not agent names. An α-axis score of 2/4 means artifact integrity was low — it does not mean agent α performed poorly.
 
 **Small-change exception:** A small-change cycle (§1.2) may be completed by one agent when:
 
@@ -127,9 +186,7 @@ In that case:
 - the artifact must state that the cycle used the small-change path,
 - and any direct-to-main commit still triggers the retro-review rule in §3.7 of the executable skill.
 
-**Delegated implementation (step 6f):** The author may delegate implementation to a third agent. The delegator writes the handoff spec (ACs, active skills, test requirements). The implementer builds and self-verifies. The author remains responsible for the cycle — delegation does not transfer ownership of steps 0–7a.
-
-**Operator override:** The operator may reassign any role explicitly. The reassignment must name the target agent and the reason. Implicit role drift (e.g., reviewer starts authoring fixes mid-review) is not permitted — if the reviewer identifies a fix, they request changes; the author executes.
+**Operator override:** The operator may reassign any role explicitly. The reassignment must name the target agent and the reason. Implicit role drift (e.g., reviewer starts authoring fixes mid-review) is not permitted — if β requests changes, α executes the fix.
 
 ---
 
@@ -305,22 +362,38 @@ Before creating the branch, verify:
 - current CI / main state is known
 - the intended scope is declared before implementation begins
 
-### 4.4 Skill selection
+### 4.4 Skill loading
 
-At step 5 (Mode), the implementer must name the 2–3 skills that govern this change and **read each SKILL.md file** before beginning any work step. Naming a skill without reading it is not loading it. The loaded skills are **hard generation constraints** — not post-hoc review checklists. All other skills remain available as reference but do not bind generation.
+Skills are loaded in three tiers. All tiers are mandatory for substantial changes.
 
-Rationale: breadth without depth produces checklist engineering. Ten skills loaded at surface level means none are deeply internalized. Fewer constraints, deeply applied, prevent more defects than many constraints lightly checked.
+**Tier 1 — CDD lifecycle (always loaded by every role):**
+All skills under `cdd/` — the master CDD skill plus sub-skills (issue, design, review, release, post-release). These define the lifecycle. Loading these is not optional and not issue-dependent.
 
-The selected skill set must be stated alongside mode. Example:
+**Tier 2 — General engineering (always loaded by α and β):**
+All general skills under `eng/` that apply regardless of domain: coding, design-principles, ship, testing, documenting, process-economics, rca, follow-up, writing, skill. These constrain how any code is written or reviewed. Loading these is not optional and not issue-dependent.
+
+**Tier 3 — Issue-specific (named per issue):**
+Skills that depend on what the work touches. The issue's "Skills and constraints" section names these. Examples:
+- Language: `eng/go`, `eng/ocaml`, `eng/typescript`
+- Domain: `eng/ux-cli`, `eng/performance-reliability`, `eng/tool-writing`
+- Architecture: `eng/architecture-evolution`, `eng/functional`
+
+γ names Tier 3 skills when creating the issue. If the issue doesn't name them, α identifies them from the work shape before coding.
+
+**Read each SKILL.md file before beginning any work step.** Naming a skill without reading it is not loading it. Loaded skills are **hard generation constraints** — not post-hoc review checklists.
+
+Rationale: Tier 1 and 2 are always loaded because omitting them is how findings happen at review time instead of authoring time. Tier 3 is selective because language and domain skills only apply when the work touches that language or domain.
+
+The Tier 3 skill set must be stated alongside mode. Example:
 
 ```text
 Mode: MCA
-Active skills: ocaml, performance-reliability
+Tier 3 skills: go, ux-cli
 ```
 
 When in doubt about mode, apply CAP: if the answer is already in the system, cite it (MCA) — don't reinvent it (MCI). If two paths close the same gap, take the lighter one unless the heavier one buys durability the lighter one cannot.
 
-Review (step 8) checks whether the implementation is consistent with the declared active skills. Findings that a loaded active skill would have prevented are process debt (§6.1).
+Review (step 8) checks whether the implementation is consistent with all three tiers. Findings that a loaded skill would have prevented are process debt (§6.1).
 
 ---
 
@@ -393,7 +466,7 @@ CDD is artifact-driven. For substantial changes, each lifecycle step must leave 
 
 **Primary branch artifact:** the PR body (`.github/PULL_REQUEST_TEMPLATE.md`) for L5/L6 changes, or the design artifact (design/SKILL.md §3.1) for larger changes.
 
-**Role key (§1.4):** *α (author/implementor)* = steps 0–7a, *γ (reviewer)* = step 8 (RC/A decision), *β (integrator/releaser)* = steps 9–13 (merge, deploy, assess). Delegated implementer is α-side. Merge is part of step 9 (gate + merge).
+**Role key (§1.4):** *α (implementer)* = steps 0–7a, *β (reviewer + releaser)* = steps 8–13 (review RC/A decision, merge, deploy, assess), *γ (coordinator)* = cycle-wide (issue creation, dispatch, unblocking). Delegated implementer is α-side. Merge is part of step 9 (gate + merge).
 
 **Producer key:** *agent* = judgment required, *mechanical* = automatable by cnos (#94), *reviewer* = produced by the review process.
 
