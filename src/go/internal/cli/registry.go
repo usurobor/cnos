@@ -45,29 +45,19 @@ func (r *Registry) Lookup(name string) (Command, bool) {
 }
 
 // All returns every registered command in registration order.
+//
+// Callers decide how to present commands to the user. Help and
+// status are the two consumers today and they have different
+// policies: help always lists the full kernel surface (annotating
+// hub-needing commands), status lists only what is usable now.
+// Keeping a single, unfiltered accessor avoids hiding that policy
+// inside the registry.
 func (r *Registry) All() []Command {
 	result := make([]Command, 0, len(r.order))
 	for _, name := range r.order {
 		if cmd, ok := r.commands[name]; ok {
 			result = append(result, cmd)
 		}
-	}
-	return result
-}
-
-// Available returns commands filtered by current runtime state.
-// If hasHub is false, commands with NeedsHub=true are excluded.
-func (r *Registry) Available(hasHub bool) []Command {
-	result := make([]Command, 0, len(r.order))
-	for _, name := range r.order {
-		cmd, ok := r.commands[name]
-		if !ok {
-			continue
-		}
-		if !hasHub && cmd.Spec().NeedsHub {
-			continue
-		}
-		result = append(result, cmd)
 	}
 	return result
 }

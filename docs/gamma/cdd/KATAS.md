@@ -1,25 +1,44 @@
 # Agent Kata
 
-Two kata families, two homes.
+Kata are executable proofs. Scripts and packages are the source of truth;
+this catalog is a secondary index.
 
-## Runtime katas (`scripts/kata/`)
+## Tier model
 
-Prove the cnos package pipeline works end-to-end. System-level — not package-specific.
+| Tier | Home | What it proves |
+|------|------|----------------|
+| 1 — bare binary | `scripts/kata/` | `cn` binary works end-to-end before any package is installed |
+| 2 — runtime/package | `src/packages/cnos.kata/` | post-package behavior: command dispatch, roundtrip, doctor-broken, self-describe |
+| 3 — method/CDD | `src/packages/cnos.cdd.kata/` | CDD adds value over ad hoc execution: design, review, post-release |
+
+Release-bootstrap and network-dependent compatibility checks belong in
+`scripts/smoke/`, not here — they are production-facing, not kata.
+
+## Tier 1 — bare binary (`scripts/kata/`)
+
+CI gate: `.github/workflows/ci.yml` job `kata-tier1`. Failure = red build.
 
 | # | Name | Proves | Script |
 |---|------|--------|--------|
-| 01 | Boot | `cn init` → hub → `cn status` | `scripts/kata/01-boot.sh` |
-| 02 | Command | build → restore → `cn daily` dispatches | `scripts/kata/02-command.sh` |
-| 03 | Round-trip | author → build → install → dispatch | `scripts/kata/03-roundtrip.sh` |
-| 04 | Doctor | break state → `cn doctor` catches it | `scripts/kata/04-doctor.sh` |
+| 01 | binary  | `cn` runs                            | `scripts/kata/01-binary.sh` |
+| 02 | init    | `cn init` creates a hub              | `scripts/kata/02-init.sh`   |
+| 03 | status  | `cn status` reads hub state          | `scripts/kata/03-status.sh` |
+| 04 | doctor  | `cn doctor` validates clean hub      | `scripts/kata/04-doctor.sh` |
+| 05 | build   | `cn build` produces dist/            | `scripts/kata/05-build.sh`  |
+| 06 | install | `cn deps restore` installs packages  | `scripts/kata/06-install.sh` |
 
 ```bash
 scripts/kata/run-all.sh
 ```
 
-## Method katas (`src/packages/cnos.cdd.kata/`)
+## Tier 2 — runtime/package (`cnos.kata`)
 
-Prove CDD adds value over ad hoc execution. Package-distributed.
+Proves post-package behavior after at least one package is installed.
+See #237.
+
+## Tier 3 — method/CDD (`cnos.cdd.kata`)
+
+Proves CDD adds value over ad hoc execution. Package-distributed.
 
 | ID | Name | Purpose |
 |---|------|---------|

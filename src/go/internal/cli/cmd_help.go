@@ -23,29 +23,39 @@ func (c *HelpCmd) Spec() CommandSpec {
 
 func (c *HelpCmd) Run(_ context.Context, inv Invocation) error {
 	hasHub := inv.HubPath != ""
-	cmds := c.Registry.Available(hasHub)
 
-	fmt.Fprintf(inv.Stdout, "cn — cnos kernel\n\n")
-	fmt.Fprintf(inv.Stdout, "Usage: cn <command> [args...]\n\n")
-
-	// Group commands by source for clear tier attribution.
+	// Kernel commands are always part of the binary and always listed —
+	// users can see the full kernel surface without creating a hub.
+	// Repo-local and package commands are only meaningful inside a hub.
 	var kernelCmds, repoLocalCmds, packageCmds []Command
-	for _, cmd := range cmds {
-		switch cmd.Spec().Source {
+	for _, cmd := range c.Registry.All() {
+		spec := cmd.Spec()
+		switch spec.Source {
 		case SourceKernel:
 			kernelCmds = append(kernelCmds, cmd)
 		case SourceRepoLocal:
-			repoLocalCmds = append(repoLocalCmds, cmd)
+			if hasHub {
+				repoLocalCmds = append(repoLocalCmds, cmd)
+			}
 		case SourcePackage:
-			packageCmds = append(packageCmds, cmd)
+			if hasHub {
+				packageCmds = append(packageCmds, cmd)
+			}
 		}
 	}
+
+	fmt.Fprintf(inv.Stdout, "cn — cnos kernel\n\n")
+	fmt.Fprintf(inv.Stdout, "Usage: cn <command> [args...]\n\n")
 
 	if len(kernelCmds) > 0 {
 		fmt.Fprintf(inv.Stdout, "Kernel commands:\n")
 		for _, cmd := range kernelCmds {
 			spec := cmd.Spec()
-			fmt.Fprintf(inv.Stdout, "  %-12s %s\n", spec.Name, spec.Summary)
+			suffix := ""
+			if !hasHub && spec.NeedsHub {
+				suffix = "  (requires hub)"
+			}
+			fmt.Fprintf(inv.Stdout, "  %-12s %s%s\n", spec.Name, spec.Summary, suffix)
 		}
 	}
 
@@ -70,8 +80,7 @@ func (c *HelpCmd) Run(_ context.Context, inv Invocation) error {
 	}
 
 	if !hasHub {
-		fmt.Fprintf(inv.Stdout, "\n⚠ No hub found — commands requiring a hub are hidden.\n")
-		fmt.Fprintf(inv.Stdout, "  Run 'cn init' to create a hub, or cd into an existing one.\n")
+		fmt.Fprintf(inv.Stdout, "\n⚠ No hub found — run 'cn init' to create one, or cd into an existing hub.\n")
 	}
 
 	return nil
