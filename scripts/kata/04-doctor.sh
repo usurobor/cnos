@@ -2,11 +2,15 @@
 # 04-doctor.sh — Tier 1 kata 04.
 #
 # Proves: `cn doctor` validates a clean hub.
-# Pass condition: exits 0 on a freshly-init'd hub with no warnings.
+# Pass condition: exits 0 on a freshly-init'd hub, with zero broken
+# checks (✗). Pending lifecycle items (✓/○) are allowed.
 #
-# A Tier 1 doctor run checks that the hub structure is intact.
-# Package/lockfile/wake artifacts belong to later lifecycle stages
-# and are reported informationally by doctor (see doctor.go).
+# Doctor reports three statuses (see internal/doctor/doctor.go):
+#   ✓ validated     — the artifact or tool is present and healthy
+#   ○ pending/opt   — legitimately absent at this lifecycle stage
+#   ✗ broken        — fails the run
+# Tier 1 asserts the absence of ✗; presence of ○ (pending lockfile,
+# runtime contract, origin remote) is the expected fresh-hub signal.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib.sh"
@@ -21,10 +25,9 @@ cd "$KATA_HUB"
 cn init kata-hub >/dev/null 2>&1 || { fail "cn init failed (precondition)"; kata_summary; }
 cd cn-kata-hub
 
-# `cn setup` is part of the minimal fresh-hub preparation: it writes
-# .cn/deps.json and the .gitignore entry. Without it, doctor flags
-# deps.json as missing. Running setup here keeps the kata scoped to
-# "doctor on a prepared fresh hub".
+# `cn setup` writes .cn/deps.json and the .gitignore entry. Without
+# it, doctor flags deps.json as missing (required after setup). Running
+# setup keeps the kata scoped to "doctor on a prepared fresh hub".
 cn setup >/dev/null 2>&1 || { fail "cn setup failed (precondition)"; kata_summary; }
 
 info "running: cn doctor"
@@ -38,12 +41,13 @@ else
   info "$DOCTOR_OUTPUT"
 fi
 
-# A clean fresh hub should have zero failing lines (✗) in doctor output.
+# Zero broken checks. ✗ (U+2717) is the doctor glyph for failures;
+# ○ (U+25CB) pending items are allowed.
 if echo "$DOCTOR_OUTPUT" | grep -q "^✗"; then
-  fail "cn doctor reports warnings on a freshly-init'd hub"
+  fail "cn doctor reports broken checks on a freshly-init'd hub"
   info "$DOCTOR_OUTPUT"
 else
-  pass "cn doctor has no warnings on a freshly-init'd hub"
+  pass "cn doctor reports no broken checks"
 fi
 
 echo ""

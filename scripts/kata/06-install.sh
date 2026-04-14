@@ -5,9 +5,15 @@
 # Pass condition: at least one package appears under .cn/vendor/packages/
 # with a cn.package.json.
 #
-# Needs dist/ from 05-build.sh. restore.FindIndexPath walks up from the
-# hub looking for dist/packages/index.json, so the temp hub is created
-# under a workdir that symlinks dist/ from the repo root.
+# Depends on 05-build.sh: this kata does not build artifacts itself; it
+# requires $REPO_ROOT/dist/packages/index.json to already exist. run-all.sh
+# runs 05 before 06 in filename order, which satisfies the dependency.
+# Running 06 in isolation without first running 05 (or `cn build`) will
+# fail fast with a clear message.
+#
+# restore.FindIndexPath walks up from the hub looking for
+# dist/packages/index.json, so the temp hub is created under a workdir
+# that symlinks dist/ from the repo root.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib.sh"

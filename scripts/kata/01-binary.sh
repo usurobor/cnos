@@ -2,7 +2,9 @@
 # 01-binary.sh — Tier 1 kata 01.
 #
 # Proves: the `cn` binary runs.
-# Pass condition: `cn help` exits 0, output contains kernel command names.
+# Pass condition: `cn help` exits 0, output lists the 8 kernel commands
+# (help, init, setup, deps, status, doctor, build, update) inside its
+# "Kernel commands:" section.
 #
 # No hub is required. This is the first gate — if this fails, the binary
 # is broken and nothing else in the suite can pass.
@@ -27,13 +29,28 @@ else
   kata_summary
 fi
 
-# The 8 kernel commands (GO-KERNEL-COMMANDS.md): help, init, setup,
-# deps, status, doctor, build, update. All must be listed by `cn help`.
+# Extract only the "Kernel commands:" section so the 8-command
+# assertion is not confused by repo-local or package commands that may
+# share names. The section ends at the next blank line or header.
+KERNEL_SECTION=$(echo "$HELP_OUTPUT" | awk '
+  /^Kernel commands:/ { inside=1; next }
+  inside && /^[A-Z]/ { exit }
+  inside && NF == 0 { exit }
+  inside { print }
+')
+
+if [ -z "$KERNEL_SECTION" ]; then
+  fail "cn help has no 'Kernel commands:' section"
+  info "$HELP_OUTPUT"
+  kata_summary
+fi
+
+# The 8 kernel commands from GO-KERNEL-COMMANDS.md.
 for cmd in help init setup deps status doctor build update; do
-  if echo "$HELP_OUTPUT" | grep -qE "^\s+${cmd}\b"; then
-    pass "cn help lists '$cmd'"
+  if echo "$KERNEL_SECTION" | grep -qE "^\s+${cmd}\b"; then
+    pass "kernel command '$cmd' listed"
   else
-    fail "cn help does not list '$cmd'"
+    fail "kernel command '$cmd' missing from 'Kernel commands:' section"
   fi
 done
 
