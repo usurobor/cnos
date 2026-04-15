@@ -99,7 +99,13 @@ The structure is a **dyad plus coordinator**: α and β are two workers that int
 3. Write α dispatch prompt (see format below)
 4. When α opens PR and CI is green, write β dispatch prompt (see format below)
 5. If α or β is blocked, diagnose and unblock: clarify requirements, resolve ambiguity, provide missing context
-6. After β releases, verify post-release assessment completeness
+6. After β releases, collect close-outs from both α and β
+7. Review both close-outs. Triage each finding:
+   - Skill gap → patch the skill now (immediate output, MCA)
+   - Pattern emerging → write adhoc thread in hub memory
+   - One-off → drop
+8. If any §9.1 trigger fired, verify Cycle Iteration section exists in assessment
+9. Cycle closed when: assessment committed, close-outs reviewed, immediate outputs executed
 
 #### γ dispatch prompt format
 
@@ -132,7 +138,14 @@ The prompt names the role, provides parameters, and points to the issue or PR. T
 6. Open PR (draft if CI unavailable locally), wait for CI green
 7. Request review from β
 8. If β returns RC: fix findings, push, re-request review
-9. Done when β approves
+9. When β approves: write α close-out (cycle findings or "no findings")
+10. Done
+
+**α close-out:** Report cycle-level learnings to γ. Must include one of:
+- Concrete findings: skill gaps, process friction, tooling issues, things that should be mechanized
+- "No new findings" — explicitly stated, not omitted
+
+This is α's input to γ's cycle iteration decision (§9.1).
 
 #### β algorithm
 
@@ -144,7 +157,14 @@ The prompt names the role, provides parameters, and points to the issue or PR. T
 6. If RC: post findings as PR comment, wait for α's fix
 7. If A: merge, tag, deploy per release skill
 8. Write post-release assessment per post-release skill
-9. Done when assessment is committed
+9. Write β close-out (cycle findings or "no findings")
+10. Done when assessment and close-out are committed
+
+**β close-out:** Report cycle-level learnings to γ. Must include one of:
+- Concrete findings: review pattern issues, skill gaps surfaced during review, process friction, §3.7 violations observed, things that should be mechanized
+- "No new findings" — explicitly stated, not omitted
+
+This is β's input to γ's cycle iteration decision (§9.1).
 
 #### Minimum configuration
 
