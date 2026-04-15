@@ -1,0 +1,15 @@
+{
+  "schema": "cn.package.v1",
+  "name": "cnos.kata",
+  "version": "0.1.0",
+  "kind": "package",
+  "engines": {
+    "cnos": ">=3.54.0"
+  },
+  "commands": {
+    "kata-runtime": {
+      "entrypoint": "commands/kata-runtime/cn-kata-runtime",
+      "summary": "Run Tier 2 runtime/package kata (R1-R4) — post-install behavior"
+    }
+  }
+}
