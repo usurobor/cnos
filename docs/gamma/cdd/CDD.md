@@ -117,27 +117,27 @@ The structure is a **dyad plus coordinator**: α and β are two workers that int
 
 **To α:**
 ```
-You are α. Hub: <hub>.
+You are α. Project: <project>.
 Load src/packages/cnos.cdd/skills/cdd/SKILL.md and follow the α algorithm (§1.4).
 Issue: gh issue view <number>
 ```
 
 **To β:**
 ```
-You are β. Hub: <hub>.
+You are β. Project: <project>.
 Load src/packages/cnos.cdd/skills/cdd/SKILL.md and follow the β algorithm (§1.4).
 PR: gh pr view <number>
 Issue: gh issue view <number>
 ```
 
-Parameters: `<hub>` is the hub name without the `cn-` prefix (e.g. `sigma`, `omega`, `pi`). The hub directory is `cn-<hub>` but git identity uses `<hub>-<role>` (e.g. `sigma-alpha`, `sigma-alpha@cnos.xyz`). `<number>` is the GitHub issue or PR number.
+Parameters: `<project>` is the project name (e.g. `cnos`, `myapp`). Git identity uses `<role>@cdd.<project>` (e.g. `alpha@cdd.cnos`). `<number>` is the issue or PR number.
 
 The prompt names the role, provides parameters, and points to the issue or PR. The CDD skill tells each role what to load (§4.4) and what to do (§1.4). γ does not enumerate skills or steps in the prompt — that is the skill's job. If the prompt needs to restate the algorithm, the algorithm is not clear enough — fix the skill.
 
 #### α algorithm
 
 1. Receive dispatch prompt from γ
-2. Configure git identity using the hub name from the dispatch prompt: `git config user.name "<hub>-alpha"` and `git config user.email "<hub>-alpha@cnos.xyz"`
+2. Configure git identity using the project name from the dispatch prompt: `git config user.name "alpha"` and `git config user.email "alpha@cdd.<project>"`
 3. Load CDD skill, load all Tier 1 + Tier 2 skills (§4.4), load Tier 3 skills from the issue
 4. Read the issue fully, read source files referenced in implementation guidance
 5. Implement: branch, code, tests, self-coherence
@@ -149,7 +149,7 @@ The prompt names the role, provides parameters, and points to the issue or PR. T
 #### β algorithm
 
 1. Receive dispatch prompt from γ (or pick up from α's review request)
-2. Configure git identity using the hub name from the dispatch prompt: `git config user.name "<hub>-beta"` and `git config user.email "<hub>-beta@cnos.xyz"`
+2. Configure git identity using the project name from the dispatch prompt: `git config user.name "beta"` and `git config user.email "beta@cdd.<project>"`
 3. Load CDD skill, load all Tier 1 + Tier 2 skills (§4.4), load Tier 3 skills from the issue
 4. Read the PR diff, read the issue
 5. Review: produce CR with findings per review skill, or approve
