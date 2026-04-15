@@ -148,10 +148,11 @@ The prompt names the role, provides parameters, and points to the issue or PR. T
 4. Read the issue fully, read source files referenced in implementation guidance
 5. Implement: branch, code, tests, self-coherence
 6. Open PR (draft if CI unavailable locally), wait for CI green
-7. Request review from β
-8. If β returns RC: fix findings, push, re-request review
-9. When β approves: write α close-out (cycle findings or "no findings")
-10. Done
+7. Subscribe to PR notifications
+8. Request review from β
+9. If β returns RC: fix findings, push, re-request review
+10. When β approves: write α close-out (cycle findings or "no findings")
+11. Done
 
 **α close-out:** Report cycle-level learnings to γ. Concrete findings (skill gaps, process friction, things to mechanize) or "no new findings" — explicitly stated, not omitted. This is α's input to γ's cycle iteration decision (§9.1).
 
