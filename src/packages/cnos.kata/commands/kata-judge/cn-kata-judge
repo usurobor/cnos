@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# cn-kata-judge — judge a kata run bundle against its fixed rubric.
+#
+# Stub per #245 AC6: while the LLM-judge wiring is not yet landed, the
+# command reads the run bundle's metadata.json and emits a structured
+# verdict with status="not-yet-implemented" so callers get an honest,
+# parseable answer rather than a fake judgment.
+
+set -euo pipefail
+
+if [ $# -eq 0 ]; then
+  echo "Usage: cn kata-judge <run-dir>" >&2
+  echo "" >&2
+  echo "Judges a kata run bundle against its fixed rubric." >&2
+  echo "For runtime katas: mechanical pass/fail from exit codes and output." >&2
+  echo "For method katas:  structured rubric score (pending LLM-judge wiring)." >&2
+  exit 1
+fi
+
+RUN_DIR="$1"
+
+if [ ! -f "$RUN_DIR/metadata.json" ]; then
+  echo "ERROR: $RUN_DIR/metadata.json not found" >&2
+  exit 1
+fi
+
+KATA_ID="$(python3 -c "import json; print(json.load(open('$RUN_DIR/metadata.json'))['kata_id'])")"
+MODE="$(python3 -c "import json; print(json.load(open('$RUN_DIR/metadata.json')).get('mode','unknown'))")"
+STATUS="$(python3 -c "import json; print(json.load(open('$RUN_DIR/metadata.json')).get('status','unknown'))")"
+
+cat <<EOF
+{
+  "kata_id": "$KATA_ID",
+  "mode": "$MODE",
+  "status": "$STATUS",
+  "verdict": "not-yet-implemented",
+  "note": "Judge wiring (LLM-backed) not yet landed — honest stub per #245 AC6"
+}
+EOF

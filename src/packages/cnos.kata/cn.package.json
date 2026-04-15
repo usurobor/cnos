@@ -1,15 +1,23 @@
 {
   "schema": "cn.package.v1",
   "name": "cnos.kata",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "kind": "package",
   "engines": {
     "cnos": ">=3.54.0"
   },
   "commands": {
-    "kata-runtime": {
-      "entrypoint": "commands/kata-runtime/cn-kata-runtime",
-      "summary": "Run Tier 2 runtime/package kata (R1-R4) — post-install behavior"
+    "kata-run": {
+      "entrypoint": "commands/kata-run/cn-kata-run",
+      "summary": "Run one kata (class detected), or all katas of a given class"
+    },
+    "kata-list": {
+      "entrypoint": "commands/kata-list/cn-kata-list",
+      "summary": "List all katas discovered in installed packages"
+    },
+    "kata-judge": {
+      "entrypoint": "commands/kata-judge/cn-kata-judge",
+      "summary": "Judge a kata run bundle against its fixed rubric (honest stub)"
     }
   }
 }

@@ -1,0 +1,181 @@
+#!/usr/bin/env bash
+# cn-kata-run — run one kata, or all katas of a given class.
+#
+# Discovery: walks `.cn/vendor/packages/*/katas/*/` for kata.md files.
+# Class is read from `**Class:** <runtime|method>` in kata.md (first match).
+#
+# Usage:
+#   cn kata-run <id>                         # run one (class detected)
+#   cn kata-run <id> --mode baseline|cdd     # method kata, specific mode
+#   cn kata-run --class runtime              # run all runtime, stop on first fail
+#   cn kata-run --class method --mode <m>    # run all method in given mode
+#
+# Exit 0 on pass; non-zero on fail or on misuse.
+
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+KATA_ID=""
+CLASS=""
+MODE=""
+OUT_DIR=""
+
+usage() {
+  cat >&2 <<EOF
+Usage:
+  cn kata-run <id>                           run one kata (class detected)
+  cn kata-run <id> --mode baseline|cdd       method kata in given mode
+  cn kata-run --class runtime                run all runtime katas
+  cn kata-run --class method --mode <m>      run all method katas in mode
+EOF
+  exit 1
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --class) CLASS="${2:-}"; shift 2 ;;
+    --mode)  MODE="${2:-}"; shift 2 ;;
+    --out)   OUT_DIR="${2:-}"; shift 2 ;;
+    -h|--help) usage ;;
+    --*) echo "unknown option: $1" >&2; usage ;;
+    *) if [ -z "$KATA_ID" ]; then KATA_ID="$1"; shift; else usage; fi ;;
+  esac
+done
+
+# Resolve hub vendor dir. `cn` sets CN_HUB_PATH when dispatching a
+# package command; outside that context, walk up from cwd.
+VENDOR=""
+if [ -n "${CN_HUB_PATH:-}" ] && [ -d "$CN_HUB_PATH/.cn/vendor/packages" ]; then
+  VENDOR="$CN_HUB_PATH/.cn/vendor/packages"
+else
+  dir="$PWD"
+  while [ "$dir" != "/" ]; do
+    if [ -d "$dir/.cn/vendor/packages" ]; then
+      VENDOR="$dir/.cn/vendor/packages"
+      break
+    fi
+    dir="$(dirname "$dir")"
+  done
+fi
+[ -n "$VENDOR" ] || { echo "ERROR: no hub vendor/packages found" >&2; exit 1; }
+
+# kata_class reads the class from a kata.md ("**Class:** runtime").
+kata_class() {
+  local md="$1"
+  grep -oE '^\*\*Class:\*\*[[:space:]]+\w+' "$md" 2>/dev/null | awk '{print $2}' | head -1
+}
+
+# discover_katas populates KATAS_FOUND, one entry per kata,
+# tab-separated: "<class>\t<id>\t<pkg>\t<abs-dir>".
+discover_katas() {
+  local raw=()
+  local pkg kata id pkg_name cls
+  for pkg in "$VENDOR"/*/; do
+    [ -d "${pkg}katas" ] || continue
+    for kata in "${pkg}katas"/*/; do
+      [ -d "$kata" ] || continue
+      [ -f "${kata}kata.md" ] || continue
+      id="$(basename "$kata")"
+      pkg_name="$(basename "$pkg")"
+      cls="$(kata_class "${kata}kata.md")"
+      [ -n "$cls" ] || cls="unknown"
+      raw+=("${cls}"$'\t'"${id}"$'\t'"${pkg_name}"$'\t'"${kata%/}")
+    done
+  done
+  if [ "${#raw[@]}" -eq 0 ]; then
+    KATAS_FOUND=()
+    return 0
+  fi
+  mapfile -t KATAS_FOUND < <(printf '%s\n' "${raw[@]}" | sort -t $'\t' -k2,2)
+}
+
+# run_method — execute a method kata, write a run bundle, emit a
+# verdict path. Supports SKIP for corpus-only katas (no run.sh).
+run_method() {
+  local kata_dir="$1" id="$2"
+  [ "$MODE" = "baseline" ] || [ "$MODE" = "cdd" ] || {
+    echo "ERROR: method kata '$id' requires --mode baseline|cdd" >&2
+    return 2
+  }
+  local run_id out
+  run_id="$(date +%Y%m%d-%H%M%S)-${id}-${MODE}"
+  out="${OUT_DIR:-.kata-runs/$run_id}"
+  mkdir -p "$out/artifacts"
+  if [ ! -f "$kata_dir/run.sh" ]; then
+    echo "SKIP: $id — corpus exists but run harness not implemented yet"
+    cat > "$out/metadata.json" <<EOF
+{
+  "kata_id": "$id",
+  "mode": "$MODE",
+  "status": "stub",
+  "failures": -1,
+  "passes": 0
+}
+EOF
+    echo "run bundle: $out"
+    return 0
+  fi
+  bash "$kata_dir/run.sh" "$MODE" "$out"
+}
+
+# run_one dispatches by class.
+run_one() {
+  local cls="$1" id="$2" kata_dir="$3"
+  case "$cls" in
+    runtime) bash "$kata_dir/run.sh" ;;
+    method)  run_method "$kata_dir" "$id" ;;
+    *)
+      echo "ERROR: kata '$id' has unknown class '$cls' in $kata_dir/kata.md" >&2
+      return 1
+      ;;
+  esac
+}
+
+discover_katas
+
+# --class mode: run all matching, stop on first failure.
+if [ -n "$CLASS" ] && [ -z "$KATA_ID" ]; then
+  ran=0
+  for entry in "${KATAS_FOUND[@]:-}"; do
+    IFS=$'\t' read -r k_cls k_id k_pkg k_dir <<<"$entry"
+    [ "$k_cls" = "$CLASS" ] || continue
+    ran=$((ran + 1))
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    run_one "$k_cls" "$k_id" "$k_dir"
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+      echo ""
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      echo "KATA RUN: $k_id failed (rc=$rc) — stopping"
+      exit "$rc"
+    fi
+  done
+  if [ "$ran" -eq 0 ]; then
+    echo "ERROR: no kata matched class '$CLASS'" >&2
+    exit 1
+  fi
+  echo ""
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "KATA RUN: all $ran '$CLASS' passed"
+  exit 0
+fi
+
+# Single-kata mode.
+[ -n "$KATA_ID" ] || usage
+
+for entry in "${KATAS_FOUND[@]:-}"; do
+  IFS=$'\t' read -r k_cls k_id k_pkg k_dir <<<"$entry"
+  [ "$k_id" = "$KATA_ID" ] || continue
+  if [ -n "$CLASS" ] && [ "$k_cls" != "$CLASS" ]; then
+    echo "ERROR: kata '$KATA_ID' has class '$k_cls', not '$CLASS'" >&2
+    exit 1
+  fi
+  run_one "$k_cls" "$k_id" "$k_dir"
+  exit $?
+done
+
+echo "ERROR: kata '$KATA_ID' not found in any installed package under $VENDOR" >&2
+echo "       Try: cn kata-list" >&2
+exit 1

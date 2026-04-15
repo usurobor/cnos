@@ -128,7 +128,7 @@ jobs:
             "profile": "engineer",
             "packages": {
               "cnos.core": "3.54.0",
-              "cnos.kata": "0.1.0"
+              "cnos.kata": "0.2.0"
             }
           }
           JSON
@@ -139,7 +139,7 @@ jobs:
         run: |
           export PATH="$PWD:$PATH"
           cd ci-tier2/cn-ci-hub
-          cn kata-runtime
+          cn kata-run --class runtime
 
   notify:
     needs: [go, kata-tier1, kata-tier2]
