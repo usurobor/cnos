@@ -122,12 +122,22 @@ else
   kata_summary
 fi
 
-# Env vars on dispatch.
-if echo "$RT_OUT" | grep -q 'hub='; then
-  pass "CN_HUB_PATH passed to command"
+# Env vars on dispatch. Both checks must be able to fail (else: fail
+# branch); the regex requires a non-empty value (\S after `=`) so that
+# an unset/empty CN_HUB_PATH cannot tautologically satisfy the grep.
+# Review F2 (PR #248): bare `hub=` matched regardless of value because
+# the fixture echoes `hub=${CN_HUB_PATH:-}`; tighten to require content.
+if echo "$RT_OUT" | grep -qE 'hub=\S'; then
+  pass "CN_HUB_PATH passed to command (non-empty)"
+else
+  fail "CN_HUB_PATH absent or empty in dispatched command output"
+  info "output: $RT_OUT"
 fi
 if echo "$RT_OUT" | grep -q 'cmd=kata-rt-test'; then
   pass "CN_COMMAND_NAME passed to command"
+else
+  fail "CN_COMMAND_NAME absent or wrong in dispatched command output"
+  info "output: $RT_OUT"
 fi
 
 echo ""
