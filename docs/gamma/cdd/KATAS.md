@@ -8,8 +8,8 @@ this catalog is a secondary index.
 cnos separates the kata **framework** (the mechanism that finds and runs
 katas) from **kata content** (the actual proofs). Both ship as packages.
 
-- **`cnos.kata`** — the framework: `cn kata-run`, `cn kata-list`,
-  `cn kata-judge`. Discovers katas across any installed package
+- **`cnos.kata`** — the framework: `cn kata run`, `cn kata list`,
+  `cn kata judge`. Discovers katas across any installed package
   (convention: `<package>/katas/<id>/`). Also carries its own Tier 2
   runtime katas as dogfood of the framework.
 - **`cnos.cdd.kata`** — content-only: CDD method katas (M0–M4). No
@@ -66,11 +66,11 @@ Failure = red build.
 | R4 | Self-describe   | `cn status` surfaces installed package name, version, and commands |
 
 ```bash
-cn kata-run --class runtime   # run R1..R4, stop on first failure
-cn kata-run R2-roundtrip      # run one
+cn kata run --class runtime   # run R1..R4, stop on first failure
+cn kata run R2-roundtrip      # run one
 ```
 
-`cnos.kata` must be installed (`cn deps restore`) before `cn kata-run`
+`cnos.kata` must be installed (`cn deps restore`) before `cn kata run`
 can be dispatched — the dispatch itself is weak proof that the package
 loop works; R1-R4 make the proof explicit.
 
@@ -88,10 +88,10 @@ commands come from `cnos.kata`.
 | M4 | Full cycle | end-to-end CDD loop vs ad hoc on the same change |
 
 ```bash
-cn kata-list                           # list all discovered katas
-cn kata-list --class method            # method only
-cn kata-run M1-design --mode cdd       # scored, produces a run bundle
-cn kata-judge <run-dir>                # honest stub until judge wiring lands
+cn kata list                           # list all discovered katas
+cn kata list --class method            # method only
+cn kata run M1-design --mode cdd       # scored, produces a run bundle
+cn kata judge <run-dir>                # honest stub until judge wiring lands
 ```
 
 ## Adding katas from a new package
@@ -99,7 +99,7 @@ cn kata-judge <run-dir>                # honest stub until judge wiring lands
 1. Create `src/packages/<pkg>/katas/<id>/kata.md` with `**Class:** runtime` or `method`.
 2. For runtime, add an executable `run.sh` alongside `kata.md`.
 3. For method, add `rubric.json`, `baseline.prompt.md`, `cdd.prompt.md`; `run.sh` is optional (corpus-only stubs are supported).
-4. `cn build && cn deps restore` — your kata now appears in `cn kata-list`.
+4. `cn build && cn deps restore` — your kata now appears in `cn kata list`.
 
 No framework change is required. Discovery is convention-driven.
 
