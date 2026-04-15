@@ -3,7 +3,7 @@ name: plan
 description: Turn a converged design into an ordered implementation sequence with acceptance criteria, file changes, and exit conditions.
 artifact_class: runbook
 kata_surface: none
-governing_question: How do we operationalize an accepted design into an ordered sequence of implementation steps?
+governing_question: How does α operationalize an accepted design into an ordered sequence of implementation steps?
 parent: cdd
 triggers: [plan, implementation, sequence, steps, operationalize]
 ---
