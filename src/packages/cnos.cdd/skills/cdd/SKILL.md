@@ -136,10 +136,11 @@ The prompt names the role, provides parameters, and points to the issue or PR. T
 4. Read the issue fully, read source files referenced in implementation guidance
 5. Implement: branch, code, tests, self-coherence
 6. Open PR (draft if CI unavailable locally), wait for CI green
-7. Request review from β
-8. If β returns RC: fix findings, push, re-request review
-9. When β approves: write α close-out (cycle findings or "no findings")
-10. Done
+7. Subscribe to PR notifications (do not wait for operator to prompt)
+8. Request review from β
+9. If β returns RC: fix findings, push, re-request review
+10. When β approves: write α close-out (cycle findings or "no findings")
+11. Done
 
 **α close-out:** Report cycle-level learnings to γ. Must include one of:
 - Concrete findings: skill gaps, process friction, tooling issues, things that should be mechanized
@@ -342,7 +343,7 @@ asking the reviewer to look — the author runs a mechanical
 gate. This is a checklist, not judgment; two authors on the
 same branch must produce the same answer.
 
-1. **Branch rebased onto current `main`.** `git fetch origin main && git rebase origin/main`. The reviewer must see only this cycle's delta. A diff that contains commits already merged into main on a parallel branch is a process bug — it forces the reviewer to mentally subtract noise and risks reverting other cycles' work.
+1. **Branch rebased onto current `main` at ready-for-review time.** `git fetch origin main && git rebase origin/main` immediately before requesting review (not just at branch creation). If main moved between PR open and review request, rebase again. The reviewer must see only this cycle's delta. A diff that contains commits already merged into main on a parallel branch is a process bug — it forces the reviewer to mentally subtract noise and risks reverting other cycles' work.
 2. **Self-coherence artifact present.** §2.5 step 7 must have produced a SELF-COHERENCE.md (or its equivalent for small-change cycles), and the PR body must link or include the CDD Trace through the current step.
 3. **CDD Trace in the PR body.** §5.4 of the canonical spec mandates that for L5/L6 cycles the PR body is the primary branch artifact carrying the trace. For L7 cycles the design artifact carries the trace and the PR body links to it.
 4. **Tests reference ACs.** Each AC the cycle promised should have at least one named test or "not applicable, justified" note in the PR body.
