@@ -102,7 +102,9 @@ The structure is a **dyad plus coordinator**: α and β are two workers that int
 6. After β releases, collect close-outs from both α and β
 7. Review both close-outs. Triage each finding using CAP:
    - MCA available (skill patch, gate, mechanization) → ship it now as immediate output
-   - No MCA yet, pattern real → MCI: adhoc thread to track until MCA becomes clear
+   - No MCA yet, pattern real → MCI. Two kinds:
+     - **Project MCI** (future cycles on this project need to know) → `.cdd/` in the repo
+     - **Agent MCI** (future sessions of this agent need to know, any project) → agent hub (`cn-<agent>/threads/adhoc/`)
    - One-off, no pattern → drop
 8. If any §9.1 trigger fired, verify Cycle Iteration section exists in assessment
 9. Cycle closed when: assessment committed, close-outs reviewed, immediate outputs executed
