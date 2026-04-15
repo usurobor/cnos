@@ -386,6 +386,13 @@ Do not bloat the suite with redundant tests. Use the smallest set that proves th
   - ❌ Ten example tests for what one property test already proves
   - ✅ One property test plus a few named edge regressions
 
+### 3.13. Cover new surfaces, not just preserved ones
+
+For refactors that add commands, APIs, or public surfaces: each new surface element requires at least one CI-gated assertion before ready-for-review. "Existing CI still passes" is the correctness floor, not the coverage target. The coverage target is every introduced surface.
+
+  - ❌ L7 refactor adds 3 new commands; CI only tests the one command that replaced the old one
+  - ✅ L7 refactor adds 3 new commands; CI has one assertion per new command (discovery, dispatch, output shape)
+
 ---
 
 ## 4. Output Pattern
