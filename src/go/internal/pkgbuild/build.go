@@ -28,10 +28,12 @@ import (
 	"github.com/usurobor/cnos/src/go/internal/pkg"
 )
 
-// ContentClasses lists the 7 content classes that a package may contain.
+// ContentClasses lists the content classes that a package may contain.
+// `cn build --check` treats a package as valid if at least one of these
+// directories is present and non-empty.
 var ContentClasses = []string{
 	"doctrine", "mindsets", "skills", "extensions",
-	"templates", "orchestrators", "commands",
+	"templates", "orchestrators", "commands", "katas",
 }
 
 // PackageManifest is the parsed cn.package.json.
