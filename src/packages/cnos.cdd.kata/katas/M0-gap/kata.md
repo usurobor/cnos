@@ -1,6 +1,6 @@
 # M0 — Gap
 
-Kata Class: method
+**Class:** method
 
 Prove that the system can frame the right incoherence before design starts.
 

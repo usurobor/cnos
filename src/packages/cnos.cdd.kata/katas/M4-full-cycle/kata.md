@@ -1,6 +1,6 @@
 # M4 — Full Cycle
 
-Kata Class: method
+**Class:** method
 
 Prove that the full CDD loop produces better artifacts and closure than ad hoc execution on the same bounded change.
 

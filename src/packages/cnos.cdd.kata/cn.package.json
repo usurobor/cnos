@@ -1,23 +1,9 @@
 {
   "schema": "cn.package.v1",
   "name": "cnos.cdd.kata",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "kind": "package",
   "engines": {
-    "cnos": ">=3.50.0"
-  },
-  "commands": {
-    "kata-list": {
-      "entrypoint": "commands/kata-list/cn-kata-list",
-      "summary": "List available CDD method katas"
-    },
-    "kata-run": {
-      "entrypoint": "commands/kata-run/cn-kata-run",
-      "summary": "Run one CDD method kata and capture a run bundle"
-    },
-    "kata-judge": {
-      "entrypoint": "commands/kata-judge/cn-kata-judge",
-      "summary": "Judge a CDD method kata run bundle against a fixed rubric"
-    }
+    "cnos": ">=3.54.0"
   }
 }

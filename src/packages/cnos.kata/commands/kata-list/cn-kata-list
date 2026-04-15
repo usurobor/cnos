@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# cn-kata-list — list all katas discovered in installed packages.
+#
+# Discovery walks `.cn/vendor/packages/*/katas/*/kata.md`. Class is
+# parsed from `**Class:** <class>` in kata.md.
+
+set -euo pipefail
+
+CLASS_FILTER=""
+
+usage() {
+  cat >&2 <<EOF
+Usage: cn kata-list [--class runtime|method]
+Lists katas discovered in installed packages (.cn/vendor/packages/*/katas/).
+EOF
+  exit 1
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --class) CLASS_FILTER="${2:-}"; shift 2 ;;
+    -h|--help) usage ;;
+    *) echo "unknown arg: $1" >&2; usage ;;
+  esac
+done
+
+VENDOR=""
+if [ -n "${CN_HUB_PATH:-}" ] && [ -d "$CN_HUB_PATH/.cn/vendor/packages" ]; then
+  VENDOR="$CN_HUB_PATH/.cn/vendor/packages"
+else
+  dir="$PWD"
+  while [ "$dir" != "/" ]; do
+    if [ -d "$dir/.cn/vendor/packages" ]; then
+      VENDOR="$dir/.cn/vendor/packages"
+      break
+    fi
+    dir="$(dirname "$dir")"
+  done
+fi
+[ -n "$VENDOR" ] || { echo "ERROR: no hub vendor/packages found" >&2; exit 1; }
+
+printf "  %-9s %-24s %-18s %s\n" "CLASS" "ID" "PACKAGE" "EXE"
+printf "  %-9s %-24s %-18s %s\n" "-----" "--" "-------" "---"
+
+count=0
+for pkg in "$VENDOR"/*/; do
+  [ -d "${pkg}katas" ] || continue
+  for kata in "${pkg}katas"/*/; do
+    [ -d "$kata" ] || continue
+    [ -f "${kata}kata.md" ] || continue
+    id="$(basename "$kata")"
+    pkg_name="$(basename "$pkg")"
+    cls="$(grep -oE '^\*\*Class:\*\*[[:space:]]+\w+' "${kata}kata.md" 2>/dev/null | awk '{print $2}' | head -1)"
+    [ -n "$cls" ] || cls="?"
+    [ -n "$CLASS_FILTER" ] && [ "$cls" != "$CLASS_FILTER" ] && continue
+    exe="○"
+    [ -x "${kata}run.sh" ] && exe="●"
+    printf "  %-9s %-24s %-18s %s\n" "$cls" "$id" "$pkg_name" "$exe"
+    count=$((count + 1))
+  done
+done
+
+echo ""
+echo "  $count kata(s)"
+if [ "$count" -gt 0 ]; then
+  echo ""
+  echo "  ● = executable (has run.sh)  ○ = corpus-only"
+  echo "  Run:  cn kata-run <id> [--mode baseline|cdd]"
+  echo "  All:  cn kata-run --class runtime|method [--mode <m>]"
+fi

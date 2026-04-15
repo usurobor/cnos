@@ -3,13 +3,34 @@
 Kata are executable proofs. Scripts and packages are the source of truth;
 this catalog is a secondary index.
 
+## Architecture
+
+cnos separates the kata **framework** (the mechanism that finds and runs
+katas) from **kata content** (the actual proofs). Both ship as packages.
+
+- **`cnos.kata`** — the framework: `cn kata-run`, `cn kata-list`,
+  `cn kata-judge`. Discovers katas across any installed package
+  (convention: `<package>/katas/<id>/`). Also carries its own Tier 2
+  runtime katas as dogfood of the framework.
+- **`cnos.cdd.kata`** — content-only: CDD method katas (M0–M4). No
+  commands. The framework in `cnos.kata` picks them up on discovery.
+- **Future domain packages** (eng, ops, …) may ship their own katas by
+  adding a `katas/` directory; no framework changes needed.
+
+Class is declared inside each `kata.md` as `**Class:** <runtime|method>`.
+The framework dispatches on that class:
+
+- **runtime** — binary pass/fail. `run.sh` is executed; exit code is the verdict.
+- **method** — scored per rubric. Produces a run bundle (`metadata.json`,
+  `artifacts/`) for the judge.
+
 ## Tier model
 
-| Tier | Home | What it proves |
-|------|------|----------------|
-| 1 — bare binary | `scripts/kata/` | `cn` binary works end-to-end before any package is installed |
-| 2 — runtime/package | `src/packages/cnos.kata/` | post-package behavior: command dispatch, roundtrip, doctor-broken, self-describe |
-| 3 — method/CDD | `src/packages/cnos.cdd.kata/` | CDD adds value over ad hoc execution: design, review, post-release |
+| Tier | Proves | Home |
+|------|--------|------|
+| 1 — bare binary | `cn` binary works end-to-end before any package is installed | `scripts/kata/` |
+| 2 — runtime/package | post-install behavior (dispatch, roundtrip, doctor-broken, self-describe) | `cnos.kata/katas/R*/` |
+| 3 — method/CDD | CDD adds value over ad hoc execution | `cnos.cdd.kata/katas/M*/` |
 
 Release-bootstrap and network-dependent compatibility checks belong in
 `scripts/smoke/`, not here — they are production-facing, not kata.
@@ -31,9 +52,9 @@ CI gate: `.github/workflows/ci.yml` job `kata-tier1`. Failure = red build.
 scripts/kata/run-all.sh
 ```
 
-## Tier 2 — runtime/package (`cnos.kata`)
+## Tier 2 — runtime/package (`cnos.kata/katas/`)
 
-Proves post-package behavior after at least one package is installed.
+Proves post-install behavior after at least one package is installed.
 CI gate: `.github/workflows/ci.yml` job `kata-tier2` (`needs: kata-tier1`).
 Failure = red build.
 
@@ -45,17 +66,18 @@ Failure = red build.
 | R4 | Self-describe   | `cn status` surfaces installed package name, version, and commands |
 
 ```bash
-cn kata-runtime                # run R1..R4, stop on first failure
-cn kata-runtime R2-roundtrip   # run one
+cn kata-run --class runtime   # run R1..R4, stop on first failure
+cn kata-run R2-roundtrip      # run one
 ```
 
-The kata package must be installed (`cn deps restore`) before
-`cn kata-runtime` can be dispatched — the dispatch itself is weak proof
-that the runtime package loop works; R1-R4 make the proof explicit.
+`cnos.kata` must be installed (`cn deps restore`) before `cn kata-run`
+can be dispatched — the dispatch itself is weak proof that the package
+loop works; R1-R4 make the proof explicit.
 
-## Tier 3 — method/CDD (`cnos.cdd.kata`)
+## Tier 3 — method/CDD (`cnos.cdd.kata/katas/`)
 
-Proves CDD adds value over ad hoc execution. Package-distributed.
+Proves CDD adds value over ad hoc execution. Content-only package; the
+commands come from `cnos.kata`.
 
 | ID | Name | Purpose |
 |---|------|---------|
@@ -66,10 +88,20 @@ Proves CDD adds value over ad hoc execution. Package-distributed.
 | M4 | Full cycle | end-to-end CDD loop vs ad hoc on the same change |
 
 ```bash
-cn kata-list
-cn kata-run M1-design --mode cdd
-cn kata-judge <run-dir>
+cn kata-list                           # list all discovered katas
+cn kata-list --class method            # method only
+cn kata-run M1-design --mode cdd       # scored, produces a run bundle
+cn kata-judge <run-dir>                # honest stub until judge wiring lands
 ```
+
+## Adding katas from a new package
+
+1. Create `src/packages/<pkg>/katas/<id>/kata.md` with `**Class:** runtime` or `method`.
+2. For runtime, add an executable `run.sh` alongside `kata.md`.
+3. For method, add `rubric.json`, `baseline.prompt.md`, `cdd.prompt.md`; `run.sh` is optional (corpus-only stubs are supported).
+4. `cn build && cn deps restore` — your kata now appears in `cn kata-list`.
+
+No framework change is required. Discovery is convention-driven.
 
 ## Post-release usage
 
