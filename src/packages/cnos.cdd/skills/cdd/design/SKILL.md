@@ -115,7 +115,7 @@ Identify what governs before proposing what changes.
 4.3. **Enumerate copies and embeddings**
   - Where does the same information appear in multiple places?
   - ❌ "Update src, packages will sync"
-  - ✅ "src/agent/skills/ops/cdd/SKILL.md + packages/cnos.core/skills/ops/cdd/SKILL.md — must match (md5 verified)"
+  - ✅ "`src/packages/cnos.cdd/skills/cdd/CDD.md` is the canonical source; `docs/gamma/cdd/CDD.md` is a human-facing pointer and must continue to point to the right canonical path"
 
 4.4. **Name authority relationships**
   - If two artifacts carry the same information, which governs?
@@ -201,7 +201,7 @@ ACs are the contract between design and implementation.
 6.2. **No charitable interpretation**
   - Each AC must be mechanically verifiable — not "I believe this is met because..." but "file X, line Y, present: yes/no"
   - ❌ "AC4 is met because §11.11 covers review metrics" (belief, not evidence)
-  - ✅ "AC4 requires post-release template update → file: `src/agent/skills/ops/post-release/SKILL.md` → §4 Review Quality section → present: yes"
+  - ✅ "AC4 requires post-release template update → file: `src/packages/cnos.cdd/skills/cdd/post-release/SKILL.md` → §4 Review Quality section → present: yes"
 
 6.3. **Cover the impact graph**
   - Every artifact in the impact graph should have at least one AC that touches it

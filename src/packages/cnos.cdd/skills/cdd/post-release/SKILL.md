@@ -169,7 +169,7 @@ This decision is **mandatory**. Every release states the balance.
 Answer three questions:
 1. **What went wrong?** What broke, was caught late, or slipped through?
 2. **What went right?** What process improvement paid off?
-3. **Skill patches needed?** If a repeatable failure mode is identified, patch the skill NOW — not next session. This is CDD step 12a: the patch must land in the same commit as the assessment, synced across all surfaces (`src/agent/skills/`, `packages/cnos.core/skills/`, `docs/gamma/cdd/CDD.md`). A "noted for next cycle" commitment is insufficient when the failure mode is recurring — two cycles of the same mechanical failure with no spec-level fix is the trigger.
+3. **Skill patches needed?** If a repeatable failure mode is identified, patch the skill NOW — not next session. This is CDD step 12a: the patch must land in the same commit as the assessment, synced across all affected surfaces: the canonical source under `src/packages/`, any package-visible loader entrypoint if affected, and any human-facing pointer surface that exposes the changed rule. A "noted for next cycle" commitment is insufficient when the failure mode is recurring — two cycles of the same mechanical failure with no spec-level fix is the trigger.
 4. **Active skill re-evaluation.** For each review finding: would the declared active skills, as written, have prevented it? If not, is the skill underspecified for this pattern, or was it just not applied deeply enough? Underspecified → patch the skill (step 12a). Application gap → note it but don't patch (the skill was right, the agent didn't follow it).
 5. **If no CDD improvement is possible**, state so explicitly with reasoning. "No skill patch needed" requires a justification: either (a) all findings were application gaps with adequate existing spec, (b) zero review findings this cycle, or (c) the failure mode is environmental (e.g. tooling constraint) with no spec-level fix available. Silence is not an acceptable disposition — every cycle must close the self-learning loop with either a patch or an explicit reason why not.
 
@@ -276,7 +276,7 @@ Before committing the assessment, verify mechanically:
 - [ ] §4 has all fields: PRs, review rounds, superseded PRs, finding breakdown, mechanical ratio, action
 - [ ] §4 mechanical ratio: if >20% AND total findings ≥ 10, a process issue is **filed and referenced** (not just noted). Below 10 findings, note the ratio but no filing required.
 - [ ] §4a CDD self-coherence: α/β/γ scored, weakest axis named, action stated (or "none" if all ≥3)
-- [ ] §3/§4 skill patches: if §3 identifies a recurring failure mode or skill gap, the patch is **in this commit** (not deferred) and synced across all surfaces: `src/agent/skills/`, `packages/cnos.core/skills/` (build-sync §3.3), `docs/gamma/cdd/CDD.md` (authority-sync §3.3a). Verify with `diff` that src/agent and packages/cnos.core copies are identical.
+- [ ] §3/§4 skill patches: if §3 identifies a recurring failure mode or skill gap, the patch is **in this commit** (not deferred) and synced across all affected surfaces: canonical source under `src/packages/`, package-visible loader entrypoint if affected, human-facing pointer/readme surfaces if they expose the changed rule.
 - [ ] §5.7 has production verification scenario (or explicit deferral with commitment)
 - [ ] §6 CDD Closeout trace present with rows for observe/assess/close steps (incl. step 12a if skill patches landed)
 - [ ] §7 has all 6 fields: Next MCA, Owner, Branch, **First AC**, MCI frozen?, Rationale

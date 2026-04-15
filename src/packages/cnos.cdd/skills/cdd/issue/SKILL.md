@@ -100,7 +100,7 @@ Failure mode: issue requires back-and-forth to clarify scope, acceptance, or pri
 ### 2.4. Skills and constraints (mandatory for implementation issues)
 
 2.4.1. **Name the Tier 3 (issue-specific) skills the implementer must load**
-  - CDD lifecycle skills (Tier 1) and general eng skills (Tier 2) are always loaded per CDD §2.4 — do not repeat them here
+  - CDD lifecycle skills (Tier 1) and general eng skills (Tier 2) are always loaded per CDD §4.4 — do not repeat them here
   - Name only the issue-specific skills: language (`eng/go`, `eng/ocaml`, `eng/typescript`), domain (`eng/ux-cli`, `eng/performance-reliability`), architecture (`eng/architecture-evolution`), etc.
   - The implementer may be a different agent who has never seen your constraints
   - ❌ Omit Tier 3 skills — implementer writes code that violates language-specific boundaries, caught only by CI or review
@@ -108,10 +108,10 @@ Failure mode: issue requires back-and-forth to clarify scope, acceptance, or pri
   - ✅ "Tier 3 skills: `eng/go` (dispatch boundary §2.18, purity boundary §2.17), `eng/ux-cli` (output formatting)"
 
 2.4.2. **Name the active invariants**
-  - Link to INVARIANTS.md entries that govern the work
+  - Link to `docs/alpha/DESIGN-CONSTRAINTS.md` entries that govern the work
   - State the key rule in plain text so the implementer doesn't have to load the doc to know the constraint exists
   - ❌ "Follow project conventions"
-  - ✅ "T-002: cmd_*.go must be thin wrappers — no os/filepath/json imports. CI enforces."
+  - ✅ "`docs/alpha/DESIGN-CONSTRAINTS.md` §5.2: cli/ owns dispatch, domain packages own logic — no cmd_*.go file may exceed 30 lines of domain logic"
 
 ### 2.5. Related artifacts
 
