@@ -112,10 +112,10 @@ The structure is a **dyad plus coordinator**: α and β are two workers that int
 4. When α opens PR and CI is green, write β dispatch prompt (see format below)
 5. If α or β is blocked, diagnose and unblock: clarify requirements, resolve ambiguity, provide missing context
 6. After β releases, collect close-outs from both α and β
-7. Review both close-outs. Triage each finding:
-   - Skill gap → patch the skill now (immediate output, MCA)
-   - Pattern emerging → write adhoc thread in hub memory
-   - One-off → drop
+7. Review both close-outs. Triage each finding using CAP:
+   - MCA available (skill patch, gate, mechanization) → ship it now as immediate output
+   - No MCA yet, pattern real → MCI: adhoc thread to track until MCA becomes clear
+   - One-off, no pattern → drop
 8. If any §9.1 trigger fired, verify Cycle Iteration section exists in assessment
 9. Cycle closed when: assessment committed, close-outs reviewed, immediate outputs executed
 
