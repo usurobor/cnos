@@ -2,42 +2,65 @@
 
 ## Outcome
 
-Coherence delta: C_Sigma A (`alpha A`, `beta A`, `gamma A`) · **Level:** L6
+Coherence delta: C_Σ **A** (`α A-`, `β A`, `γ A`) · **Level:** **L7**
 
-**The kernel command chain now has a CI-enforced end-to-end proof, and `cn doctor` reports fresh-hub state truthfully.** Six Tier 1 kata scripts chain `cn help` → `cn init` → `cn status` → `cn doctor` → `cn build` → `cn deps restore` on every PR, and the kata-tier1 job gates merges on them all passing. Where doctor previously conflated "pending" with "failed" (fresh hubs exited non-zero before any lock or remote existed), it now renders three distinct states — `validated` (✓), `pending` (○), `broken` (✗) — and only broken gates the exit code.
+**The kata system is now a framework that discovers katas across packages, not a CDD-owned command suite, and the CDD triadic protocol has its first executable surfaces.** `cnos.kata` 0.2.0 ships `cn kata-run`, `cn kata-list`, `cn kata-judge` and walks `<pkg>/katas/<id>/kata.md` for any installed package; `cnos.cdd.kata` 0.3.0 is content-only. Every release tag now runs the Tier 1 kata on each of the 4 shipped-binary platforms before publishing. γ, α, β close-outs and `cn cdd-verify --triadic` make cycle completeness mechanical rather than narrative.
 
 ## Why it matters
 
-`scripts/kata/` used to mix pre-package and post-package kata in a flat suite whose headers claimed things the scripts didn't actually prove (e.g. `01-boot.sh` header mentioned `cn deps restore` but the script never ran it). None of them ran in CI. Regressions in the kernel command chain were caught manually or not at all — the `packages/index.json` migration leak was caught by accident, not by a named kata.
+Before this release, kata framework and kata content lived in the same package (`cnos.cdd.kata`). A future domain kata package (`cnos.eng.kata`, `cnos.ops.kata`, …) would have had to duplicate the framework or cross-reach. After: framework lives once; content packages are pure data. The class of work "wire up a kata system for a new domain" is eliminated — the convention is the framework.
 
-This cycle makes the bare-binary pipeline a structural invariant of the repo: the kernel command chain cannot silently break, because every PR must prove it end-to-end before merge. The three-tier kata model (Tier 1 bare binary here; Tier 2 runtime/package in `cnos.kata` #237; Tier 3 method/CDD in `cnos.cdd.kata`) gives future kata a clear home and keeps each tier focused on one failure class. The doctor three-way status is what made this possible without a script full of "expected warnings" exceptions — fresh-hub kata can now assert the absence of `✗` rather than tolerate a menagerie of pending-item noise.
+On the release side, v3.54.0 shipped the Tier 1 kata suite but only CI-gated it on PRs; fresh per-platform compiles in the release matrix (linux-x64/arm64, macos-x64/arm64) were unproven at ship time. #247 closes that gap: the matrix now runs the kata on the packaged binary on every platform before `Upload artifact` — any platform-specific regression fails the matrix position, the `release.needs: build` gate blocks, and no artifacts publish.
+
+On the process side, the CDD triadic protocol (α implements / β reviews+releases / γ coordinates) got its first operational artifacts: γ CLOSE-OUT written to `.cdd/releases/<version>/gamma/`, α close-outs under `.cdd/releases/<version>/alpha/<issue>.md`, β post-release assessment under `.cdd/releases/<version>/beta/`. `cn cdd-verify --version <v> --triadic` checks artifact completeness at cycle-close. Identity converged on `role@cdd.project` (replaces `<hub>-<role>@cnos.xyz`) — project-scoped, practice-namespaced.
 
 ## Added
 
-- **Tier 1 bare-binary kata suite** (#236): six scripts at `scripts/kata/0{1..6}-*.sh` — binary, init, status, doctor, build, install. Each with a header comment stating exactly what it proves.
-- **`run-all.sh` stop-on-first-failure** (#236): earliest failure surfaces first.
-- **CI `kata-tier1` job** (#236): depends on `go`, runs the suite, gates merges.
-- **Three-tier kata catalog** in `docs/gamma/cdd/KATAS.md` (#236).
+- **`cnos.kata` 0.2.0 framework** (#251, PR #252): `cn kata-run <id>` (class detected from kata.md), `cn kata-run --class <runtime|method>` (bulk), `cn kata-list [--class <c>]`, `cn kata-judge <bundle>` (honest stub until LLM wiring lands). Cross-package discovery via `.cn/vendor/packages/*/katas/*/kata.md`; class is parsed from `**Class:** <runtime|method>`.
+- **Tier 2 runtime kata R1–R4** (#237, PR #248): command dispatch, round-trip authoring in isolated tempdir, `cn doctor` catches broken installed state, `cn status` surfaces installed package + commands. CI `kata-tier2` job (`needs: kata-tier1`); failure = red build.
+- **Tier 1 kata in the release matrix** (#246, PR #247): the Tier 1 kata suite runs against the packaged binary on all 4 matrix platforms before `Upload artifact`. Per-platform fresh-compile regressions block publish.
+- **`cn cdd-verify`** (c24c75f3): artifact-completeness check for cycle close. Modes: `--pr <n>` (PR-scoped), `--version <ver>` (release-scoped), `--version <ver> --triadic` (also checks `.cdd/` protocol artifacts).
+- **`.cdd/` Phase 1 triadic artifacts** (#249): first `.cdd/releases/<ver>/{gamma,alpha,beta}/` layout landed. γ CLOSE-OUT and α close-outs for cycle #251; β assessment (this release).
+- **`katas/` as the 8th package content directory**: `pkgbuild.ContentClasses` expanded 7 → 8. Content-only packages like `cnos.cdd.kata` (post-strip) now pass `cn build --check`.
 
 ## Changed
 
-- **`cn help` always lists the 8 kernel commands** (#236): hub-requiring ones annotated with `(requires hub)` when no hub. Enables kata 01 to run before `cn init`.
-- **`cn doctor` three-way Status** (#236): Pass/Info/Fail → ✓/○/✗, only Fail drives the exit code. Fresh-hub pending items (deps.lock.json, runtime contract, origin remote, vendor before any lock) are informational. deps.json after `cn setup` stays fatal when missing. Present-but-invalid artifacts still fail.
+- **`cnos.cdd.kata` 0.2.0 → 0.3.0**: stripped to content-only. `commands/` removed entirely; only `cn.package.json` + `katas/M0–M4/` remain. The framework in `cnos.kata` picks up its katas on discovery.
+- **CI `kata-tier2`**: was `cn kata-runtime`, now `cn kata-run --class runtime` plus a new "Framework command surface" step that asserts `cn kata-list` discovery, method dispatch (`cn kata-run M0-gap --mode cdd` → `status:stub` bundle), and judge output (`cn kata-judge <bundle>` → `verdict:not-yet-implemented`). Every new command gated against regression.
+- **Identity format `role@cdd.project`** (34d78c5f): project-scoped, practice-namespaced (e.g. `alpha@cdd.cnos`, `beta@cdd.cnos`, `gamma@cdd.cnos`). Replaces `<hub>-<role>@cnos.xyz`. γ dispatch prompt accepts `Project:` instead of `Hub:`.
+- **CDD §1.4 role model**: dyad + coordinator — α implements, β reviews and releases, γ coordinates. α and β must be separate agents for substantial cycles; γ may be operator.
+- **CDD canonical/loader split** (461858a4): `docs/gamma/cdd/CDD.md` is canonical; `src/packages/cnos.cdd/skills/cdd/SKILL.md` is a loader pointing to it. One source of truth.
+- **CDD §4.4 skill-loading tiers**: Tier 1 (`cdd/` sub-skills, always) + Tier 2 (`eng/` general, always) + Tier 3 (issue-specific). Issue must name Tier 3 or α identifies from work shape pre-code.
+- **CDD §2.5b check 1**: rebase verification now required at ready-for-review time, not branch-creation (89a1b2f — MCA from PR #248 review finding).
+- **CDD §2.5b check 6**: schema/shape audit sharpened to reject addition-only shape verifications (MCA from PR #252 F2). Canonical-form introductions must also verify removal of any superseded form.
+- **α algorithm step 7**: subscribe to PR activity on open (89a1b2f — MCA from #248 close-out).
+- **γ algorithm**: triage uses CAP (MCA first, MCI only when no system change is available) (d545241).
+- **α/β close-outs feed γ cycle iteration**: close-outs are first-class artifacts, not optional notes (17302cb).
+- **Two kinds of MCI** (§11.12, eb47d19c): project-MCI (`.cdd/`) vs agent-MCI (hub threads) are distinct lifecycles.
+- **CDD sub-skill frontmatter normalized** (dde8b4f2): review/release/plan sub-skills have matching `artifact_class`/`governing_question`/`parent` fields. `governing_question` attributed to role (β for release, α for plan) (1c1fecf5).
 
 ## Removed
 
-- **`Registry.Available()`** — dead code after help always-list (#236).
-- **`scripts/kata/01-boot.sh`, `02-command.sh`, `03-roundtrip.sh`** — post-package behavior moved to Tier 2 (#237). Old `04-doctor.sh` rewritten for clean-hub validation.
+- **`cnos.kata/commands/kata-runtime/`**: superseded by unified `cn kata-run` (per-class dispatch via `--class runtime`).
+- **`cnos.cdd.kata/commands/`**: framework moved to `cnos.kata`. M0–M4 content relocated to package-root `katas/`.
+- **Stale `dist/packages/*-3.54.0.tar.gz` tarballs** (b2598463): locally-built tarballs committed by accident in 34d78c5 removed; committed tarballs are release-artifact-only, freshly rebuilt by CI.
+- **Legacy `Kata Class: method` prose** from `M0-gap/kata.md` and `M4-full-cycle/kata.md`: superseded by canonical `**Class:** method` discovery line; dual-source removed (PR #252 F2 fix).
 
 ## Validation
 
-- All 6 CI checks green on PR head (`go`, `kata-tier1`, Protocol contract schema sync I2, Package/source drift I1, 2× notify).
-- `go test ./...`, `go vet ./...` clean; updated `registry_test.go` and `doctor_test.go` pass.
-- `scripts/kata/run-all.sh` runs all 6 kata end-to-end on a freshly-built `cn` binary — first CI pass with the kata gate in place.
-- γ review (§2.0 contract gate, §2.2.13 invariants, §2.2.14 architecture check): 0 D/C findings; §2.2.14.G improved — degraded paths now visible via `○` glyph.
+- **CI green** on every PR in the bundle: `go` + `kata-tier1` + `kata-tier2` + `Package/source drift (I1)` + `Protocol contract schema sync (I2)` + release-notify (7/7 on all merged heads).
+- **All 8 stale-path findings from β review fixed** (d98b4dca).
+- **Tier 1 kata** (`scripts/kata/run-all.sh`) passes end-to-end on freshly-built `cn` in every CI run.
+- **Tier 2 kata** (`cn kata-run --class runtime`) passes on `cnos.kata` 0.2.0 installed into a fresh CI hub.
+- **Framework command surface** (`cn kata-list`, method dispatch, `cn kata-judge`) now CI-gated in `kata-tier2`.
+- **`cn build`** produces `cnos.core-3.55.0`, `cnos.cdd-3.55.0`, `cnos.eng-3.55.0`, `cnos.kata-0.2.0`, `cnos.cdd.kata-0.3.0` tarballs + index + checksums. Triggered fresh on tag push by release workflow.
+- **`scripts/check-version-consistency.sh`** green against VERSION=3.55.0.
+- **`cn cdd-verify --version 3.55.0 --triadic`** run before cycle-close.
 
 ## Known Issues
 
-- #237 — Tier 2 runtime/package kata (`cnos.kata`) — not yet implemented.
-- #238 — Release bootstrap / compatibility smoke — scope split from this cycle.
-- Role configuration: γ+β collapse per CDD §1.4 (operator-authorized two-agent-minimum). Review posted as PR comment (#239) rather than native GitHub review state due to shared author identity (review/SKILL.md §7.1).
+- #250 — `cn deps lock` vendors every package in the index (ignores `deps.json` pins). Pre-existing; surfaced by Tier 2 CI (CI test hub ends up with 8 packages when 3 were pinned; harmless for kata-tier2). Fix planned for next cycle.
+- #245 AC6 — `cn kata-judge` is an honest stub (`verdict:not-yet-implemented`). LLM-judge wiring is a separate cycle.
+- `pkg.FullPackageManifest.ContentClasses()` (declared-in-JSON: skills/commands/orchestrators/extensions/providers) and `pkgbuild.ContentClasses` (recognized-on-disk: 8 directory names) have divergent membership. Pre-existing; not introduced by this cycle. Convergence is a separate cycle if the display surface should show katas as a content class.
+- **Shared-GitHub-identity review pattern**: review artifacts post as PR comments (review/SKILL.md §7.1) instead of native review state. Will resolve when `.cdd/` Phase 2 (#242) replaces comment-state with `.cdd/releases/<ver>/beta/REVIEW-*.md`. Tracked; no new blocker.
+- **Direct-to-main CDD commits** (34d78c5 identity format, plus several skill patches): operator-authorized in real-time; retro-closure via this release's post-release assessment per CDD §3.7.
