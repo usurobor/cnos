@@ -86,8 +86,63 @@ jobs:
           export PATH="$PWD:$PATH"
           scripts/kata/run-all.sh
 
+  kata-tier2:
+    runs-on: ubuntu-latest
+    needs: [kata-tier1]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache-dependency-path: src/go/go.sum
+
+      - name: Build binary
+        working-directory: src/go
+        run: go build -o ../../cn ./cmd/cn
+
+      - name: Configure git identity
+        # Tier 2 creates hubs via `cn init`; several sub-kata exercise
+        # `cn doctor`, which requires a git user.name / user.email.
+        run: |
+          git config --global user.name "ci"
+          git config --global user.email "ci@cnos.local"
+
+      - name: Build packages
+        run: |
+          export PATH="$PWD:$PATH"
+          cn build
+
+      - name: Set up CI test hub (cnos.core + cnos.kata installed)
+        run: |
+          export PATH="$PWD:$PATH"
+          mkdir -p ci-tier2
+          cd ci-tier2
+          cn init ci-hub >/dev/null
+          cd cn-ci-hub
+          cn setup >/dev/null
+          cat > .cn/deps.json <<'JSON'
+          {
+            "schema": "cn.deps.v1",
+            "profile": "engineer",
+            "packages": {
+              "cnos.core": "3.54.0",
+              "cnos.kata": "0.1.0"
+            }
+          }
+          JSON
+          cn deps lock
+          cn deps restore
+
+      - name: Run Tier 2 kata
+        run: |
+          export PATH="$PWD:$PATH"
+          cd ci-tier2/cn-ci-hub
+          cn kata-runtime
+
   notify:
-    needs: [go, kata-tier1]
+    needs: [go, kata-tier1, kata-tier2]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -98,12 +153,13 @@ jobs:
         run: |
           if [ -z "$TG_BOT_TOKEN" ] || [ -z "$TG_CHAT_ID" ]; then exit 0; fi
           STATUS="${{ needs.go.result }}"
-          KATA="${{ needs.kata-tier1.result }}"
-          if [ "$STATUS" = "success" ] && [ "$KATA" = "success" ]; then
+          K1="${{ needs.kata-tier1.result }}"
+          K2="${{ needs.kata-tier2.result }}"
+          if [ "$STATUS" = "success" ] && [ "$K1" = "success" ] && [ "$K2" = "success" ]; then
             ICON="✅"
           else
             ICON="❌"
-            STATUS="$STATUS (kata: $KATA)"
+            STATUS="$STATUS (kata1: $K1, kata2: $K2)"
           fi
           REF="${{ github.head_ref || github.ref_name }}"
           MSG="$ICON CI $STATUS: ${{ github.repository }}@${REF}"
