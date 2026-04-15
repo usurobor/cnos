@@ -291,8 +291,8 @@ Check whether the change creates obligations on code it did not touch.
   - If the diff implicitly revises a constraint without naming the revision, that is a C-level finding.
   - If no project constraints document exists, skip this check.
   - ❌ "Diff looks correct" (adds a second package manifest type, violating a one-substrate invariant)
-  - ✅ "Diff adds `cn.provider.v1` manifest — INV-001 (one package substrate) would be violated. Either use `cn.extension.v1` or explicitly revise the constraint. D finding."
-  - ✅ "Diff moves doctor logic inline into cli/ — T boundary (cli/ owns dispatch) not yet a hard invariant but transition direction is away. C finding."
+  - ✅ "Diff adds a second manifest family — this violates one-package-substrate. D finding."
+  - ✅ "Diff moves doctor logic inline into cli/ — this moves away from the dispatch-only transition direction. C finding."
 
 2.2.14. **Architecture and design-principles check**
   - Use this check when the change touches any of:
@@ -404,11 +404,6 @@ The verdict is a function of the worst named incoherence.
   - ❌ "APPROVED" with Architecture Check showing "no" on surface separation
   - ✅ "REQUEST CHANGES — Architecture Check F (surface separation) failed. File redesign issue or reduce scope."
 
-2.3.7. **Close the search space on approval**
-  - Approval explicitly states that no remaining blocker was found in the relevant contract.
-  - ❌ "APPROVED"
-  - ✅ "APPROVED — I do not see a remaining blocker in the executor/sandbox contract"
-
 2.3.6. **Evidence depth matches claim strength**
   - When judging whether an AC is met, verify that the evidence depth matches the claim:
     - structural claim → unit/schema proof may suffice
@@ -417,7 +412,12 @@ The verdict is a function of the worst named incoherence.
   - ❌ "Predicate tests exist → runtime filtering AC met"
   - ✅ "Predicate tests prove the predicate; no integration test proves the queue/offset path"
 
-2.3.7. **Review divergence is a review-skill gap**
+2.3.7. **Close the search space on approval**
+  - Approval explicitly states that no remaining blocker was found in the relevant contract.
+  - ❌ "APPROVED"
+  - ✅ "APPROVED — I do not see a remaining blocker in the executor/sandbox contract"
+
+2.3.8. **Review divergence is a review-skill gap**
   - When two reviewers review the same PR and one catches findings the other missed, the divergence is a gap in this skill — not in the reviewer who missed it.
   - After identifying the divergence:
     1. Name which review-skill step, if followed, would have caught the missed finding
@@ -428,7 +428,7 @@ The verdict is a function of the worst named incoherence.
   - ❌ "I missed the stale cnos.pm reference — I'll look harder next time"
   - ✅ "I missed it because no review-skill step says to scan the full touched module for same-kind assumptions. Added §2.2.9 (module-truth audit). Adhoc thread: `20260328-review-divergence-pr130.md`."
 
-2.3.8. **Higher-leverage alternative check**
+2.3.9. **Higher-leverage alternative check**
   - A diff may be locally correct and still miss the more coherent system move.
   - Name that explicitly as a review note or finding when appropriate.
   - ❌ "Looks correct, approved" when the change repeats a known architectural pressure

@@ -76,7 +76,8 @@ Failure mode: plan restates the design instead of operationalizing it. Or: steps
 2.2.3. **Each step names files changed**
   - Reviewer can scope the diff before reading it
   - ❌ "Various files"
-  - ✅ "src/cmd/cn_deps.ml, test/cmd/cn_deps_test.ml"
+  - ✅ "`src/go/internal/deps/restore.go`, `src/go/internal/deps/restore_test.go`"
+  - ✅ "`src/packages/cnos.cdd/skills/cdd/CDD.md`, `src/packages/cnos.cdd/skills/cdd/SKILL.md`"
 
 2.2.4. **Order minimizes rework**
   - Substrate before consumers. Data model before logic. Logic before presentation.

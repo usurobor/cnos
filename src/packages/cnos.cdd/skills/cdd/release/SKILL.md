@@ -178,6 +178,9 @@ Failure mode: version drift — tag says X, binary says Y, agent reports Z. Or: 
     - artifact: tag / CHANGELOG / release artifact
     - skills loaded: release, plus writing if used
     - decision: released version X.Y.Z
+  - If the triadic protocol is active, β also writes:
+    - release / assessment evidence in the post-release artifact
+    - β close-out for γ to review in the `.cdd/` protocol surface
   - If the branch has no primary branch artifact, the PR body must carry the trace instead.
 
 ## 3. Rules
