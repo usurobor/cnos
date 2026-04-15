@@ -146,15 +146,16 @@ The prompt names the role, provides parameters, and points to the issue or PR. T
 
 1. Receive dispatch prompt from γ
 2. Configure git identity using the project name from the dispatch prompt: `git config user.name "alpha"` and `git config user.email "alpha@cdd.<project>"`
-3. Load CDD skill, load all Tier 1 + Tier 2 skills (§4.4), load Tier 3 skills from the issue
-4. Read the issue fully, read source files referenced in implementation guidance
-5. Implement: branch, code, tests, self-coherence
-6. Open PR (draft if CI unavailable locally), wait for CI green
-7. Subscribe to PR notifications
-8. Request review from β
-9. If β returns RC: fix findings, push, re-request review
-10. When β approves: write α close-out (cycle findings or "no findings")
-11. Done
+3. Subscribe to the issue (`gh issue edit <number> --add-assignee @me` or equivalent) so you receive PR and update notifications
+4. Load CDD skill, load all Tier 1 + Tier 2 skills (§4.4), load Tier 3 skills from the issue
+5. Read the issue fully, read source files referenced in implementation guidance
+6. Implement: branch, code, tests, self-coherence
+7. Open PR (draft if CI unavailable locally), wait for CI green
+8. Subscribe to PR notifications
+9. Request review from β
+10. If β returns RC: fix findings, push, re-request review
+11. When β approves: write α close-out (cycle findings or "no findings")
+12. Done
 
 **α close-out:** Report cycle-level learnings to γ. Concrete findings (skill gaps, process friction, things to mechanize) or "no new findings" — explicitly stated, not omitted. This is α's input to γ's cycle iteration decision (§9.1).
 
@@ -162,14 +163,15 @@ The prompt names the role, provides parameters, and points to the issue or PR. T
 
 1. Receive dispatch prompt from γ (or pick up from α's review request)
 2. Configure git identity using the project name from the dispatch prompt: `git config user.name "beta"` and `git config user.email "beta@cdd.<project>"`
-3. Load CDD skill, load all Tier 1 + Tier 2 skills (§4.4), load Tier 3 skills from the issue
-4. Read the PR diff, read the issue
-5. Review: produce CR with findings per review skill, or approve
-6. If RC: post findings as PR comment, wait for α's fix
-7. If A: merge, tag, deploy per release skill
-8. Write post-release assessment per post-release skill
-9. Write β close-out (cycle findings or "no findings")
-10. Done when assessment and close-out are committed
+3. Subscribe to the issue and PR (`gh issue edit <number> --add-assignee @me`, subscribe to PR) so you receive update notifications
+4. Load CDD skill, load all Tier 1 + Tier 2 skills (§4.4), load Tier 3 skills from the issue
+5. Read the PR diff, read the issue
+6. Review: produce CR with findings per review skill, or approve
+7. If RC: post findings as PR comment, wait for α's fix
+8. If A: merge, tag, deploy per release skill
+9. Write post-release assessment per post-release skill
+10. Write β close-out (cycle findings or "no findings")
+11. Done when assessment and close-out are committed
 
 **β close-out:** Report cycle-level learnings to γ. Concrete findings (review pattern issues, skill gaps, process friction, §3.7 violations, things to mechanize) or "no new findings" — explicitly stated, not omitted. This is β's input to γ's cycle iteration decision (§9.1).
 
