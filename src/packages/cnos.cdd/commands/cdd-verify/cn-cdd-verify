@@ -1,0 +1,280 @@
+#!/usr/bin/env bash
+# cn-cdd-verify — verify CDD cycle artifact completeness.
+#
+# Checks that all required artifacts exist for a given cycle.
+# Designed for γ to run at cycle-close before declaring done.
+#
+# Usage:
+#   cn cdd-verify --version <ver>              check release-scoped cycle
+#   cn cdd-verify --pr <number>                check PR-scoped cycle (no release)
+#   cn cdd-verify --version <ver> --triadic    also check .cdd/ artifacts
+#
+# Exit 0 if all checks pass; non-zero on missing artifacts.
+
+set -euo pipefail
+
+VERSION=""
+PR=""
+TRIADIC=false
+REPO_ROOT=""
+
+usage() {
+  cat >&2 <<EOF
+Usage:
+  cn cdd-verify --version <ver>              release-scoped cycle
+  cn cdd-verify --pr <number>                PR-scoped cycle (no release)
+  cn cdd-verify --version <ver> --triadic    include .cdd/ artifact checks
+
+Checks:
+  Core (always):
+    - PR exists and is merged
+    - α close-out present (PR comment or .cdd/)
+    - β close-out present (PR comment or .cdd/)
+
+  Release-scoped (--version):
+    - CHANGELOG contains version entry
+    - Git tag exists
+    - Post-release assessment exists
+
+  Triadic (--triadic):
+    - .cdd/releases/<ver>/gamma/ directory exists
+    - .cdd/releases/<ver>/gamma/CLOSE-OUT.md exists
+    - .cdd/releases/<ver>/gamma/KATA-VERDICT.md exists (if kata is available)
+EOF
+  exit 1
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --version) VERSION="$2"; shift 2 ;;
+    --pr) PR="$2"; shift 2 ;;
+    --triadic) TRIADIC=true; shift ;;
+    -h|--help) usage ;;
+    *) echo "Unknown option: $1" >&2; usage ;;
+  esac
+done
+
+if [[ -z "$VERSION" && -z "$PR" ]]; then
+  echo "Error: must specify --version or --pr" >&2
+  usage
+fi
+
+# Find repo root
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || {
+  echo "Error: not in a git repository" >&2
+  exit 1
+}
+
+PASS=0
+FAIL=0
+WARN=0
+
+check() {
+  local label="$1"
+  local result="$2"  # pass|fail|warn
+  local detail="${3:-}"
+
+  case "$result" in
+    pass)
+      PASS=$((PASS + 1))
+      printf "  ✅ %s" "$label"
+      ;;
+    fail)
+      FAIL=$((FAIL + 1))
+      printf "  ❌ %s" "$label"
+      ;;
+    warn)
+      WARN=$((WARN + 1))
+      printf "  ⚠️  %s" "$label"
+      ;;
+  esac
+  if [[ -n "$detail" ]]; then
+    printf " — %s" "$detail"
+  fi
+  printf "\n"
+}
+
+# --- Core checks (always) ---
+
+echo "## Core artifacts"
+
+# PR check
+if [[ -n "$PR" ]]; then
+  PR_NUM="$PR"
+else
+  # Try to find PR for this version via git log
+  PR_NUM=""
+  if command -v gh &>/dev/null; then
+    PR_NUM=$(gh pr list --state merged --search "$VERSION" --json number -q '.[0].number' 2>/dev/null || echo "")
+  fi
+fi
+
+if [[ -n "$PR_NUM" ]]; then
+  # Check PR is merged
+  PR_STATE=$(gh pr view "$PR_NUM" --json state -q '.state' 2>/dev/null || echo "UNKNOWN")
+  if [[ "$PR_STATE" == "MERGED" ]]; then
+    check "PR #${PR_NUM} merged" pass
+  elif [[ "$PR_STATE" == "UNKNOWN" ]]; then
+    check "PR #${PR_NUM} state" warn "could not query (gh auth?)"
+  else
+    check "PR #${PR_NUM} merged" fail "state: $PR_STATE"
+  fi
+
+  # Check for α close-out in PR comments
+  if command -v gh &>/dev/null; then
+    ALPHA_CLOSEOUT=$(gh pr view "$PR_NUM" --json comments -q '.comments[].body' 2>/dev/null | grep -ci "close-out\|closeout\|close out\|cycle.finding\|no.new.finding\|no findings" || true)
+    ALPHA_CLOSEOUT="${ALPHA_CLOSEOUT:-0}"
+    if [[ "$ALPHA_CLOSEOUT" -gt 0 ]]; then
+      check "α close-out" pass "found in PR comments"
+    else
+      # Check .cdd/ if triadic
+      if [[ "$TRIADIC" == true && -n "$VERSION" ]]; then
+        ALPHA_CDD="$REPO_ROOT/.cdd/releases/$VERSION/alpha"
+        if [[ -d "$ALPHA_CDD" ]] && ls "$ALPHA_CDD"/*CLOSE* &>/dev/null 2>&1; then
+          check "α close-out" pass "found in .cdd/"
+        else
+          check "α close-out" fail "not found in PR comments or .cdd/"
+        fi
+      else
+        check "α close-out" warn "not found in PR comments (check manually)"
+      fi
+    fi
+
+    BETA_CLOSEOUT=$(gh pr view "$PR_NUM" --json comments -q '.comments[].body' 2>/dev/null | grep -ci "close-out\|closeout\|close out\|cycle.finding\|no.new.finding\|no findings\|assessment" || true)
+    BETA_CLOSEOUT="${BETA_CLOSEOUT:-0}"
+    if [[ "$BETA_CLOSEOUT" -gt 0 ]]; then
+      check "β close-out" pass "found in PR comments"
+    else
+      if [[ "$TRIADIC" == true && -n "$VERSION" ]]; then
+        BETA_CDD="$REPO_ROOT/.cdd/releases/$VERSION/beta"
+        if [[ -d "$BETA_CDD" ]] && ls "$BETA_CDD"/*CLOSE* &>/dev/null 2>&1; then
+          check "β close-out" pass "found in .cdd/"
+        else
+          check "β close-out" fail "not found in PR comments or .cdd/"
+        fi
+      else
+        check "β close-out" warn "not found in PR comments (check manually)"
+      fi
+    fi
+  else
+    check "α close-out" warn "gh CLI not available"
+    check "β close-out" warn "gh CLI not available"
+  fi
+else
+  check "PR identification" warn "could not determine PR number"
+fi
+
+# --- Release-scoped checks ---
+
+if [[ -n "$VERSION" ]]; then
+  echo ""
+  echo "## Release artifacts (v${VERSION})"
+
+  # CHANGELOG
+  if [[ -f "$REPO_ROOT/CHANGELOG.md" ]]; then
+    if grep -q "$VERSION" "$REPO_ROOT/CHANGELOG.md"; then
+      check "CHANGELOG entry" pass
+    else
+      check "CHANGELOG entry" fail "version $VERSION not found in CHANGELOG.md"
+    fi
+  else
+    check "CHANGELOG entry" warn "no CHANGELOG.md found"
+  fi
+
+  # Git tag
+  if git tag -l "v${VERSION}" "$VERSION" 2>/dev/null | grep -q .; then
+    check "Git tag" pass
+  else
+    check "Git tag" fail "neither v${VERSION} nor ${VERSION} tag exists"
+  fi
+
+  # Post-release assessment
+  ASSESSMENT_PATHS=(
+    "$REPO_ROOT/.cdd/releases/$VERSION/beta/POST-RELEASE-ASSESSMENT.md"
+    "$REPO_ROOT/.cdd/releases/$VERSION/beta/ASSESSMENT.md"
+    "$REPO_ROOT/docs/gamma/cdd/$VERSION/POST-RELEASE-ASSESSMENT.md"
+  )
+  ASSESSMENT_FOUND=false
+  for p in "${ASSESSMENT_PATHS[@]}"; do
+    if [[ -f "$p" ]]; then
+      check "Post-release assessment" pass "$(basename "$(dirname "$p")")/$(basename "$p")"
+      ASSESSMENT_FOUND=true
+      break
+    fi
+  done
+  if [[ "$ASSESSMENT_FOUND" == false ]]; then
+    check "Post-release assessment" fail "not found in any expected location"
+  fi
+fi
+
+# --- Triadic checks ---
+
+if [[ "$TRIADIC" == true && -n "$VERSION" ]]; then
+  echo ""
+  echo "## Triadic protocol artifacts (.cdd/)"
+
+  CDD_DIR="$REPO_ROOT/.cdd/releases/$VERSION"
+
+  if [[ -d "$CDD_DIR/gamma" ]]; then
+    check "gamma/ directory" pass
+  else
+    check "gamma/ directory" fail "$CDD_DIR/gamma/ does not exist"
+  fi
+
+  if [[ -f "$CDD_DIR/gamma/CLOSE-OUT.md" ]]; then
+    check "γ CLOSE-OUT.md" pass
+  else
+    check "γ CLOSE-OUT.md" fail
+  fi
+
+  if [[ -f "$CDD_DIR/gamma/KATA-VERDICT.md" ]]; then
+    check "γ KATA-VERDICT.md" pass
+  else
+    # Only warn — kata may not be available
+    check "γ KATA-VERDICT.md" warn "not found (kata may not have run)"
+  fi
+
+  # Check alpha/beta dirs if they should exist
+  if [[ -d "$CDD_DIR/alpha" ]]; then
+    check "alpha/ directory" pass
+    if ls "$CDD_DIR/alpha/"*SELF-COHERENCE* &>/dev/null 2>&1; then
+      check "α SELF-COHERENCE.md" pass
+    else
+      check "α SELF-COHERENCE.md" warn "not found in .cdd/ (may be in PR)"
+    fi
+  fi
+
+  if [[ -d "$CDD_DIR/beta" ]]; then
+    check "beta/ directory" pass
+    if ls "$CDD_DIR/beta/"*REVIEW* &>/dev/null 2>&1; then
+      check "β REVIEW artifact" pass
+    else
+      check "β REVIEW artifact" warn "not found in .cdd/ (may be in PR comments)"
+    fi
+    if ls "$CDD_DIR/beta/"*ASSESSMENT* &>/dev/null 2>&1; then
+      check "β ASSESSMENT" pass
+    else
+      check "β ASSESSMENT" warn "not found in .cdd/"
+    fi
+  fi
+fi
+
+# --- Summary ---
+
+echo ""
+TOTAL=$((PASS + FAIL + WARN))
+echo "## Summary: $PASS passed, $FAIL failed, $WARN warnings (${TOTAL} total)"
+
+if [[ $FAIL -gt 0 ]]; then
+  echo ""
+  echo "❌ Cycle artifact verification FAILED"
+  exit 1
+elif [[ $WARN -gt 0 ]]; then
+  echo ""
+  echo "⚠️  Cycle artifact verification PASSED with warnings"
+  exit 0
+else
+  echo ""
+  echo "✅ Cycle artifact verification PASSED"
+  exit 0
+fi

@@ -6,6 +6,12 @@
   "engines": {
     "cnos": "3.54.0"
   },
+  "commands": {
+    "cdd-verify": {
+      "entrypoint": "commands/cdd-verify/cn-cdd-verify",
+      "summary": "Verify CDD cycle artifact completeness (γ runs at cycle-close)"
+    }
+  },
   "skills": {
     "exposed": [
       "cdd"
