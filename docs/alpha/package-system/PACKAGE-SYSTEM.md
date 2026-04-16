@@ -74,7 +74,7 @@ The build system uses two copy strategies:
 - **Individual file copy**: Used by doctrine (when named), mindsets, and templates.
   Each declared entry is a single file name relative to the package's class directory.
 
-- **Directory tree copy**: Used by skills, extensions, commands, and orchestrators.
+- **Directory tree copy**: Used by skills, extensions, commands, orchestrators, and katas.
   Each declared entry is a directory path. The entire subtree is copied recursively.
 
 Doctrine has a special case: `"*"` copies all `.md` files (wildcard mode).
