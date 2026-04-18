@@ -43,7 +43,7 @@ It expands those steps into executable checks, evidence, and gates.
 
 ## Step map
 
-- Step 1 → observe + select (`§2.1–§2.2`)
+- Step 1a → observe and build candidates (`§2.1`), Step 1b → select and size (`§2.2`)
 - Step 2 → issue pack + issue-quality gate (`§2.3–§2.4`)
 - Steps 3–5 → dispatch + unblocking (`§2.5`)
 - Steps 6–7 → deferred release mechanics (`§2.6`)
@@ -92,7 +92,7 @@ Close-out converts cycle findings into immediate fixes or committed next work.
 
 ## 2. Unfold
 
-### 2.1. Step 1 — Observe and build candidates
+### 2.1. Step 1a — Observe and build candidates
 
 Before selecting work, read the observation surfaces required by `CDD.md`:
 1. CHANGELOG TSC table
@@ -113,7 +113,7 @@ Do not select from memory or preference alone.
 - ❌ "I remember issue #143 felt important"
 - ✅ "Candidate table shows #143 is selected under CDD §3.x for a named reason"
 
-### 2.2. Step 1 — Select by `CDD.md`, then size the intervention
+### 2.2. Step 1b — Select by `CDD.md`, then size the intervention
 
 Apply `CDD.md` §3 in order.
 Do **not** restate or reorder the rule list here.
