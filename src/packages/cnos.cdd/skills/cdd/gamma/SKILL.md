@@ -141,7 +141,7 @@ A dispatchable γ issue is:
 - **plus** dependency notes when sequencing or blockers are real
 
 γ does not restate Tier 1 or Tier 2 skills in the issue.
-γ does name Tier 3 skills, active invariants, related artifacts, non-goals, and priority exactly as `issue/SKILL.md` requires.
+γ does name Tier 3 skills, active design constraints, related artifacts, non-goals, and priority exactly as `issue/SKILL.md` requires.
 
 If the issue cannot be written to that level, the work is not ready for α dispatch.
 
@@ -156,7 +156,7 @@ Before dispatch, verify:
 - every noun in ACs and work items is in scope
 - non-goals exist when the issue is substantial
 - Tier 3 skills are named explicitly
-- active invariants are linked and stated plainly
+- active design constraints are linked and stated plainly
 - related artifacts are linked or explicitly absent
 - priority is stated
 - work-shape is stated
@@ -378,7 +378,7 @@ Rewrite it into a dispatchable γ issue pack.
 - numbered ACs
 - non-goals
 - Tier 3 skills
-- active invariants
+- active design constraints
 - related artifacts
 - priority
 - work-shape note
