@@ -129,15 +129,54 @@ func TestParseFrontmatter_UnrecognisedKeys(t *testing.T) {
 	}
 }
 
-// Inline triggers list is not supported — warned and left empty.
-func TestParseFrontmatter_InlineTriggersIgnored(t *testing.T) {
+// Inline triggers list (YAML flow sequence) is the dominant format
+// in production (42 of 52 SKILL.md files in src/packages/ use this
+// form). Round-trips to a []string with per-item whitespace trimming.
+func TestParseFrontmatter_InlineTriggersSupported(t *testing.T) {
 	src := "---\n" +
-		"name: demo\n" +
-		"triggers: [a, b]\n" +
+		"name: ca-conduct\n" +
+		"triggers: [conduct, boundary, ethics, trust, behavior]\n" +
 		"---\n"
 	fm := ParseFrontmatter([]byte(src))
+	want := []string{"conduct", "boundary", "ethics", "trust", "behavior"}
+	if !reflect.DeepEqual(fm.Triggers, want) {
+		t.Errorf("triggers = %v, want %v", fm.Triggers, want)
+	}
+}
+
+// Inline triggers tolerate whitespace around brackets and commas, and
+// an empty flow sequence "[]" yields no triggers (still a valid empty
+// list — distinguishable from "absent", which also yields empty
+// Triggers but would have no `triggers:` key parsed at all).
+func TestParseFrontmatter_InlineTriggersWhitespace(t *testing.T) {
+	cases := []struct {
+		name  string
+		value string
+		want  []string
+	}{
+		{"spaces-around-items", "[ a , b ,c ]", []string{"a", "b", "c"}},
+		{"empty-list", "[]", nil},
+		{"empty-list-with-space", "[  ]", nil},
+		{"single-item", "[only]", []string{"only"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			src := "---\nname: t\ntriggers: " + tc.value + "\n---\n"
+			fm := ParseFrontmatter([]byte(src))
+			if !reflect.DeepEqual(fm.Triggers, tc.want) {
+				t.Errorf("triggers = %v, want %v", fm.Triggers, tc.want)
+			}
+		})
+	}
+}
+
+// A malformed inline value (missing bracket) is neither a scalar nor
+// a valid flow sequence; parser warns and leaves triggers empty.
+func TestParseFrontmatter_InlineTriggersMalformed(t *testing.T) {
+	src := "---\nname: t\ntriggers: [unterminated\n---\n"
+	fm := ParseFrontmatter([]byte(src))
 	if len(fm.Triggers) != 0 {
-		t.Errorf("triggers = %v, want empty (inline unsupported)", fm.Triggers)
+		t.Errorf("triggers = %v, want empty (malformed inline)", fm.Triggers)
 	}
 }
 

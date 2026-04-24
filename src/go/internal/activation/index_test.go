@@ -9,6 +9,28 @@ import (
 	"testing"
 )
 
+// findRepoRoot walks up from the current working directory looking
+// for go.mod, then returns the repo root (two levels above go/).
+// Kept local to index_test.go to avoid coupling across test files.
+func findRepoRoot(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			// dir is src/go/; repo root is two levels up.
+			return filepath.Dir(filepath.Dir(dir))
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatal("could not find repo root")
+		}
+		dir = parent
+	}
+}
+
 // installSkill writes a SKILL.md for the given (package, skill id,
 // frontmatter body). The skill id is interpreted as a path relative to
 // <pkg>/skills/ and may contain forward slashes for nested skills.
@@ -178,6 +200,124 @@ func TestDiscover_DeterministicOrder(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("order = %v, want %v", got, want)
 	}
+}
+
+// Integration test against the real SKILL.md corpus: install an
+// unmodified cnos.core skill into a temp hub and verify Discover
+// parses its inline triggers. This is the regression β called out
+// after the initial PR landed: the parser's inline-list gap surfaces
+// as "skill X has no triggers" in doctor against a freshly restored
+// hub because 81% of production SKILL.md files use inline form.
+func TestDiscover_RealCoreSkills_HaveTriggers(t *testing.T) {
+	repoRoot := findRepoRoot(t)
+	realSkill := filepath.Join(repoRoot, "src", "packages", "cnos.core",
+		"skills", "agent", "ca-conduct", "SKILL.md")
+	data, err := os.ReadFile(realSkill)
+	if err != nil {
+		t.Skipf("real skill not present at %s: %v", realSkill, err)
+	}
+
+	hub := t.TempDir()
+	dst := filepath.Join(hub, ".cn", "vendor", "packages", "cnos.core",
+		"skills", "agent", "ca-conduct", "SKILL.md")
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(dst, data, 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	skills := Discover(hub)
+	if len(skills) != 1 {
+		t.Fatalf("len = %d, want 1", len(skills))
+	}
+	if skills[0].SkillID != "agent/ca-conduct" {
+		t.Errorf("skill id = %q, want agent/ca-conduct", skills[0].SkillID)
+	}
+	if len(skills[0].Frontmatter.Triggers) == 0 {
+		t.Errorf("triggers empty — parser did not consume the real SKILL.md's %q line",
+			"triggers: [...]")
+	}
+
+	// The same skill must not trip the doctor empty-triggers check.
+	issues := Validate(hub)
+	for _, iss := range issues {
+		if iss.Kind == IssueEmptyTriggers {
+			t.Errorf("unexpected empty-triggers issue for real skill: %s", iss.Message)
+		}
+	}
+}
+
+// Integration test against the full skill corpus: copy every
+// src/packages/*/skills/**/SKILL.md into a temp hub and run Validate.
+// Expects no IssueEmptyTriggers — every real skill declares triggers
+// in some form (inline or block). This is the Go-level equivalent of
+// β's required negative regression "skill activation check reports
+// all skills valid against the real cnos.core/cnos.cdd corpus".
+func TestValidate_RealCorpus_NoEmptyTriggers(t *testing.T) {
+	repoRoot := findRepoRoot(t)
+	srcPackages := filepath.Join(repoRoot, "src", "packages")
+	pkgEntries, err := os.ReadDir(srcPackages)
+	if err != nil {
+		t.Skipf("no src/packages at %s: %v", srcPackages, err)
+	}
+
+	hub := t.TempDir()
+	vendorPkgs := filepath.Join(hub, ".cn", "vendor", "packages")
+	copied := 0
+	for _, pe := range pkgEntries {
+		if !pe.IsDir() {
+			continue
+		}
+		srcSkills := filepath.Join(srcPackages, pe.Name(), "skills")
+		if _, err := os.Stat(srcSkills); err != nil {
+			continue
+		}
+		dstSkills := filepath.Join(vendorPkgs, pe.Name(), "skills")
+		if err := os.MkdirAll(dstSkills, 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		err := filepath.Walk(srcSkills, func(path string, info os.FileInfo, err error) error {
+			if err != nil || info.IsDir() {
+				return err
+			}
+			rel, err := filepath.Rel(srcSkills, path)
+			if err != nil {
+				return err
+			}
+			dst := filepath.Join(dstSkills, rel)
+			if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+				return err
+			}
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			if filepath.Base(path) == "SKILL.md" {
+				copied++
+			}
+			return os.WriteFile(dst, data, 0o644)
+		})
+		if err != nil {
+			t.Fatalf("copy %s: %v", pe.Name(), err)
+		}
+	}
+	if copied == 0 {
+		t.Skip("no SKILL.md files copied — skipping corpus check")
+	}
+
+	issues := Validate(hub)
+	for _, iss := range issues {
+		if iss.Kind == IssueEmptyTriggers {
+			t.Errorf("empty-triggers against real corpus: %s", iss.Message)
+		}
+	}
+	// Log conflict/missing counts for visibility; they are not part of
+	// this test's contract (conflicts legitimately happen if the corpus
+	// itself has duplicate trigger keywords, which is a corpus problem
+	// rather than a parser problem).
+	t.Logf("real-corpus validation: %d skills copied, %d issues surfaced",
+		copied, len(issues))
 }
 
 // --- AC3 activation index (public filter) ---

@@ -60,11 +60,12 @@ func (f Frontmatter) IsPublic() bool {
 // zero-valued Frontmatter or a partially populated record. Malformed
 // lines are logged via slog.Warn and skipped.
 //
-// Supported grammar (mirrors Cn_frontmatter.parse_frontmatter):
+// Supported grammar:
 //   - --- markers delimit the frontmatter block (both required)
 //   - "key: value" sets a scalar
+//   - "key: [a, b, c]" sets an inline flow-sequence list (bare items,
+//     comma-separated, whitespace trimmed; quoted items not supported)
 //   - "key:" followed by indented "- item" lines builds a block list
-//   - inline lists (key: [a, b]) are not supported
 func ParseFrontmatter(data []byte) Frontmatter {
 	block, ok := extractBlock(splitLines(data))
 	if !ok {
@@ -73,19 +74,18 @@ func ParseFrontmatter(data []byte) Frontmatter {
 
 	var fm Frontmatter
 	var pendingListKey string
-	var triggersAcc []string
+	var pendingItems []string
 
 	flushList := func() {
-		// Only `triggers` is materialised today. Other keys can legally
-		// open a block list (any "key:" with no value sets pendingListKey),
-		// but their items are accumulated in triggersAcc and discarded
-		// here. When a new field that wants block-list semantics is
-		// added (e.g. `aliases:`), extend this switch.
-		if pendingListKey == "triggers" {
-			fm.Triggers = triggersAcc
+		// Dispatch on which key opened this block list. Adding a new
+		// block-list-capable field (e.g. `aliases:`) means adding one
+		// case here — nothing else in the loop changes.
+		switch pendingListKey {
+		case "triggers":
+			fm.Triggers = pendingItems
 		}
 		pendingListKey = ""
-		triggersAcc = nil
+		pendingItems = nil
 	}
 
 	for _, line := range block {
@@ -93,7 +93,7 @@ func ParseFrontmatter(data []byte) Frontmatter {
 			continue
 		}
 		if isListItem(line) && pendingListKey != "" {
-			triggersAcc = append(triggersAcc, listItemValue(line))
+			pendingItems = append(pendingItems, listItemValue(line))
 			continue
 		}
 		flushList()
@@ -115,12 +115,43 @@ func ParseFrontmatter(data []byte) Frontmatter {
 		case "visibility":
 			fm.Visibility = value
 		case "triggers":
-			slog.Warn("activation: inline triggers list not supported; use block list",
-				slog.String("value", value))
+			items, ok := parseInlineList(value)
+			if !ok {
+				slog.Warn("activation: malformed inline triggers list",
+					slog.String("value", value))
+				continue
+			}
+			fm.Triggers = items
 		}
 	}
 	flushList()
 	return fm
+}
+
+// parseInlineList parses a YAML flow-sequence value like "[a, b, c]".
+// Returns (items, true) on success and (nil, false) if the value does
+// not begin with '[' and end with ']'. Items are bare strings split on
+// commas and trimmed; empty "[]" yields a nil slice. Quoted items and
+// nested sequences are not supported — production SKILL.md files use
+// only bare identifiers.
+func parseInlineList(value string) ([]string, bool) {
+	if len(value) < 2 || value[0] != '[' || value[len(value)-1] != ']' {
+		return nil, false
+	}
+	inner := strings.TrimSpace(value[1 : len(value)-1])
+	if inner == "" {
+		return nil, true
+	}
+	parts := strings.Split(inner, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		item := strings.TrimSpace(p)
+		if item == "" {
+			continue
+		}
+		out = append(out, item)
+	}
+	return out, true
 }
 
 // splitLines splits on \n, accepting either \n or \r\n line endings.
