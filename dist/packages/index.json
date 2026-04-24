@@ -12,7 +12,7 @@
       },
       "3.57.0": {
         "url": "cnos.cdd-3.57.0.tar.gz",
-        "sha256": "1f2fb72807ae598dc78be66e4f323c0051b7191e3728b932afe60bf921b37349"
+        "sha256": "5355963a96f9048cfc7bc821186a281a9b5e9fd63160a4edf2f64ec1c3bfa054"
       }
     },
     "cnos.cdd.kata": {
