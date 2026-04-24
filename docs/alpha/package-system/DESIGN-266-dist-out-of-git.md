@@ -85,7 +85,7 @@ This is the same assumption the code already holds about binaries (`cn` is not c
 
 The change touches one rule: *"dist/ is build output, never committed."* That rule must:
 - appear in `.gitignore` (currently absent),
-- be enforced by removing tracked files (currently 9 tarballs + 2 metadata files),
+- be enforced by removing tracked files (currently 8 tarballs + 2 metadata files),
 - stop being checked by the I3 drift gate (becomes vacuous / misleading),
 - be reflected as accomplished-migration in `BUILD-AND-DIST.md`,
 - not contradict anything else that already describes `cn build` as producing `dist/packages/` (it doesn't — producing ≠ committing).
@@ -184,7 +184,7 @@ Choice rationale: A is the only candidate that makes the failure class *structur
 
 ## Process Cost / Automation Boundary
 
-- **One-time adoption cost:** 11 files removed from git, 1 line added to `.gitignore`, 1 CI job removed, ~10 lines of doc updated. No ongoing cost — the change removes process rather than adds.
+- **One-time adoption cost:** 10 files removed from git, `.gitignore` rule broadened from `dist/bin/` to `dist/` (+2 lines net, with explanatory comment), 1 CI job removed, ~10 lines of doc updated. No ongoing cost — the change removes process rather than adds.
 - **Ongoing cost:** zero. The gitignore rule is passive. `cn build` already runs in CI and locally in the existing flows that need dist/.
 - **Consumer of the removed I3 job:** nobody post-change. I3's function (catching authored-dist/ drift) dissolves because authored-dist/ stops existing.
 - **Automation boundary:** `.gitignore` + commit removal is 100% mechanical. No discipline, checklist, or reviewer gate is required to enforce "don't commit dist/" — git itself silently drops the path.
