@@ -160,6 +160,61 @@ func TestFreshHubLifecycleChecksAreInfo(t *testing.T) {
 	}
 }
 
+// TestSkillActivationCheck_PassEmpty: no installed packages means
+// no skill activation problems; the check passes.
+func TestSkillActivationCheck_PassEmpty(t *testing.T) {
+	hub := makeTestHub(t)
+	checks := RunAll(context.Background(), hub, "3.48.0", nil)
+
+	found := false
+	for _, ch := range checks {
+		if ch.Name == "skill activation" {
+			found = true
+			if ch.Status != StatusPass {
+				t.Errorf("skill activation on empty hub: status=%d value=%q, want StatusPass",
+					ch.Status, ch.Value)
+			}
+		}
+	}
+	if !found {
+		t.Error("expected 'skill activation' check in results")
+	}
+}
+
+// TestSkillActivationCheck_FailsOnTriggerConflict: two packages claim
+// the same trigger keyword from distinct skill ids → StatusFail.
+func TestSkillActivationCheck_FailsOnTriggerConflict(t *testing.T) {
+	hub := makeTestHub(t)
+	writeSkill := func(pkg, skillID, body string) {
+		path := filepath.Join(hub, ".cn", "vendor", "packages", pkg,
+			"skills", skillID, "SKILL.md")
+		os.MkdirAll(filepath.Dir(path), 0o755)
+		os.WriteFile(path, []byte(body), 0o644)
+	}
+	writeSkill("cnos.a", "first",
+		"---\nname: first\ntriggers:\n  - shared\n---\n")
+	writeSkill("cnos.b", "second",
+		"---\nname: second\ntriggers:\n  - shared\n---\n")
+
+	checks := RunAll(context.Background(), hub, "3.48.0", nil)
+
+	found := false
+	for _, ch := range checks {
+		if ch.Name == "skill activation" {
+			found = true
+			if ch.Status != StatusFail {
+				t.Errorf("status = %d, want StatusFail", ch.Status)
+			}
+			if !strings.Contains(ch.Value, "conflict") || !strings.Contains(ch.Value, "shared") {
+				t.Errorf("value = %q, want to mention conflict + 'shared' trigger", ch.Value)
+			}
+		}
+	}
+	if !found {
+		t.Error("expected 'skill activation' check in results")
+	}
+}
+
 func makeTestHub(t *testing.T) string {
 	t.Helper()
 	hub := t.TempDir()

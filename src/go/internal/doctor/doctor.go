@@ -24,6 +24,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/usurobor/cnos/src/go/internal/activation"
 )
 
 // Status classifies a CheckResult.
@@ -101,6 +103,12 @@ func RunAll(ctx context.Context, hubPath, version string, commandIssues []Comman
 
 	// Command integrity — broken vendor commands are fatal.
 	checks = append(checks, checkCommandIntegrity(commandIssues))
+
+	// Skill activation — malformed frontmatter, empty triggers, or
+	// triggers shared across distinct skill ids are fatal because they
+	// render the activation index ambiguous. Reports pass when no
+	// skills are installed yet (legitimate pre-restore state).
+	checks = append(checks, checkSkillActivation(hubPath))
 
 	// Runtime contract — generated at wake; legitimately pending before
 	// the first wake. A present-but-malformed contract is fatal.
@@ -363,6 +371,26 @@ func ValidateCommands(descs []CommandDescriptor) []CommandIssue {
 	}
 
 	return issues
+}
+
+func checkSkillActivation(hubPath string) CheckResult {
+	issues := activation.Validate(hubPath)
+	if len(issues) == 0 {
+		return CheckResult{
+			Name:   "skill activation",
+			Status: StatusPass,
+			Value:  "all skills valid",
+		}
+	}
+	msgs := make([]string, len(issues))
+	for i, iss := range issues {
+		msgs[i] = fmt.Sprintf("[%s] %s", activation.IssueKindLabel(iss.Kind), iss.Message)
+	}
+	return CheckResult{
+		Name:   "skill activation",
+		Status: StatusFail,
+		Value:  fmt.Sprintf("%d issue(s): %s", len(issues), strings.Join(msgs, "; ")),
+	}
 }
 
 func checkCommandIntegrity(issues []CommandIssue) CheckResult {
