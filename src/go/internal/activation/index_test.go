@@ -497,24 +497,41 @@ func TestValidate_SelfTriggersNotConflict(t *testing.T) {
 	}
 }
 
-// Visibility does not affect conflict detection: an internal skill
-// that shares a trigger keyword with a public skill still conflicts.
-func TestValidate_InternalTriggersStillConflict(t *testing.T) {
+// Internal skills are excluded from trigger-conflict detection: they
+// never surface in the public activation index (see BuildIndex), so
+// an internal sub-skill sharing a trigger keyword with its parent
+// orchestrator is intentional delegation, not ambiguity. Mirrors the
+// OCaml-era semantic where validate iterated only manifest-exposed
+// (public) skill IDs.
+func TestValidate_InternalDoesNotConflictWithPublic(t *testing.T) {
 	hub := t.TempDir()
-	installSkill(t, hub, "cnos.cdd", "cdd/alpha",
-		"---\nname: alpha\nvisibility: internal\ntriggers:\n  - shared\n---\n")
-	installSkill(t, hub, "cnos.core", "other",
-		"---\nname: other\ntriggers:\n  - shared\n---\n")
+	installSkill(t, hub, "cnos.cdd", "cdd",
+		"---\nname: cdd\ntriggers:\n  - review\n---\n")
+	installSkill(t, hub, "cnos.cdd", "cdd/review",
+		"---\nname: review\nvisibility: internal\ntriggers:\n  - review\n---\n")
 
 	issues := Validate(hub)
-	saw := false
 	for _, i := range issues {
-		if i.Kind == IssueTriggerConflict && strings.Contains(i.Message, "shared") {
-			saw = true
+		if i.Kind == IssueTriggerConflict {
+			t.Errorf("unexpected conflict between public orchestrator and internal sub-skill: %s", i.Message)
 		}
 	}
-	if !saw {
-		t.Errorf("expected trigger conflict between internal and public skills, got %v", issues)
+}
+
+// Two internal skills sharing a trigger do not conflict either —
+// neither is publicly addressable.
+func TestValidate_TwoInternalDoNotConflict(t *testing.T) {
+	hub := t.TempDir()
+	installSkill(t, hub, "cnos.cdd", "cdd/a",
+		"---\nname: a\nvisibility: internal\ntriggers:\n  - shared\n---\n")
+	installSkill(t, hub, "cnos.cdd", "cdd/b",
+		"---\nname: b\nvisibility: internal\ntriggers:\n  - shared\n---\n")
+
+	issues := Validate(hub)
+	for _, i := range issues {
+		if i.Kind == IssueTriggerConflict {
+			t.Errorf("unexpected conflict between internal skills: %s", i.Message)
+		}
 	}
 }
 

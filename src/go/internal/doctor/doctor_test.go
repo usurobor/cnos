@@ -181,9 +181,11 @@ func TestSkillActivationCheck_PassEmpty(t *testing.T) {
 	}
 }
 
-// TestSkillActivationCheck_FailsOnTriggerConflict: two packages claim
-// the same trigger keyword from distinct skill ids → StatusFail.
-func TestSkillActivationCheck_FailsOnTriggerConflict(t *testing.T) {
+// TestSkillActivationCheck_WarnsOnTriggerConflict: public-public
+// trigger overlap is StatusInfo (doctor prints ○, hub stays rc=0).
+// Overlapping activation keywords are a legitimate authoring pattern;
+// only structural breakage (unreadable SKILL.md) fails the hub.
+func TestSkillActivationCheck_WarnsOnTriggerConflict(t *testing.T) {
 	hub := makeTestHub(t)
 	writeSkill := func(pkg, skillID, body string) {
 		path := filepath.Join(hub, ".cn", "vendor", "packages", pkg,
@@ -202,8 +204,8 @@ func TestSkillActivationCheck_FailsOnTriggerConflict(t *testing.T) {
 	for _, ch := range checks {
 		if ch.Name == "skill activation" {
 			found = true
-			if ch.Status != StatusFail {
-				t.Errorf("status = %d, want StatusFail", ch.Status)
+			if ch.Status != StatusInfo {
+				t.Errorf("status = %d, want StatusInfo", ch.Status)
 			}
 			if !strings.Contains(ch.Value, "conflict") || !strings.Contains(ch.Value, "shared") {
 				t.Errorf("value = %q, want to mention conflict + 'shared' trigger", ch.Value)
@@ -213,7 +215,23 @@ func TestSkillActivationCheck_FailsOnTriggerConflict(t *testing.T) {
 	if !found {
 		t.Error("expected 'skill activation' check in results")
 	}
+	// Scoped assertion: no skill-activation check alone should escalate
+	// to StatusFail on a hub whose only "problem" is overlapping
+	// triggers. (The base test hub has other legitimate failures
+	// around env/hub setup that are orthogonal to activation.)
+	for _, ch := range checks {
+		if ch.Name == "skill activation" && ch.Status == StatusFail {
+			t.Errorf("skill activation escalated to StatusFail on a conflict-only hub: %q", ch.Value)
+		}
+	}
 }
+
+// Note: the StatusFail mapping for IssueMissingSkill is one-line
+// wiring (see checkSkillActivation). The underlying Issue generation
+// is covered by activation.TestValidateSkills_UnreadableSkillMissing.
+// Adding a doctor-level test of the mapping would require platform-
+// specific tricks to produce an unreadable file on linux+root; the
+// coverage cost/benefit doesn't justify it.
 
 func makeTestHub(t *testing.T) string {
 	t.Helper()

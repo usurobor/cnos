@@ -222,8 +222,16 @@ func Validate(hubPath string) []Issue {
 // skill list. Returns one Issue per distinct problem:
 //   - SKILL.md present but unreadable → IssueMissingSkill
 //   - SKILL.md parses but declares no triggers → IssueEmptyTriggers
-//   - same trigger claimed by two or more distinct skill IDs across
-//     any packages (public or internal) → IssueTriggerConflict
+//   - same trigger claimed by two or more distinct PUBLIC skill IDs →
+//     IssueTriggerConflict
+//
+// Internal skills (visibility: internal) are intentionally excluded
+// from conflict detection. They never appear in the public activation
+// index (see BuildIndex), so an internal sub-skill sharing a trigger
+// keyword with its parent orchestrator is not a user-visible
+// ambiguity — the runtime activates the public orchestrator, which
+// then delegates internally. This mirrors OCaml-era semantics where
+// activation.validate iterated only manifest-exposed skill IDs.
 //
 // Output is deterministic: missing/empty issues follow input order
 // (Discover sorts by package/skill); conflict issues are sorted by
@@ -231,8 +239,8 @@ func Validate(hubPath string) []Issue {
 func ValidateSkills(skills []Skill) []Issue {
 	var issues []Issue
 
-	// triggerClaimants records which skill IDs claim a trigger,
-	// de-duplicated, insertion-ordered.
+	// triggerClaimants records which PUBLIC skill IDs claim a trigger,
+	// de-duplicated, insertion-ordered. Internal skills are skipped.
 	type triggerClaimants struct {
 		ids  []string
 		seen map[string]struct{}
@@ -254,6 +262,12 @@ func ValidateSkills(skills []Skill) []Issue {
 				Message: fmt.Sprintf("package %s: skill %s has no triggers",
 					s.Package, s.SkillID),
 			})
+			continue
+		}
+		// Internal skills do not participate in public conflict
+		// detection — they are not addressable via the activation
+		// index, so they cannot ambiguate activation.
+		if !s.Frontmatter.IsPublic() {
 			continue
 		}
 		for _, t := range s.Frontmatter.Triggers {
