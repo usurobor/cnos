@@ -114,7 +114,7 @@ src/packages/   ────► cn build ────► dist/packages/      src
    ```sh
    git rm dist/packages/*.tar.gz dist/packages/index.json dist/packages/checksums.txt
    ```
-   9 tarballs + `index.json` + `checksums.txt` = 11 tracked files to remove.
+   8 tarballs + `index.json` + `checksums.txt` = 10 tracked files to remove.
 
 2. **Add `dist/` to `.gitignore`.**
    New line (scoped broadly, per BUILD-AND-DIST.md §Migration step 2: "`dist/` is build output, never committed"):
