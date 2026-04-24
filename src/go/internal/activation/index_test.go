@@ -131,6 +131,33 @@ func TestDiscover_PackageWithoutSkillsDir(t *testing.T) {
 	}
 }
 
+// A SKILL.md placed directly under skills/ (with no containing named
+// subdirectory) has no derivable skill ID and is intentionally not
+// discoverable. Authors must place each skill under skills/<name>/.
+func TestDiscover_RootLevelSKILLMdSkipped(t *testing.T) {
+	hub := t.TempDir()
+	pkgDir := filepath.Join(hub, ".cn", "vendor", "packages", "cnos.demo")
+	if err := os.MkdirAll(filepath.Join(pkgDir, "skills"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	// SKILL.md directly under skills/ — no containing subdirectory.
+	if err := os.WriteFile(
+		filepath.Join(pkgDir, "skills", "SKILL.md"),
+		[]byte("---\nname: rootless\ntriggers:\n  - x\n---\n"),
+		0o644,
+	); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	// A properly-placed sibling skill should still be discovered.
+	installSkill(t, hub, "cnos.demo", "good",
+		"---\nname: good\ntriggers:\n  - g\n---\n")
+
+	skills := Discover(hub)
+	if len(skills) != 1 || skills[0].SkillID != "good" {
+		t.Errorf("skills = %v, want single 'good' (root SKILL.md must be skipped)", skills)
+	}
+}
+
 // Discover output is sorted by (Package, SkillID) for deterministic
 // downstream rendering (eng/go §2.13).
 func TestDiscover_DeterministicOrder(t *testing.T) {

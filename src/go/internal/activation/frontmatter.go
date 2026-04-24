@@ -76,6 +76,11 @@ func ParseFrontmatter(data []byte) Frontmatter {
 	var triggersAcc []string
 
 	flushList := func() {
+		// Only `triggers` is materialised today. Other keys can legally
+		// open a block list (any "key:" with no value sets pendingListKey),
+		// but their items are accumulated in triggersAcc and discarded
+		// here. When a new field that wants block-list semantics is
+		// added (e.g. `aliases:`), extend this switch.
 		if pendingListKey == "triggers" {
 			fm.Triggers = triggersAcc
 		}

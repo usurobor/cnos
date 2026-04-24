@@ -160,8 +160,14 @@ func discoverPackageSkills(pkgName, pkgDir string) []Skill {
 		}
 		skillID := filepath.ToSlash(rel)
 		if skillID == "." || skillID == "" {
-			// SKILL.md directly under skills/ has no id; treat as malformed.
-			slog.Debug("activation: SKILL.md directly under skills/ has no id",
+			// Contract: a skill's ID is the path of its SKILL.md's
+			// containing directory relative to skills/. A SKILL.md
+			// directly under skills/ has no containing subdirectory
+			// and therefore no derivable ID, so it is intentionally
+			// not a discoverable skill. Authors must place each skill
+			// under a named subdirectory (skills/<name>/SKILL.md or
+			// deeper, e.g. skills/cdd/alpha/SKILL.md → id "cdd/alpha").
+			slog.Debug("activation: SKILL.md directly under skills/ has no id; place under a named subdirectory",
 				slog.String("package", pkgName),
 				slog.String("path", path))
 			return nil
