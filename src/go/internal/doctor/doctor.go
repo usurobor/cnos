@@ -26,6 +26,7 @@ import (
 	"strings"
 
 	"github.com/usurobor/cnos/src/go/internal/activation"
+	"github.com/usurobor/cnos/src/go/internal/pkg"
 )
 
 // Status classifies a CheckResult.
@@ -272,10 +273,11 @@ func checkPackages(hubPath, _ string) CheckResult {
 			stale = append(stale, fmt.Sprintf("%s (no manifest)", dep.Name))
 			continue
 		}
-		var pm struct {
-			Version string `json:"version"`
-		}
-		if err := json.Unmarshal(manifestData, &pm); err != nil {
+		// Reuse the pure parser introduced for restoreOne (issue #230 F1):
+		// one parser per fact ("installed package version") — eng/go §2.17
+		// + design §3.2.
+		pm, err := pkg.ParseInstalledManifestData(manifestData)
+		if err != nil {
 			stale = append(stale, fmt.Sprintf("%s (unparseable manifest)", dep.Name))
 			continue
 		}

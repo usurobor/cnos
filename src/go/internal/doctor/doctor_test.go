@@ -97,6 +97,35 @@ func TestRunAllPackageVersionDrift(t *testing.T) {
 	}
 }
 
+// TestRunAllPackageManifestUnparseable covers the third stale-state
+// branch (issue #230 F3): cn.package.json is present but contains
+// invalid JSON. Doctor must flag it stale with the "unparseable
+// manifest" diagnostic — same severity as missing/drift.
+func TestRunAllPackageManifestUnparseable(t *testing.T) {
+	hub := makeTestHub(t)
+	pkgDir := filepath.Join(hub, ".cn", "vendor", "packages", "cnos.core")
+	os.MkdirAll(pkgDir, 0755)
+	// Garbage JSON body.
+	os.WriteFile(filepath.Join(pkgDir, "cn.package.json"),
+		[]byte(`{not valid json`), 0644)
+	lockfile := `{"schema":"cn.lock.v2","packages":[{"name":"cnos.core","version":"1.0.0","sha256":"aaa"}]}`
+	os.WriteFile(filepath.Join(hub, ".cn", "deps.lock.json"), []byte(lockfile), 0644)
+
+	checks := RunAll(context.Background(), hub, "3.48.0", nil)
+
+	found := false
+	for _, ch := range checks {
+		if ch.Name == "packages" && ch.Status == StatusFail &&
+			strings.Contains(ch.Value, "unparseable manifest") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected StatusFail with 'unparseable manifest' diagnostic, got: %+v",
+			packagesCheck(checks))
+	}
+}
+
 // TestRunAllPackageManifestMissing covers the half-state case: vendor
 // dir present but cn.package.json absent (a partial install or manual
 // mkdir). Doctor must flag it stale and direct the operator to restore.
