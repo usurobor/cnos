@@ -1,23 +1,12 @@
----
-name: review/katas
-description: Review practice scenarios — contract integrity, implementation review, and checker PR review.
-artifact_class: reference
-kata_surface: embedded
-governing_question: What review practice scenarios train β to catch contract and implementation incoherence?
-visibility: internal
-parent: review
-triggers:
-  - review kata
-scope: task-local
-inputs: []
-outputs: []
-requires: []
-calls: []
+# Review — Embedded Katas
+
+Practice scenarios for the review orchestrator. Plain reference material — drill these to internalize the contract-integrity preflight before the diff.
+
+For the method-level review kata (baseline-vs-CDD evaluation with rubric), see `cnos.cdd.kata/katas/M2-review/`.
+
 ---
 
-# Review Katas
-
-## 8.1 Kata — First-round review
+## Kata 1 — First-round review
 
 **Scenario:** An LLM branch adds a new CLI provider.
 
@@ -32,7 +21,7 @@ Perform:
 
 ---
 
-## 8.2 Kata — Review a checker PR
+## Kata 2 — Review a checker PR
 
 **Scenario:** A branch adds a CUE validation gate with a CI job. The issue says `scope` is a hard-gate field, but the exception file allows `"allowed_missing": ["scope"]`. The CI job is added but notification aggregation is not updated. The PR body says "the runtime now enforces frontmatter compliance."
 
@@ -48,7 +37,7 @@ Review it using §2.0.0 Contract Integrity Preflight.
 
 ---
 
-## 8.3 Kata — Review a docs alignment PR
+## Kata 3 — Review a docs alignment PR
 
 **Scenario:** A branch updates the root README and docs README to reflect a new project framing. The PR changes link paths from `doctrine/MANIFESTO.md` to `essays/MANIFESTO.md`. The PR body says the layer diagram uses sibling `├─` architecture, but the diff still shows nested `└─`.
 

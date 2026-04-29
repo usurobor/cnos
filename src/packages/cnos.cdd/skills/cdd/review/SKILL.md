@@ -25,7 +25,6 @@ requires:
 calls:
   - review/contract/SKILL.md
   - review/implementation/SKILL.md
-  - review/katas/SKILL.md
 calls_dynamic:
   - source: project design constraints
 ---
