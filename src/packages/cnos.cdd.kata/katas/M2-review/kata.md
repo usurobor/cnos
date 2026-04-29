@@ -10,16 +10,17 @@ Given a PR diff, produce a review under two modes (baseline / CDD) and compare f
 
 ## Required artifacts
 
+- Contract integrity preflight (Phase 1, `review/contract/SKILL.md`) — completed before any diff inspection
 - Verdict (approve / request changes)
 - Evidence for each finding (line, file, artifact)
-- Architecture check (§2.2.14 — 7 questions)
+- Architecture check (`review/implementation/SKILL.md §2.2` — 7 questions, A–G)
 - Active skill consistency check
-- Finding taxonomy (mechanical vs judgment)
+- Finding taxonomy (mechanical vs contract vs judgment)
 
 ## Scoring
 
 - L5: findings exist, locally correct
-- L6: architecture check performed, cross-surface siblings checked, evidence depth matches claim strength
+- L6: contract integrity preflight completed before diff; architecture check performed; cross-surface siblings checked; evidence depth matches claim strength
 - L7: higher-leverage alternative identified, process improvement shipped
 
 ## Worked examples
