@@ -2,7 +2,7 @@
 name: review
 description: Orchestrate β review in phases — contract integrity, then implementation, then verdict. Each phase loads its own sub-skill.
 artifact_class: skill
-kata_surface: embedded
+kata_surface: external
 governing_question: Is the branch coherent enough to merge, or what specific incoherence must be named and fixed?
 visibility: internal
 parent: cdd

@@ -2,7 +2,7 @@
 name: review/implementation
 description: Implementation review — issue contract walk, diff inspection, architecture checks, and evidence-bound findings.
 artifact_class: skill
-kata_surface: embedded
+kata_surface: external
 governing_question: How does β verify that the branch implementation satisfies the issue contract, diff/context invariants, and architecture constraints?
 visibility: internal
 parent: review
