@@ -48,6 +48,12 @@ Build these tables before reading the diff:
 | Artifact | Required? | Present? | Notes |
 |----------|-----------|----------|-------|
 
+### Active Skill Consistency
+| Skill | Required by | Loaded? | Applied? | Notes |
+|-------|-------------|---------|----------|-------|
+
+Verify that every Tier 3 skill the issue requires (and every active design constraint named in the project) was actually loaded by α and is applied somewhere in the diff. A required skill that is "loaded" but not "applied" is silent process theater. A skill applied without being declared is a discoverability gap.
+
 ---
 
 ## 2.1 Diff and context inspection

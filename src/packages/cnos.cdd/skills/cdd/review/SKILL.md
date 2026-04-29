@@ -27,6 +27,7 @@ calls:
   - review/implementation/SKILL.md
 calls_dynamic:
   - source: project design constraints
+kata_ref: src/packages/cnos.cdd.kata/katas/M2-review/
 ---
 
 # Review — Orchestrator
@@ -181,6 +182,10 @@ Written to `.cdd/unreleased/{N}/beta-review.md`. Each round appends a new sectio
 | Artifact | Required? | Present? | Notes |
 |----------|-----------|----------|-------|
 
+### Active Skill Consistency
+| Skill | Required by | Loaded? | Applied? | Notes |
+|-------|-------------|---------|----------|-------|
+
 ## Findings
 
 | # | Finding | Evidence | Severity | Type |
@@ -231,3 +236,13 @@ Before submitting a review:
 ### Review identity
 
 β uses a different git identity than α — `beta@cdd.{project}` versus `alpha@cdd.{project}`. The role separation is git-observable.
+
+---
+
+## External kata
+
+Practice and evaluation for this review skill live in:
+
+`src/packages/cnos.cdd.kata/katas/M2-review/`
+
+That kata exercises the contract-integrity preflight, implementation review, architecture check, finding taxonomy, active-skill consistency, and evidence-depth rules. The frontmatter `kata_ref` field above carries the same path for machine-readable linkage.
