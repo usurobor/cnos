@@ -428,7 +428,7 @@ agent write-essay : coherent-agent =
   >>= join-essay-evidence
   >> case verdict of
        accepted -> close
-       repair   -> fix (revise >> re-review)
+       repair   -> fix (revise >> re-review) until accepted else close-with-debt
        blocked  -> close-with-debt
 
 -- Specialized: code production as a triadic cycle
@@ -440,7 +440,7 @@ agent write-code : coherent-agent =
   >>= join-code-evidence
   >> case verdict of
        accepted -> close
-       repair   -> fix (patch >> re-test)
+       repair   -> fix (patch >> re-test) until accepted else close-with-debt
        blocked  -> close-with-debt
 ```
 
