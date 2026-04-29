@@ -568,6 +568,24 @@ Both `write-essay` and `write-code` satisfy `coherent-agent`. Both use `|||` for
 
 ---
 
+## 15. Non-normative risk: witness theater
+
+The witness and close-out model (§5.4–§5.6, §6.7) can fail if witness fields become persuasive accounting structure rather than accountable evidence. A conformant-looking close-out is not sufficient. Until a checker or runtime enforces v0.2 obligations, an agent may produce a well-structured witness that is not mechanically connected to what actually happened. This risk is called **witness theater**.
+
+A v0.2 implementation SHOULD mitigate witness theater by checking that:
+
+- required witness fields are present
+- evidence fields are non-vacuous where required
+- failed evidence is preserved across `repair`, `fix`, and `try`/`recover`
+- non-accepted close-outs remain active until repaired, recovered, propagated, escalated, closed with debt, or explicitly judged
+- `fix` is bounded or debt-bearing (§6.6)
+- `|||` / `wait` / `join` account for every operand result
+- `accepted` close-outs do not hide active residual debt
+
+Until those checks exist, v0.2 remains a draft discipline rather than enforced semantics.
+
+---
+
 ## Authority
 
 This document governs the language model for agent modules, signatures, scope, invocation, composition, and the effect-plan boundary.
