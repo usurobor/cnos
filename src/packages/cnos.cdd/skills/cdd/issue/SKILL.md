@@ -675,6 +675,14 @@ Notes:
 
 - ...
 
+## Success / closure condition
+
+This issue is closeable when:
+- all ACs are met;
+- the proof plan passes;
+- non-goals remain unviolated;
+- known gaps are either resolved or explicitly carried as named debt.
+
 ## Handoff checklist
 
 [ ] ...
