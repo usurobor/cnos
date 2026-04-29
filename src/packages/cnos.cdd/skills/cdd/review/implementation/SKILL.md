@@ -18,6 +18,7 @@ outputs:
   - AC coverage table
   - named doc updates table
   - CDD artifact contract table
+  - active skill consistency table
   - findings with severity and type
 requires:
   - Phase 1 (contract integrity) completed
