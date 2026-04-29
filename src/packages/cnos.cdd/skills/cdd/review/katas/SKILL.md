@@ -1,6 +1,9 @@
 ---
 name: review/katas
 description: Review practice scenarios — contract integrity, implementation review, and checker PR review.
+artifact_class: reference
+kata_surface: embedded
+governing_question: What review practice scenarios train β to catch contract and implementation incoherence?
 visibility: internal
 parent: review
 triggers:

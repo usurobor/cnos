@@ -1,6 +1,9 @@
 ---
 name: review/contract
 description: Contract integrity preflight — verify the work contract is truthful, consistent, and non-contradictory before reading the diff.
+artifact_class: skill
+kata_surface: embedded
+governing_question: How does β verify that the work contract is truthful, scoped, sourced, and non-contradictory before inspecting implementation?
 visibility: internal
 parent: review
 triggers:

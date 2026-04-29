@@ -1,7 +1,7 @@
 ---
 name: review
 description: Orchestrate β review in phases — contract integrity, then implementation, then verdict. Each phase loads its own sub-skill.
-artifact_class: review
+artifact_class: skill
 kata_surface: embedded
 governing_question: Is the branch coherent enough to merge, or what specific incoherence must be named and fixed?
 visibility: internal
@@ -59,6 +59,8 @@ Complete the Contract Integrity table. If any row is "no," the review cannot app
 **Load:** `review/implementation/SKILL.md`
 
 Walk the issue contract (ACs, named docs, CDD artifacts). Read the diff and its neighbors. Apply mechanical scans, architecture checks, and evidence-bound findings.
+
+> **Future split (deferred).** Phase 2 currently bundles three cognitive modes — issue-contract walk, diff/context inspection, and architecture/design check. When `review/implementation/SKILL.md` grows past the next size budget, split it into siblings `review/issue-contract/SKILL.md`, `review/diff-context/SKILL.md`, and `review/architecture/SKILL.md`, each owning one reason to change. The orchestrator's phase order does not change; only the load granularity does.
 
 ### Phase 3: Verdict
 
