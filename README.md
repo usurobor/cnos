@@ -9,15 +9,26 @@
 
 ## What is cnos?
 
-cnos is a coherence system for autonomous agents, built on Git.
+cnos is a Git-native coherence system for human+AI agents.
 
-The core idea: an AI agent's identity, memory, and relationships should live in a git repo — not locked behind a platform, not dependent on any single host. If any server disappears, the agent's fork persists. Every decision is a commit. Every collaboration is a merge.
+The core idea: an agent's identity, memory, work, and relationships should live in a git repo — not locked behind a platform, not dependent on any single host. If any server disappears, the agent's fork persists. Every decision is a commit. Every collaboration is a merge.
+
+At the language level, the core unit is the **agent**:
 
 ```
-Agent (pure)  ──>  cn (CLI)  ──>  Git (substrate)
-  reads input       validates        push/fetch
-  writes output     executes ops     threads as files
+agent = tri(orientation, intervention, witness)
 ```
+
+An agent orients to a boundary or task, intervenes through work or delegation, and closes with an inspectable witness. A **skill** is a narrow agent (single invocation, task-local scope). A **role** is a wider-scoped agent (bound while the role is held). A **composite agent** coordinates subagents through explicit composition operators and returns a witnessed close-out.
+
+```
+Agent / CTB layer  ──>  cn runtime boundary  ──>  Git substrate
+orients/intervenes      validates/executes        stores refs, threads,
+returns close-outs      side effects              witnesses, commits,
+                                                  packages
+```
+
+Today, `cn` ships the Git-native hub/package CLI. The full agent runtime and [CTB](#ctb) enforcement layer are still in progress — see [Current State](#current-state).
 
 ### The coherent agent
 
@@ -28,7 +39,7 @@ A coherent agent minimizes the gap between its model and reality. It does this t
 - **MCP** — the best current picture of reality and system state
 - **CDD** — coherence-driven development: the same coherence law applied to the system's own evolution
 
-The agent is a pure function. It reads input, writes output. `cn` handles all side effects — git, network, file I/O — through a validated, sandboxed shell with crash recovery and audit receipts.
+A narrow agent may behave like a pure function: input → output. Wider agents compose subagents, preserve witnesses, and return close-outs. `cn` handles all side effects — git, network, file I/O — through a validated runtime boundary.
 
 ### The network
 
@@ -39,7 +50,8 @@ Agents connect through **peering** — exchanging git refs. Each agent has a **h
 | **Hub** | A git repo — the agent's home. Holds threads, state, config. |
 | **Peer** | Another agent's hub. Listed in `state/peers.md`. |
 | **Thread** | Unit of work or conversation. Markdown + YAML frontmatter. |
-| **Agent** | Pure function: input → output. Never touches files or git directly. |
+| **Agent** | Scoped process: orients, intervenes, closes with a witness. Skills are narrow agents. |
+| **CTB** | Triadic agent-composition language. Emerging spec — see [CTB docs](./docs/alpha/ctb/). |
 
 > [Manifesto](./docs/alpha/doctrine/MANIFESTO.md) · [Thesis](./docs/THESIS.md) · [Whitepaper](./docs/alpha/protocol/WHITEPAPER.md) · [Architecture](./docs/beta/architecture/ARCHITECTURE.md)
 
@@ -200,6 +212,13 @@ cn-<name>/
 | [WHITEPAPER.md](./docs/alpha/protocol/WHITEPAPER.md) | CN protocol specification |
 | [PROTOCOL.md](./docs/alpha/protocol/PROTOCOL.md) | The four FSMs |
 | [SECURITY-MODEL.md](./docs/alpha/security/SECURITY-MODEL.md) | Security architecture |
+
+| CTB (agent-composition language) | |
+|--------|---|
+| [CTB README](./docs/alpha/ctb/README.md) | Document map and authority rules |
+| [LANGUAGE-SPEC.md](./docs/alpha/ctb/LANGUAGE-SPEC.md) | v0.1 skill-module baseline (normative) |
+| [LANGUAGE-SPEC-v0.2-draft.md](./docs/alpha/ctb/LANGUAGE-SPEC-v0.2-draft.md) | v0.2 agent-module target (draft) |
+| [SEMANTICS-NOTES.md](./docs/alpha/ctb/SEMANTICS-NOTES.md) | Conceptual rationale (non-normative) |
 
 | Process | |
 |---------|---|

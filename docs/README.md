@@ -2,8 +2,8 @@
 
 A recurrent coherence system with Git as its lowest durable substrate.
 
-**Version:** 3.13.0
-**Date:** 2026-03-23
+**Version:** 3.61.1
+**Date:** 2026-04-29
 
 ---
 
@@ -90,7 +90,7 @@ The substance of the system — doctrine, specs, definitions.
 | [N-PASS-BIND-v3.8.0.md](./alpha/N-PASS-BIND-v3.8.0.md) | N-pass bind loop and indicators | 3.8.0 |
 | [SYSCALL-SURFACE-v3.8.0.md](./alpha/SYSCALL-SURFACE-v3.8.0.md) | Syscall surface redesign | 3.8.0 |
 | [SCHEDULER-v3.7.0.md](./alpha/SCHEDULER-v3.7.0.md) | Scheduler design | 3.7.0 |
-| [CTB-v4.0.0-VISION.md](./alpha/ctb/CTB-v4.0.0-VISION.md) | CTB v4.0.0 vision: skill language | 4.0.0 |
+| [CTB-v4.0.0-VISION.md](./alpha/ctb/CTB-v4.0.0-VISION.md) | CTB v4.0.0 vision: agent-composition language | 4.0.0 |
 
 **Feature bundles:**
 
@@ -99,7 +99,7 @@ The substance of the system — doctrine, specs, definitions.
 | [agent-runtime/](./alpha/agent-runtime/) | Runtime spec, CAA, runtime contract, version-scoped design docs |
 | [cli/](./alpha/cli/) | CLI reference, daemon mode, setup installer |
 | [cognitive-substrate/](./alpha/cognitive-substrate/) | Cognitive asset classes, CAR resolver |
-| [ctb/](./alpha/ctb/) | CTB v4.0.0 vision |
+| [ctb/](./alpha/ctb/) | CTB — triadic agent-composition language; [v0.1 baseline](./alpha/ctb/LANGUAGE-SPEC.md), [v0.2 draft target](./alpha/ctb/LANGUAGE-SPEC-v0.2-draft.md), [semantics notes](./alpha/ctb/SEMANTICS-NOTES.md) |
 | [doctrine/](./alpha/doctrine/) | Coherence system, foundations, manifesto |
 | [protocol/](./alpha/protocol/) | Whitepaper, protocol FSMs, thread API |
 | [runtime-extensions/](./alpha/runtime-extensions/) | Extensions spec, version snapshots |
@@ -153,8 +153,12 @@ docs/
 │   │   ├── CLI.md, DAEMON.md, SETUP-INSTALLER.md
 │   ├── cognitive-substrate/           # Cognitive assets, CAR
 │   │   ├── COGNITIVE-SUBSTRATE.md, CAR.md
-│   ├── ctb/                           # CTB vision
-│   │   └── CTB-v4.0.0-VISION.md
+│   ├── ctb/                           # CTB agent-composition language
+│   │   ├── README.md                  # Document map + authority
+│   │   ├── LANGUAGE-SPEC.md           # v0.1 baseline (normative)
+│   │   ├── LANGUAGE-SPEC-v0.2-draft.md # v0.2 agent-module target (draft)
+│   │   ├── SEMANTICS-NOTES.md         # Conceptual rationale (non-normative)
+│   │   └── CTB-v4.0.0-VISION.md      # Strategy + roadmap (non-normative)
 │   ├── doctrine/                      # Coherence system, foundations, manifesto
 │   │   ├── COHERENCE-SYSTEM.md, FOUNDATIONS.md, MANIFESTO.md
 │   ├── protocol/                      # Whitepaper, protocol, thread API
