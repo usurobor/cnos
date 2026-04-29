@@ -66,6 +66,155 @@ Review fails via **surface reading** — checking only what changed, missing wha
 
 ## 2. Unfold
 
+### 2.0.0. Contract integrity preflight
+
+**GATE: Complete §2.0.0 before §2.0.** A branch can be locally well-implemented and still not review-ready if the contract it claims to satisfy is contradictory, stale, or overclaims shipped behavior.
+
+```markdown
+## §2.0.0 Contract Integrity
+
+| Check | Result | Notes |
+|---|---|---|
+| Status truth preserved | yes / no / n/a | |
+| Canonical sources/paths verified | yes / no / n/a | |
+| Scope/non-goals consistent | yes / no / n/a | |
+| Constraint strata consistent | yes / no / n/a | |
+| Exceptions are field-specific/reasoned | yes / no / n/a | |
+| Path resolution base explicit | yes / no / n/a | |
+| Proof shape adequate | yes / no / n/a | |
+| Cross-surface projections updated | yes / no / n/a | |
+| No witness theater / false closure | yes / no / n/a | |
+| PR body matches branch files | yes / no / n/a | |
+```
+
+If any Contract Integrity row is "no," the review cannot approve unless the row is explicitly out of scope and the reviewer names why it does not affect merge readiness.
+
+#### Status truth
+Verify that the issue, PR body, branch artifacts, and docs distinguish:
+- shipped behavior;
+- current normative spec;
+- draft target;
+- planned work;
+- non-goals;
+- unknown / unverified facts.
+
+Findings:
+- D if the branch claims runtime enforcement that does not exist.
+- C if draft/target state is described as current but the diff itself does not rely on it.
+- mechanical if the status label is plainly stale across docs/README/source map.
+
+- ❌ "CTB enforces witnessed close-outs" when only the v0.2 draft defines them.
+- ✅ "CTB v0.2 draft defines witnessed close-outs; ctb-check/runtime enforcement is not shipped."
+
+#### Source-of-truth map
+For every load-bearing claim in the issue or PR body, verify the canonical source. Check:
+- exact file path;
+- branch/ref if relevant;
+- current vs draft status;
+- upstream repo links;
+- generated vs authored source;
+- README/docs/source-map projections.
+
+If paths changed, grep old paths across live docs and code.
+
+- ❌ "Manifesto lives under doctrine/" when canonical path is `docs/alpha/essays/MANIFESTO.md`.
+- ✅ Root README, docs README, and source map all point to the same canonical path.
+
+#### Scope and non-goal consistency
+Check whether any AC, implementation note, PR claim, or output artifact contradicts the non-goals.
+
+Findings:
+- D if an out-of-scope behavior is implemented or claimed as shipped.
+- C if the PR body implies out-of-scope work but files do not.
+- mechanical if the contradiction is textual and deterministic.
+
+- ❌ Non-goal: "do not implement runtime enforcement." PR body: "runtime now enforces CTB v0.2."
+- ✅ PR body: "adds structural checker issue; runtime enforcement remains out of scope."
+
+#### Constraint strata
+If the issue defines required/optional/exception-backed fields or rules, verify that examples and implementation obey the strata. Check:
+- hard gates are not exception-backed;
+- exception-backed fields have field-specific exceptions;
+- optional/defaulted fields name defaults;
+- validated-if-present fields are actually checked when present;
+- deferred fields are not silently enforced or claimed.
+
+- ❌ Hard gate: `scope`. Exception example: `"allowed_missing": ["scope"]`.
+- ✅ Exception example only lists exception-backed fields such as `artifact_class` or `kata_surface`.
+
+#### Exception discipline
+Exceptions are debt, not blanket permission. Verify:
+- exceptions are field-specific;
+- each exception has a reason;
+- JSON exceptions do not rely on comments;
+- exceptions do not exempt hard gates;
+- cleanup/removal condition is named where appropriate.
+
+- ❌ `{ "path": "...", "ignore": true }`
+- ✅ `{ "path": "...", "allowed_missing": ["artifact_class"], "reason": "legacy skill migration pending" }`
+
+#### Path resolution semantics
+If the issue or implementation validates paths, verify the resolution base. Check whether paths are:
+- repo-root-relative;
+- package-root-relative;
+- caller-file-relative;
+- branch-relative;
+- generated-artifact-relative.
+
+Require at least one concrete example when path validation is part of the change.
+
+- ❌ "Validate calls relative to the skill's parent directory" when current skills use package-root-relative calls.
+- ✅ `alpha/SKILL.md` with `calls: design/SKILL.md` resolves to `src/packages/cnos.cdd/skills/cdd/design/SKILL.md`.
+
+#### Proof shape
+For checker, schema, parser, runtime, CI, and validation issues, verify that the branch includes:
+- invariant;
+- oracle;
+- positive case;
+- negative case;
+- operator-visible projection;
+- known gap.
+
+Existing CI passing is the floor, not the proof.
+
+- ❌ "CI passes" but no invalid fixture proves the checker rejects malformed input.
+- ✅ Valid fixture passes; missing hard-gate field fails with expected diagnostic.
+
+#### Cross-surface projections
+When the diff adds or changes a status, checker, command, CI job, source map, schema, or runtime surface, verify every projection that should expose it. Examples:
+- CI job added → notify aggregation updated.
+- README source map changed → docs README changed.
+- Schema added → schema README / fixtures / CI invocation added.
+- Runtime status changed → help / doctor / status / docs agree.
+- Upstream formal source added → source map and further-reading sections agree.
+
+- ❌ Add CI job I5 but leave Telegram/notify aggregation unaware of I5.
+- ✅ I5 is added and notify job result summary includes I5.
+
+#### False closure / witness theater
+If the change adds witnesses, close-outs, review artifacts, checker outputs, debt records, or governance structure, verify that the structure is accountable to evidence. Ask:
+- What rejects a malformed artifact?
+- What preserves failed evidence?
+- What prevents accepted closure from hiding active debt?
+- What fields are required but non-vacuous?
+- What is still only prose discipline?
+
+Findings:
+- D if the branch claims enforcement but only adds prose.
+- C if the structure is useful but lacks the promised rejection mechanism.
+- B if the rejection mechanism is correctly deferred but the deferral could be clearer.
+
+- ❌ 10-field close-out shape exists, but no checker or issue says which fields are required.
+- ✅ Spec names required fields; checker issue requires invalid fixtures and diagnostics.
+
+#### PR body / branch summary consistency
+Verify that the PR description still matches the corrected branch files. After fix rounds, PR bodies can describe an older state.
+
+- ❌ PR body says "nested └─ layer diagram" but branch files now show sibling `├─` architecture.
+- ✅ PR body updated after fix to match the branch head state.
+
+---
+
 ### 2.0. Issue — what was promised
 
 **PRE-GATE: Verify branch is unmerged.** Before any review work, confirm the branch has not already landed on main. Run `git log main --oneline | grep -w {issue-number}` (or check the merge commit's reachability with `git merge-base --is-ancestor {branch} main`). If already merged: the branch is stale — either review the merged code on main, or skip. Do not review a dead branch. (If this check is added to the review subagent's preflight, this PRE-GATE becomes informational.)
@@ -501,7 +650,17 @@ Before submitting a review:
 - [ ] Mechanical diff scan: duplicates in lists, branch name convention, expect-test plausibility
 - [ ] Every claim traces to evidence
 - [ ] Severity assigned to every finding
-- [ ] Type assigned to every finding (mechanical / judgment)
+- [ ] §2.0.0 Contract integrity preflight completed
+- [ ] Status truth checked: shipped/current/draft/planned/non-goal not conflated
+- [ ] Source-of-truth paths resolve and match canonical docs
+- [ ] Issue/PR examples obey their own rules
+- [ ] Hard gates do not appear in exception examples
+- [ ] Path resolution base verified where paths are validated
+- [ ] Proof plan includes oracle, positive case, negative case where required
+- [ ] New CI/check/status surfaces update operator-visible projections
+- [ ] PR body still matches corrected branch files
+- [ ] No witness theater: structure is backed by rejection mechanism or honest caveat
+- [ ] Type assigned to every finding (mechanical / judgment / contract)
 - [ ] Multi-format outputs checked for semantic parity
 - [ ] Authority surfaces checked for conflict where multiple define the same thing
 - [ ] Sibling fallback paths audited when one fallback/compatibility path was touched (§2.2.1b)
@@ -544,6 +703,9 @@ Every finding MUST be tagged as one of:
 |------|-----------|----------|
 | **mechanical** | Could be caught by grep/diff/script without judgment | stale path, wrong branch name, snapshot mismatch, broken link |
 | **judgment** | Requires design/coherence assessment | missing AC coverage, authority conflict, design trade-off |
+| **contract** | The work contract itself is incoherent | issue contradiction, wrong canonical path, PR body overclaim, draft-as-current, non-goal violated, exception contradicts hard gate, proof plan missing |
+
+Contract findings may overlap with mechanical or judgment — tag both when applicable. A contract finding means the implementation may be correct but the contract it claims to satisfy is wrong.
 
 Mechanical findings reaching review are **process bugs**. If mechanical findings exceed 20% of total findings in a release cycle, file a process issue.
 
@@ -639,3 +801,19 @@ The role-separation contract is git-observable: `git log --format='%an %s' main.
 7. State verdict with evidence
 
 **Verify:** Did you complete §2.0 before the diff? Did you enumerate input sources at security-level rigor for the closure claim? Does every finding trace to a line, file, or artifact?
+
+---
+
+### 8.2 Kata — Review a checker PR
+
+**Scenario:** A branch adds a CUE validation gate with a CI job. The issue says `scope` is a hard-gate field, but the exception file allows `"allowed_missing": ["scope"]`. The CI job is added but notification aggregation is not updated. The PR body says "the runtime now enforces frontmatter compliance."
+
+Review it using §2.0.0 Contract Integrity Preflight.
+
+1. **Status truth:** PR body says "runtime enforces" — is that shipped or planned? → D finding (contract): false runtime claim.
+2. **Constraint strata:** Hard gate `scope` appears in exception `allowed_missing` — contradiction. → D finding (contract): exception exempts hard gate.
+3. **Cross-surface projections:** CI job I5 added but notify job aggregation unchanged. → C finding (mechanical): operator-visible projection missing.
+4. **Proof shape:** Are there negative fixtures? Does the checker reject a file missing `scope`? If not, → C finding (contract): proof plan incomplete.
+5. **Scope/non-goal consistency:** Issue says "non-goal: runtime enforcement." PR body says "runtime now enforces." → D finding (contract): non-goal violated in PR body.
+
+**Verify:** Did you complete §2.0.0 before reading the diff? Did you catch all five contract violations? Would approving this branch ship a false runtime claim?
