@@ -1,7 +1,9 @@
 # CTB Semantics Notes
 
 **Status:** Conceptual rationale and design discussion. Non-normative.
+
 **Date:** 2026-04-26
+
 **Companion to:** `LANGUAGE-SPEC.md` (normative), `CTB-v4.0.0-VISION.md` (strategic).
 
 ---

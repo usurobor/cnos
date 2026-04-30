@@ -1,7 +1,9 @@
 # CTB Language Spec
 
 **Version:** 0.2 (draft-normative)
+
 **Date:** 2026-04-28
+
 **Status:** Draft-normative migration target. Conceptually supersedes v0.1 by unifying "skill" and "agent" into one primitive, but does not govern current v0.1 conformance until promoted. Until promotion, `LANGUAGE-SPEC.md` (v0.1) governs conformance.
 
 ---
