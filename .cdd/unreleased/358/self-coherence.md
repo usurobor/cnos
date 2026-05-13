@@ -29,3 +29,23 @@
 This gap affects cnos ecosystem coherence — satellite repos propose valuable changes but the lifecycle tracking is informal and feedback is unreliable. This leads to stale proposals, lost coordination context, and missed opportunities for cross-repo improvements.
 
 **Root cause:** Missing protocol for systematic proposal lifecycle management with bidirectional feedback between source and target repos.
+
+## §Skills
+
+**Active Skills:**
+
+**Tier 1:**
+- `CDD.md` — canonical lifecycle and role contract
+- `alpha/SKILL.md` — α role surface and algorithm
+- `issue/SKILL.md` — for interpreting issue quality and AC boundaries
+
+**Tier 2:**
+- `cnos.core/skills/write/SKILL.md` — for writing skill artifacts
+- `cnos.core/skills/skill/SKILL.md` — for authoring and modifying skills
+
+**Tier 3:**
+- `cross-repo-proposal/SKILL.md` — new skill being implemented
+- `gamma/SKILL.md`, `post-release/SKILL.md`, `issue/SKILL.md` — skills being updated
+
+**Skills application:**
+This cycle produces documentation and skill updates, not runtime code. Write skill constrains documentation authoring for clarity and precision. The issue skill guides template updates. The cross-repo proposal skill defines the new protocol being implemented.
