@@ -249,6 +249,13 @@ Why:
 
 ## Related artifacts
 
+## Source Proposal (optional)
+
+- Source: 
+- Source commit:
+- Disposition: 
+- Delta:
+
 ## Non-goals
 
 ## Success / closure condition

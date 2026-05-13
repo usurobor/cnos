@@ -420,6 +420,7 @@ Before committing the assessment, verify mechanically:
 - [ ] CHANGELOG TSC row added or updated to match assessment scores
 - [ ] §8 Hub memory: daily reflection written and pushed to hub repo
 - [ ] §8 Hub memory: at least one adhoc thread updated (or explicit note why none applies)
+- [ ] Cross-repo proposal status updated or feedback patch emitted for any proposal that contributed to this cycle
 - [ ] If the triadic protocol is active, `.cdd/unreleased/{N}/gamma-closeout.md` (in-version) or `.cdd/releases/{X.Y.Z}/{N}/gamma-closeout.md` (post-release) exists and reflects α close-out, β close-out, γ triage, and final cycle status. (Legacy aggregate `.cdd/releases/{X.Y.Z}/gamma/CLOSE-OUT.md` is warn-only per `CDD.md` §5.3a; do not require it.)
 
 This gate is mechanical. Two agents checking the same template must find the same missing fields.

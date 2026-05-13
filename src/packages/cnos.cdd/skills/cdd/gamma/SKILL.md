@@ -133,9 +133,15 @@ Close-out converts cycle findings into immediate fixes or committed next work.
 
 Before selecting work, read the observation surfaces required by `CDD.md`:
 1. **Last post-release assessment** — read this first. It contains the prior cycle's next-MCA commitment, deferred outputs, cycle iteration findings, and MCI freeze state. These are binding inputs to selection, not optional context.
-2. CHANGELOG TSC table
-3. encoding lag table
-4. doctor / status / operational-health surface
+2. **Cross-repo proposals** — scan known source repos for active proposal paths:
+   - `.cdd/iterations/proposals/*/STATUS` (existing tsc format)
+   - `.cdd/proposals/{target}/*/STATUS` (new format)
+   - Consider proposals whose last event is `submitted`
+   - Read adjacent `ISSUE.md` and optional `PATCH.diff` for each submitted proposal
+   - Check target state for duplicates or already-landed work
+3. CHANGELOG TSC table
+4. encoding lag table
+5. doctor / status / operational-health surface
 
 Build a candidate table:
 
@@ -408,6 +414,11 @@ Before close-out, collect (in-version, before release):
 - If pending: delay close-out until run completes
 - If red: log as §9.1 trigger (avoidable tooling failure); cycle's γ-axis grade reflects post-merge failure; consider rollback or follow-on fix-cycle
 - If green: proceed; record run URL in `gamma-closeout.md` §Post-merge verification (mandatory subsection)
+
+**Cross-repo proposal status update (mandatory):** Every accepted or modified source proposal touched by the cycle gets a `landed` event or feedback patch:
+- For each accepted/modified proposal that contributed to this cycle, append `landed YYYY-MM-DD {target-issue} commit={merge-SHA} artifact=.cdd/unreleased/{N}/` to source `STATUS`
+- If cnos cannot write to the source repo, emit a patch that updates source `STATUS`
+- Record proposal status updates in `gamma-closeout.md` §Cross-repo proposal feedback
 
 `self-coherence.md` and `beta-review.md` carry the in-cycle record (gap/ACs/trace and round-by-round verdicts respectively); the two `*-closeout.md` files are γ's primary triage inputs.
 
