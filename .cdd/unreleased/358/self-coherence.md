@@ -152,3 +152,25 @@ Files created/modified:
 **Step 7 - Docs:** ✅ Comprehensive documentation provided via new cross-repo-proposal skill and examples. All existing skills updated with integration points.
 
 **Step 7a - Self-coherence:** ✅ This artifact documents gap closure, AC mapping, and review readiness.
+
+## Review-readiness | round 1
+
+**Base SHA:** cea74a29 (origin/main at branch creation)
+**Head SHA:** 1daaf91e (implementation complete)
+**Branch:** cycle/358
+**Branch CI:** N/A (docs-only changes, no automated CI applicable)
+**Artifact enumeration verified:** All 7 files in diff explicitly documented in CDD-Trace step 6
+
+**Pre-review gate checklist:**
+- [x] Cycle branch current with origin/main
+- [x] Self-coherence carries CDD Trace through step 7a
+- [x] Tests present or explicit reason (docs+skills work, no automated tests applicable)
+- [x] Every AC has evidence mapped
+- [x] Known debt explicit (§Debt)
+- [x] Peer enumeration complete (all affected CDD skills updated)
+- [x] Commit author email canonical: alpha@cdd.cnos
+- [x] All diff files enumerated in self-coherence CDD-Trace step 6
+
+**Ready for β**
+
+Implementation complete. All acceptance criteria met. Cross-repo proposal lifecycle protocol fully specified and integrated into CDD skills per issue #358 requirements.
