@@ -49,3 +49,35 @@ This gap affects cnos ecosystem coherence — satellite repos propose valuable c
 
 **Skills application:**
 This cycle produces documentation and skill updates, not runtime code. Write skill constrains documentation authoring for clarity and precision. The issue skill guides template updates. The cross-repo proposal skill defines the new protocol being implemented.
+
+## §ACs
+
+**AC1: Add STATUS file format spec and lifecycle to appropriate CDD skill files**
+- Evidence: Created `src/packages/cnos.cdd/skills/cdd/cross-repo-proposal/SKILL.md` with comprehensive STATUS format specification
+- Evidence: Created `src/packages/cnos.cdd/skills/cdd/cross-repo-proposal/EXAMPLES.md` with concrete usage examples
+- Status: ✅ COMPLETE
+
+**AC2: Update gamma/SKILL.md with cross-repo proposal scanning in observation/selection**
+- Evidence: Updated `gamma/SKILL.md` §2.1 to add cross-repo proposal scanning to observation surfaces
+- Evidence: Added scanning for both `.cdd/iterations/proposals/*/STATUS` and `.cdd/proposals/{target}/*/STATUS` formats
+- Status: ✅ COMPLETE
+
+**AC3: Update gamma/SKILL.md with close-out obligation for landed proposals**
+- Evidence: Updated `gamma/SKILL.md` §2.7 to add mandatory cross-repo proposal status update step
+- Evidence: Added requirement to append `landed` events to source STATUS or emit feedback patches
+- Status: ✅ COMPLETE
+
+**AC4: Update post-release/SKILL.md with proposal status checklist item**
+- Evidence: Updated `post-release/SKILL.md` pre-publish gate checklist
+- Evidence: Added "Cross-repo proposal status updated or feedback patch emitted" checklist item
+- Status: ✅ COMPLETE
+
+**AC5: Update issue/SKILL.md with optional Source Proposal block**
+- Evidence: Updated `issue/SKILL.md` minimal output pattern template
+- Evidence: Added optional "Source Proposal" section with source, commit, disposition, and delta fields
+- Status: ✅ COMPLETE
+
+**AC6: Keep changes minimal (docs+skill issue)**
+- Evidence: Implementation focused solely on skill updates and format specification
+- Evidence: No runtime code changes, no automation, no CI integration per non-goals
+- Status: ✅ COMPLETE
