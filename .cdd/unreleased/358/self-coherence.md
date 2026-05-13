@@ -107,3 +107,17 @@ The implementation follows standard CDD skill authoring patterns:
 - Documentation follows CDD writing conventions  
 - Integration points are explicit in gamma, post-release, and issue skills
 - Examples provide concrete usage guidance for future implementers
+
+## §Debt
+
+**Known limitations:**
+
+1. **No migration tooling** — Implementation provides protocol but no automated migration from existing tsc proposal status tracking. This is intentional per issue non-goals ("No broad migration").
+
+2. **No CI validation** — STATUS format is documented but not validated by CI. This is intentional per R3 decision to avoid automation until manual protocol proves stable.
+
+3. **Transport dependency** — Protocol assumes git access between repos. If git access is unavailable, fallback to manual patch application is required.
+
+**Acceptable technical debt:**
+
+All identified limitations align with issue R3 convergence decision to implement minimal viable protocol without over-engineering. Future automation can be added after manual protocol validation.
