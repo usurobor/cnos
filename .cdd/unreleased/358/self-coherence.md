@@ -121,3 +121,34 @@ The implementation follows standard CDD skill authoring patterns:
 **Acceptable technical debt:**
 
 All identified limitations align with issue R3 convergence decision to implement minimal viable protocol without over-engineering. Future automation can be added after manual protocol validation.
+
+## §CDD-Trace
+
+**CDD Algorithm trace through step 7:**
+
+**Step 1 - Receive:** ✅ Received dispatch for issue #358, configured alpha git identity, checked out cycle/358 branch
+
+**Step 2 - Issue interpretation:** ✅ Read issue #358 fully, identified gap in cross-repo proposal lifecycle, loaded required skills per Tier 1/2/3 specification
+
+**Step 3 - Design:** ✅ Design converged in issue R3 — minimal STATUS format + CDD skill integrations. No separate design artifact required.
+
+**Step 4 - Plan:** ✅ Implementation sequence: skill updates → new cross-repo-proposal skill → examples → self-coherence. No complex sequencing required.
+
+**Step 5 - Tests:** ⚠️ No automated tests applicable — this is docs+skills work. Manual verification via skill integration points and example validation.
+
+**Step 6 - Implementation artifacts:**
+
+Files created/modified:
+- `src/packages/cnos.cdd/skills/cdd/gamma/SKILL.md` — Added cross-repo proposal observation + close-out
+- `src/packages/cnos.cdd/skills/cdd/post-release/SKILL.md` — Added checklist item
+- `src/packages/cnos.cdd/skills/cdd/issue/SKILL.md` — Added Source Proposal template block
+- `src/packages/cnos.cdd/skills/cdd/cross-repo-proposal/SKILL.md` — New comprehensive skill
+- `src/packages/cnos.cdd/skills/cdd/cross-repo-proposal/EXAMPLES.md` — Concrete usage examples
+- `.cdd/unreleased/358/gamma-scaffold.md` — Validation artifact
+- `.cdd/unreleased/358/self-coherence.md` — This file
+
+**Peer enumeration:** All CDD skill files that needed integration have been updated. No missing sibling surfaces.
+
+**Step 7 - Docs:** ✅ Comprehensive documentation provided via new cross-repo-proposal skill and examples. All existing skills updated with integration points.
+
+**Step 7a - Self-coherence:** ✅ This artifact documents gap closure, AC mapping, and review readiness.
