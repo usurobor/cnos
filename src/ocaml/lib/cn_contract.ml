@@ -121,6 +121,23 @@ type orchestrator_entry = {
   orch_trigger_kinds : string list;
 }
 
+(* === Memory faculty (issue #100) ===
+
+   The agent's retention faculty under cognition. v1 backend is
+   [git+threads+state] — protocol + discipline over the existing
+   git-native surfaces. The fields name the canonical restore
+   surface and the readable/writable surfaces so the agent can
+   answer "what should I read at session start" from the contract
+   alone, not from ad-hoc file probing. *)
+
+type memory = {
+  backend : string;          (** v1 literal: "git+threads+state" *)
+  entrypoint : string;       (** canonical restore surface (hub-relative) *)
+  surfaces : string list;    (** readable/writable memory surfaces (hub-relative) *)
+  freshness : string;        (** last-update / staleness summary *)
+  scope : string;            (** what memory is expected to preserve *)
+}
+
 (* === Cognition layer === *)
 
 type cognition = {
@@ -128,6 +145,7 @@ type cognition = {
   overrides : override_info;
   extensions_installed : extension_contract_info list;
   activation_index : activation_entry list;
+  memory : memory;
 }
 
 (* === Body contract layer === *)

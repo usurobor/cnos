@@ -207,6 +207,13 @@ let%expect_test "CG1 cognition constructs and reads activation_index" =
       { skill_id = "cdd/design"; package = "cnos.eng";
         summary = "Design"; triggers = ["design"] };
     ];
+    memory = {
+      backend = "git+threads+state";
+      entrypoint = ".cn/vendor/packages/cnos.core/skills/agent/memory/SKILL.md";
+      surfaces = ["threads/reflections/"; "threads/adhoc/"; "state/conversation.json"];
+      freshness = "no memory activity";
+      scope = "decisions, learnings, reflections, working continuity";
+    };
   } in
   Printf.printf "package_count=%d activation_count=%d\n"
     (List.length cg.packages) (List.length cg.activation_index);
@@ -257,6 +264,13 @@ let%expect_test "RC1 runtime_contract composes identity/cognition/body/medium" =
       overrides = { doctrine = []; mindsets = []; skills = [] };
       extensions_installed = [];
       activation_index = [];
+      memory = {
+        backend = "git+threads+state";
+        entrypoint = ".cn/vendor/packages/cnos.core/skills/agent/memory/SKILL.md";
+        surfaces = [];
+        freshness = "no memory activity";
+        scope = "decisions, learnings, reflections, working continuity";
+      };
     };
     body = {
       capabilities_text = "";

@@ -88,11 +88,20 @@ type orchestrator_entry = Cn_contract.orchestrator_entry = {
   orch_trigger_kinds : string list;
 }
 
+type memory = Cn_contract.memory = {
+  backend : string;
+  entrypoint : string;
+  surfaces : string list;
+  freshness : string;
+  scope : string;
+}
+
 type cognition = Cn_contract.cognition = {
   packages : package_info list;
   overrides : override_info;
   extensions_installed : extension_contract_info list;
   activation_index : Cn_contract.activation_entry list;
+  memory : memory;
 }
 
 type body_contract = Cn_contract.body_contract = {
@@ -214,6 +223,72 @@ let build_orchestrator_registry ~hub_path =
           orch_trigger_kinds = [o.trigger.trigger_kind];
         })
 
+(** Build the [memory] record (issue #100 AC1).
+
+    [backend]: v1 literal — protocol + discipline over git-native
+      surfaces (threads + state). No retrieval index or vector
+      store in v1 (non-goal #1).
+    [entrypoint]: canonical restore surface — the installed memory
+      skill, hub-relative. Post B14a (#101) the path moves
+      mechanically to [self/memory/SKILL.md].
+    [surfaces]: canonical memory surfaces, hub-relative. Includes
+      [threads/adhoc/] (episodic), [threads/reflections/]
+      (reflective), [state/conversation.json] (working continuity
+      — useful but not canonical per memory skill §3 Taxonomy).
+    [freshness]: most-recent mtime under canonical memory dirs,
+      rendered as "N days ago" (whole days). Empty case →
+      "no memory activity". Doctor consumes the same mtime
+      signal with a 30-day stale threshold (issue #100 AC6, v1
+      hard-coded). *)
+let memory_state ~hub_path =
+  let entrypoint =
+    ".cn/vendor/packages/cnos.core/skills/agent/memory/SKILL.md" in
+  let surfaces = [
+    "threads/reflections/";
+    "threads/adhoc/";
+    "state/conversation.json";
+  ] in
+  let scope = "decisions, learnings, reflections, working continuity" in
+  let scan_dirs = [
+    "threads/reflections/daily";
+    "threads/reflections/weekly";
+    "threads/adhoc";
+  ] in
+  let mtimes_in dir acc =
+    if not (Cn_ffi.Fs.exists dir) then acc
+    else
+      try
+        Cn_ffi.Fs.readdir dir |> List.fold_left (fun acc f ->
+          let p = Cn_ffi.Path.join dir f in
+          try
+            let st = Unix.stat p in
+            if st.Unix.st_kind = Unix.S_REG then st.Unix.st_mtime :: acc
+            else acc
+          with _ -> acc
+        ) acc
+      with _ -> acc
+  in
+  let mtimes =
+    scan_dirs |> List.fold_left (fun acc d ->
+      mtimes_in (Cn_ffi.Path.join hub_path d) acc
+    ) []
+  in
+  let freshness = match mtimes with
+    | [] -> "no memory activity"
+    | xs ->
+      let newest = List.fold_left max 0.0 xs in
+      let now = Unix.time () in
+      let days = int_of_float ((now -. newest) /. 86400.0) in
+      if days <= 0 then "most-recent: today"
+      else if days = 1 then "most-recent: 1 day ago"
+      else Printf.sprintf "most-recent: %d days ago" days
+  in
+  { backend = "git+threads+state";
+    entrypoint;
+    surfaces;
+    freshness;
+    scope }
+
 (** Build the runtime contract from current hub state. *)
 let gather ~hub_path ~(shell_config : Cn_shell.shell_config)
       ~(assets : Cn_assets.asset_summary) ~peers
@@ -301,6 +376,7 @@ let gather ~hub_path ~(shell_config : Cn_shell.shell_config)
   let activation_index = Cn_activation.build_index ~hub_path in
   let commands = build_command_registry ~hub_path in
   let orchestrators = build_orchestrator_registry ~hub_path in
+  let memory = memory_state ~hub_path in
 
   {
     identity = {
@@ -317,6 +393,7 @@ let gather ~hub_path ~(shell_config : Cn_shell.shell_config)
       };
       extensions_installed = all_ext_info;
       activation_index;
+      memory;
     };
     body = {
       capabilities_text;
@@ -413,6 +490,18 @@ returns a contract_redirect, not file content.\n\n";
     ) (ov.doctrine @ ov.mindsets @ ov.skills)
   end else
     Buffer.add_string buf " (none)\n";
+
+  (* Memory faculty — issue #100 AC1. Render order under Cognition
+     mirrors the JSON schema so structural drift between the two
+     projections is mechanical, not semantic. *)
+  let m = c.cognition.memory in
+  Buffer.add_string buf "memory:\n";
+  Buffer.add_string buf (Printf.sprintf "  backend: %s\n" m.backend);
+  Buffer.add_string buf (Printf.sprintf "  entrypoint: %s\n" m.entrypoint);
+  Buffer.add_string buf (Printf.sprintf "  surfaces: %s\n"
+    (String.concat ", " m.surfaces));
+  Buffer.add_string buf (Printf.sprintf "  freshness: %s\n" m.freshness);
+  Buffer.add_string buf (Printf.sprintf "  scope: %s\n" m.scope);
 
   (* Body — what can my body do? *)
   Buffer.add_string buf "\n### Body\n";
@@ -520,6 +609,15 @@ let to_json ~(shell_config : Cn_shell.shell_config) (c : runtime_contract) =
               "summary", str a.summary;
               "triggers", Cn_json.Array (List.map str a.triggers);
             ]) c.cognition.activation_index);
+      ];
+      (* memory faculty — issue #100 AC1 *)
+      "memory", Cn_json.Object [
+        "backend", str c.cognition.memory.backend;
+        "entrypoint", str c.cognition.memory.entrypoint;
+        "surfaces", Cn_json.Array
+          (List.map str c.cognition.memory.surfaces);
+        "freshness", str c.cognition.memory.freshness;
+        "scope", str c.cognition.memory.scope;
       ];
     ];
     "body", Cn_json.Object ([
