@@ -128,12 +128,13 @@ The machine-readable form lives in §4 (renderer contract); the human-readable f
 
 4. **Operator from hub.** Fetch `<hub>/spec/OPERATOR.md`. This file names which operator this body serves at this hub: who decides, who routes, what their preferences are, what they will and will not approve. Operator is per-hub. Load it after Persona because operator instructions often reference the agent's role from Persona.
 
-5. **Hub state.** Survey the hub's current state — what is in motion right now. The hub state is a composite of four readable surfaces:
+5. **Hub state.** Survey the hub's current state — what is in motion right now. The hub state is a composite of five readable surfaces:
    - **Dependency manifest** — `<hub>/.cn/deps.json`, which packages this hub vendors from cnos and which versions.
    - **Latest reflection** — most-recent file under `<hub>/threads/reflections/daily/`. This is the operator's or agent's most recent durable thought; reading it grounds the body in current-state-of-mind, not session-start.
-   - **Memory surfaces** — what reflection layers exist: `<hub>/threads/reflections/{daily,weekly,monthly}/`, `<hub>/threads/adhoc/`. These are durable continuity across sessions.
+   - **Recent adhocs** — read the K most-recent files under `<hub>/threads/adhoc/` by mtime, default K=5. Adhocs are the not-yet-rolled-up signal: durable observations the most recent daily reflection may not have folded in. The latest daily covers what was digested; the K recent adhocs cover what was filed since (or was filed before but never digested). Reading only the latest daily misses adhocs the daily did not fold in, including adhocs that propose changes to this skill itself.
+   - **Memory surfaces** — inventory only: `<hub>/threads/reflections/{daily,weekly,monthly}/`, `<hub>/threads/adhoc/`. Names which reflection layers exist for follow-up reads beyond the K adhocs above. The inventory is durable continuity across sessions; the K adhocs above are the live read set.
    - **Thread surfaces** — what inbox / mail / archived surfaces exist: `<hub>/threads/{in,inbox,mail,archived}/`. These are live coordination state.
-   Read each in order. The hub state is grouped as item 5 because the four surfaces are co-presupposing: they all describe what is currently happening at this hub.
+   Read each in order. The hub state is grouped as item 5 because the five surfaces are co-presupposing: they all describe what is currently happening at this hub.
 
 6. **Identity confirmation.** Produce a concrete statement, in the body's voice, naming:
    - **Who** — the agent name and role from Persona (e.g. "Sigma, the coordinator at cn-sigma")
@@ -286,6 +287,13 @@ Hubs adopt the §2.3 router template verbatim, substituting only the hub URL. If
 - ❌ Per-hub README overrides the load order with hub-preferred ordering
 - ✅ Per-hub README pastes the router template; the skill owns the procedure
 
+### 3.8. Read recent adhocs, not just the latest daily
+
+The latest daily reflection is read in full; the K most-recent adhocs (default K=5) are also read in full. Adhocs are the not-yet-rolled-up signal — observations a body filed that may not be folded into any daily yet. A rule that reads only the latest daily misses adhocs filed between dailies or filed-but-never-digested, including adhocs that propose changes to this skill itself.
+
+- ❌ Body reads `latest-daily.md`, inventories `threads/adhoc/`, never opens an adhoc
+- ✅ Body reads `latest-daily.md` plus the 5 most-recent adhocs by mtime
+
 ---
 
 ## 4. Renderer contract
@@ -319,7 +327,7 @@ Each token in §4.1 maps to a template position. The renderer substitutes hub-st
 | `ca-skills` | (none — cnos-side; rendered as a fixed pointer) | `cnos.core/skills/agent/{cap,clp,mca,mci,coherent,agent-ops}/SKILL.md` (the CA skill set in cnos) |
 | `persona` | hub `spec/PERSONA.md` presence | `spec/PERSONA.md` when present; absence message otherwise |
 | `operator` | hub `spec/OPERATOR.md` presence | `spec/OPERATOR.md` when present; absence message otherwise |
-| `hub-state` | deps state, latest reflection path, memory surfaces, thread surfaces | Composite line: deps summary + latest reflection path (if any) + memory/threads inventory |
+| `hub-state` | deps state, latest reflection path, K=5 most-recent adhoc paths by mtime, memory surfaces, thread surfaces | Composite: deps summary + latest reflection path (if any) + enumerated paths for the K most-recent adhocs (rendered as explicit reads under `## Read first`, not inventory) + memory/threads inventory |
 | `identity` | (none — emitted as a fixed prompt) | An identity-confirmation prompt directing the body to produce the who/whom/where/when statement |
 
 Tokens not listed above are reserved. A renderer encountering an unknown token MUST emit a `(unknown token: X)` placeholder and continue; it MUST NOT panic or silently drop the item.
@@ -372,6 +380,10 @@ Confirm §2.4 names both paths exactly: `src/packages/cnos.cdd/skills/cdd/activa
 ### 5.6. Layering rule citation
 
 Confirm §2.1 cites cn-sigma `threads/adhoc/20260325-session2-learnings.md` §3 ("Soul = what kind of agent. Identity = which agent. Don't mix them.").
+
+### 5.7. Recent-adhocs read check
+
+Confirm an adhoc filed under `<hub>/threads/adhoc/` between the latest daily reflection and the activation moment is in the body's read set. Construct a fixture hub with the latest daily at T₀ and an adhoc at T₁ > T₀; run `cn activate` against the fixture; confirm the adhoc path appears under `## Read first`. Construct a second fixture where an adhoc at T₋₁ < T₀ is one of the K most-recent (i.e. fewer than K newer adhocs exist); confirm that old-but-undigested adhoc is also in the read set.
 
 ---
 
