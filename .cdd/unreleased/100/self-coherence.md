@@ -10,7 +10,7 @@ This file is written incrementally per `alpha/SKILL.md §2.5`, one section per c
 
 ---
 
-## §Gap
+## Gap
 
 The named gap (from #100 body):
 
@@ -24,7 +24,7 @@ Path-coordination (scaffold §1.1 decision (b)): this cycle ships the skill at `
 
 ---
 
-## §Skills
+## Skills
 
 Active skill set (per γ dispatch + scaffold §1.2):
 
@@ -43,7 +43,7 @@ MEMORY.md v0.2.0 supersession (scaffold §2.3): read as historical context for t
 
 ---
 
-## §ACs
+## ACs
 
 AC text is #100 verbatim. Evidence is named at file:line where appropriate; behavioural evidence (test runs) cites the runner output.
 
@@ -138,7 +138,7 @@ Peers updated:
 
 ---
 
-## §Self-check
+## Self-check
 
 Did α's work push ambiguity onto β? Is every claim backed by evidence in the diff?
 
@@ -217,7 +217,7 @@ No claim of "N assertions added" is made — the test runner's PASS lines are th
 
 ---
 
-## §Debt
+## Debt
 
 Explicit known debt the cycle does not close, and the reason each is left as debt rather than fixed in-scope:
 
@@ -242,7 +242,7 @@ The first four items are out-of-scope by design (scaffold + non-goals). Items 5�
 
 ---
 
-## §CDD Trace
+## CDD Trace
 
 CDD Trace through step 7 (per alpha/SKILL.md §2.5 minimum contents):
 
