@@ -1,407 +1,159 @@
-# Memory in cnos — lean triadic model
+# Memory — fresh-session restore runbook
 
-**Issue:** #100  
-**Version:** 0.2.0  
-**Mode:** MCA  
-**Active Skills:** cdd/design, eng/evolve, eng/writing  
-**Engineering Level:** L7
+**Status:** Runbook (v1, post-#100)
+**Authority:** This file is the canonical restore entrypoint named by `cognition.memory.entrypoint` in the runtime contract.
+**Owning skill:** `src/packages/cnos.core/skills/agent/memory/SKILL.md` (`cnos.core/skills/agent/memory`).
+**Adjacent skills:** `cnos.core/skills/agent/reflect/SKILL.md` (reflective memory); `cnos.core/skills/ops/adhoc-thread/SKILL.md` (episodic memory).
 
----
-
-## Problem
-
-cnos already has memory in practice, but the current model is still narrower than the way the system actually works.
-
-Today:
-
-- The runtime contract classifies `threads/reflections/` and `state/conversation.json` as memory
-- `state/` otherwise remains `private_body`
-- The context packer loads reflections into the dynamic system block
-- The context packer loads conversation history as recent message turns
-- The adhoc-thread skill already treats standalone topic threads as the place where important things should be preserved instead of being lost in chat
-
-So the system already distinguishes:
-
-- Durable reflective memory
-- Session continuity
-- Runtime internals
-
-What is missing is a simple architectural statement of how these fit together. The current incoherence is:
-
-1. `threads/adhoc/` is functionally memory, but is not yet named as such in the runtime contract
-2. Conversation history is useful, but it is too easy to mistake it for canonical memory
-3. There is pressure to add a memory index or retrieval layer before the underlying memory model is explicit
-4. Packages, commands, and orchestrators could add memory tooling, but core memory semantics are not yet clearly separated from optional memory services
+This runbook tells a fresh session what to read first and in what order. It is the answer to "what should I read at session start" — without it, the agent re-derives context instead of restoring it.
 
 ---
 
-## Decision
+## 0. Why this file exists
 
-Use a lean triadic memory model.
+cnos agents have persistence in practice (reflections, adhoc threads, hub state, git history, runtime contract) but no canonical answer to: what to read at session start, what to write back, what counts as durable, what is only runtime projection.
 
-### Core memory classes
+Without that answer, every session re-derives. Behaviour-changing observations die with the session.
 
-- **α — episodic memory:** factual retained record of what happened and what was decided. Surface: `threads/adhoc/`
-- **β — reflective memory:** interpretation and synthesis over episodic memory. Surface: `threads/reflections/`
-- **γ — working continuity:** recent session/conversation continuity across wake boundaries. Surface: `state/conversation.json`
-
-### Canonical rule
-
-Canonical memory is:
-
-- `threads/adhoc/`
-- `threads/reflections/`
-
-`state/conversation.json` is:
-
-- Useful
-- Retained
-- Runtime-visible
-- But not canonical memory
-
-It is a working continuity surface.
-
-### KISS / YAGNI rule
-
-Do not add:
-
-- `threads/memory/INDEX.md`
-- Vector stores
-- Graph stores
-- Retrieval indexes
-- Memory-specific package roles
-- A dedicated memory package
-
-...until the current three-surface model proves insufficient.
+This file is the **fresh-session entrypoint**. The skill at `cnos.core/skills/agent/memory` is the **discipline**. Together they make memory a faculty rather than ad-hoc file probing.
 
 ---
 
-## Constraints
+## 1. What memory is — short form
 
-- Keep canonical memory Git-native and inspectable
-- Do not add opaque mandatory storage
-- Do not require a retrieval backend
-- Preserve current runtime behavior where possible
-- Keep the distinction between constitutive self, memory, and private runtime state explicit
-- Avoid adding a third canonical memory surface unless there is real operational need
+Three surfaces, one entrypoint.
 
-## Challenged Assumption
+| Surface | Path | Owner | Contains |
+|---|---|---|---|
+| Reflective | `threads/reflections/` | `reflect` | daily / weekly / monthly / quarterly / yearly synthesis |
+| Episodic | `threads/adhoc/` | `adhoc-thread` | typed standalone records: proposal, learning, question, decision |
+| Working | `state/conversation.json` | runtime | recent turns across wake boundaries — useful, not canonical |
 
-The challenged assumption is:
+**Canonical retained memory is the first two.** Working continuity is useful retained state, not the source of truth. Everything else under `state/` is runtime projection — regenerated at wake, not memory.
 
-> Memory needs an additional index or retrieval layer in core before the underlying memory model is explicit.
-
-That assumption is unnecessary right now. cnos already has enough surfaces to define a coherent memory model without introducing another canonical layer.
-
----
-
-## Current Evidence
-
-### Runtime contract
-
-The runtime contract already classifies:
-
-- `threads/reflections/`
-- `state/conversation.json`
-
-as memory surfaces, distinct from:
-
-- `constitutive_self`
-- `private_body`
-- `work_medium`
-- `projection_surface`
-
-### Context packer
-
-The context packer already loads:
-
-- Daily and weekly reflections into the dynamic system block
-- Conversation history into recent message turns
-
-It does not treat all state equally.
-
-### Skills
-
-`adhoc-thread` already defines a durable thread as the place for a proposal, learning, question, or decision that would otherwise be lost if left inline.
-
-`reflect` already defines reflection as: evidence → interpretation → conclusion.
-
-So the practical model already exists. It is just not yet stated cleanly.
-
----
-
-## Proposal
-
-### 1. Core memory semantics
-
-Core should own only the memory semantics that must be true for every hub:
-
-#### 1.1 Canonical episodic memory — `threads/adhoc/`
-
-What belongs here:
-
-- Decisions
-- Investigations
-- Proposals
-- Durable questions
-- Corrections worth preserving
-- Significant conversation outcomes once promoted out of chat
-
-This is the factual retained record.
-
-#### 1.2 Canonical reflective memory — `threads/reflections/`
-
-What belongs here:
-
-- Daily synthesis
-- Weekly synthesis
-- Higher-order lessons
-- Explicit MCA/MCI outcomes
-- Reflections over patterns in the raw record
-
-This is the interpretive retained record.
-
-#### 1.3 Working continuity — `state/conversation.json`
-
-What belongs here:
-
-- Recent turns
-- Session continuity
-- Immediate conversational context
-- Resumable short-term history
-
-This is useful retained state, but not the canonical record of memory.
-
----
-
-### 2. Triadic fit
-
-#### α — episodic memory
-
-The α side preserves the pattern of what happened. Its failure mode is:
-
-- Facts stay in chat and disappear
-- Decisions are remembered socially but not recorded
-- Investigations leave no durable trace
-
-#### β — reflective memory
-
-The β side links the parts into meaning. Its failure mode is:
-
-- Conclusions detached from evidence
-- Lessons that cannot be traced back to what actually happened
-- Reflections that substitute for the record instead of interpreting it
-
-#### γ — working continuity
-
-The γ side carries the current line of interaction across a wake boundary. Its failure mode is:
-
-- The agent loses the immediate thread of a conversation
-- Stale short-term history is mistaken for durable truth
-- Runtime projection is treated as if it were canonical memory
-
-#### Memory is coherent when
-
-- α preserves the facts
-- β interprets the facts
-- γ carries the current thread without claiming to be the source of truth
-
----
-
-### 3. Ownership split
-
-#### cnos core owns
-
-- The distinction between episodic, reflective, and working memory
-- Runtime-contract visibility of those surfaces
-- Doctor/status validation of memory surfaces
-- The rule that `state/conversation.json` is not canonical memory
-- The rule that constitutive self is not memory
-
-#### Agent layer owns
-
-The existing skills already provide most of the needed memory discipline:
-
-- `adhoc-thread` — when to retain a fact or decision durably
-- `reflect` — how to synthesize evidence into a durable lesson
-
-No new agent/memory skill is required in this v1 design.
-
-#### Commands / orchestrators may later own
-
-Optional tooling only:
-
-- Conversation import
-- Memory compaction
-- Recall helpers
-- Search/indexing helpers
-- Reflection promotion workflows
-
-Those are layered behaviors, not memory ontology.
-
----
-
-### 4. Runtime contract changes
-
-Update the memory zone so it reflects the actual lean model.
-
-#### Current
-
-- `threads/reflections/`
-- `state/conversation.json`
-
-#### Proposed
-
-Memory should distinguish canonical vs working surfaces more clearly. Suggested rendering:
+The runtime contract exposes the same shape under `cognition.memory`:
 
 ```json
-"medium": {
-  "zones": [
-    { "path": "threads/adhoc/", "zone": "memory_episodic" },
-    { "path": "threads/reflections/", "zone": "memory_reflective" },
-    { "path": "state/conversation.json", "zone": "memory_working" },
-    { "path": "spec/SOUL.md", "zone": "constitutive_self" },
-    { "path": ".cn/", "zone": "private_body" }
-  ]
+"cognition": {
+  "memory": {
+    "backend": "git+threads+state",
+    "entrypoint": ".cn/vendor/packages/cnos.core/skills/agent/memory/SKILL.md",
+    "surfaces": [
+      "threads/reflections/",
+      "threads/adhoc/",
+      "state/conversation.json"
+    ],
+    "freshness": "most-recent: 2 days ago",
+    "scope": "decisions, learnings, reflections, working continuity"
+  }
 }
 ```
 
-If introducing three new zone names feels too heavy, then at minimum:
-
-- Add `threads/adhoc/` to memory
-- Document in prose that `state/conversation.json` is working continuity, not canonical memory
-
-That lighter version is acceptable for v1.
+`cn status` projects this block as a Memory section. `cn doctor` reports the entrypoint as missing (Fail), stale (Info, > 30 days since the most-recent thread mtime), or fresh (Pass).
 
 ---
 
-### 5. Context-packing rule
+## 2. Fresh-session restore — the ordered reads
 
-Do not blindly load all adhoc threads into context.
+When a new session starts, read in this order. Stop early when the task is bounded enough that further reads would only add noise.
 
-Current behavior is already mostly right:
+1. **Runtime contract** — `cognition.memory` block (already in packed context). Confirms which entrypoint and surfaces are canonical for this hub.
+2. **This file** — the runbook itself. The contract names it; reading it resolves the next-step pointers.
+3. **The owning skill** — `cnos.core/skills/agent/memory/SKILL.md`. The discipline that names recall triggers, write triggers, and the index rule.
+4. **Most-recent daily reflection** — the latest file under `threads/reflections/daily/`. Carries forward yesterday's judgment, open threads, and any in-flight cycle.
+5. **Most-recent weekly** — `threads/reflections/weekly/` if newer than the daily or if the daily references it.
+6. **Relevant adhoc threads** — open threads under `threads/adhoc/`, especially anything the daily or the current task references.
+7. **Workspace doctrine / design docs** — when the task touches them. Recall is **hub threads + workspace doctrine**, not hub threads alone (#100 AC4, April-26 evidence point 1). For cnos, that means `docs/alpha/doctrine/`, `docs/alpha/agent-runtime/`, and any design doc named by the current task.
 
-- Reflections are directly useful as compact memory
-- Conversation history is directly useful as recent turns
-
-For `threads/adhoc/`, use:
-
-- Explicit reference from the current task
-- Or later, an optional retrieval/indexing layer
-
-This avoids flooding the prompt while still keeping adhoc threads canonical.
+The skill (`cnos.core/skills/agent/memory`) also names triggers for *re-reading* during a session: before answering about prior work, before planning or reprioritizing, before filing or updating an issue, after a correction.
 
 ---
 
-### 6. What not to add yet
+## 3. Write protocol — short form
 
-#### No `threads/memory/INDEX.md`
+Three rules. The skill carries the full protocol.
 
-Not yet. Reason:
+1. **Write at the moment of recognition** — a behaviour-changing observation is durable only when it is in a surface git can serve next session.
+2. **Use the right surface** — daily/weekly synthesis goes to `threads/reflections/` (see `reflect`); a proposal / learning / question / decision goes to `threads/adhoc/` (see `adhoc-thread`); `state/` is not memory.
+3. **Close the session with a structured gate** — Part B receipt naming `artifact_refs`, `debt_refs`, `decision_refs`, `learnings_refs`, `memory_refs`, `upstream_pending`. The full schema and the in-line MCA receipt form (Part A) are in the skill.
 
-- Runtime does not use it today
-- Current memory surfaces are enough
-- A third canonical memory file would add ceremony before necessity
-
-If restore cost becomes too high later, add it as a derived restore map, not a third source of truth.
-
-#### No vector/graph store in core
-
-Not needed. Those can be optional later.
-
-#### No dedicated memory package
-
-Not needed yet. The existing reflect and adhoc-thread split is already enough.
+If a session produced any artifact / decision / learning and exits without the Part B gate, its work is at compaction risk.
 
 ---
 
-## Leverage
+## 4. Index — typed frontmatter relationships
 
-This design:
+Adhoc threads navigate by typed frontmatter, not prose pointers. The skill names this as a rule from this cycle forward; existing threads are not retrofitted by #100.
 
-- Makes the current memory surfaces explicit
-- Keeps core small
-- Keeps memory inspectable and Git-native
-- Avoids introducing an unnecessary index layer
-- Gives commands/orchestrators/extensions a clear non-core role
-- Aligns the runtime contract, context packer, and existing skills
+```yaml
+---
+type: learning
+relates_to: [20260520-some-other-thread]
+supersedes: [20260418-old-thread]
+derived_from: [20260520-daily]
+---
+```
 
-### Negative Leverage
-
-This adds:
-
-- One more explicit distinction to maintain in docs and runtime contract
-- One more rule for what is canonical and what is projection
-- Some migration work for docs that currently speak about memory more loosely
+Restore reads `supersedes` to follow the chain to the current entry. Without typed relationships, links are not traversable; with them, the existing surfaces stay navigable without a retrieval index.
 
 ---
 
-## Alternatives Considered
+## 5. Freshness signal
 
-| Option | Pros | Cons | Decision |
-|--------|------|------|----------|
-| Keep current implicit model | No work | adhoc stays semantically invisible; confusion remains | Rejected |
-| Add `threads/memory/INDEX.md` now | Explicit restore surface | Extra canonical layer too early | Rejected |
-| Add vector/index backend in core | Better retrieval | Makes memory backend-defined and opaque too early | Rejected |
-| New dedicated agent/memory skill now | One obvious home | Adds a layer before the current split proves insufficient | Rejected |
-| **Lean triadic model: adhoc + reflections + conversation** | Small, truthful, aligned with current system | Requires explicit documentation of boundaries | **Chosen** |
+`cn doctor` reports the memory entrypoint:
 
----
+| State | Status | Meaning |
+|---|---|---|
+| Skill file missing | Fail | cnos.core not installed or memory skill missing |
+| Present, no thread activity yet | Info | Legitimate fresh hub |
+| Most-recent thread mtime > 30 days | Info | Stale (operator-visible, not merge-gating) |
+| Most-recent thread mtime ≤ 30 days | Pass | Fresh |
 
-## File Changes
-
-### Edit
-
-- `docs/alpha/agent-runtime/RUNTIME-CONTRACT-v2.md` — add `threads/adhoc/` to the memory model, clarify `state/conversation.json` as working continuity
-- `src/cmd/cn_runtime_contract.ml` — reflect the same distinction in emitted contract
-- `docs/alpha/agent-runtime/AGENT-RUNTIME.md` — align memory language with the lean model if needed
-
-### No new files in v1
-
-Do not add:
-
-- `threads/memory/INDEX.md`
-- New memory package
-- New retrieval extension
-- New memory-specific command package
+The 30-day threshold is v1 hard-coded. The literal appears in the doctor check value text so the rule is data, not folklore. `cn status` shows the same freshness summary in its Memory section.
 
 ---
 
-## Acceptance Criteria
+## 6. Known debt (v1 non-goals — future work)
 
-- [ ] `threads/adhoc/` is explicitly recognized as canonical memory
-- [ ] `threads/reflections/` remains canonical reflective memory
-- [ ] `state/conversation.json` is explicitly treated as working continuity, not source of truth
-- [ ] Runtime contract reflects the distinction clearly
-- [ ] Docs no longer imply that memory requires an index layer in core
-- [ ] No new canonical memory surfaces are introduced in v1
-- [ ] Existing reflect and adhoc-thread skills remain the practice layer for memory
+- **Automated EOD transcript extraction** — write triggers remain manual; the discipline must exist before tooling can enforce it.
+- **Contradiction detection at write time** — manual via `reflect` §3.6 decision-basis capture. Semantic scan is a future MCA candidate.
+- **Adhoc-thread corpus retrofit** — typed relationships apply from this cycle forward. Migrating the existing corpus is a separate cycle (candidate: B9c / `forget` / `reindex`).
+- **Retrieval backend** — Memory Palace–style retrieval (find facts by meaning) is a candidate future backend per `cognition.memory.backend`. The continuity stack (this file + skill + surfaces) comes first; retrieval sits underneath.
 
 ---
 
-## Known Debt
+## §Supersession — v0.2.0 design history
 
-- If wake/restore cost grows, a derived restore map may become useful later
-- Optional recall/search/import tooling may still be worth packaging later
-- The exact runtime-contract zone names may need one tightening pass for clarity
+This file previously held the v0.2.0 lean-triadic design for #100, written 2026-02–03 era. That design **explicitly rejected** a dedicated `agent/memory` skill, on the basis that `reflect` + `adhoc-thread` alone provided enough discipline.
+
+#100 supersedes that rejection. The empirical anchors are documented in #100's 2026-04-26 evidence comment and the 2026-05-20 cnos#386 fold-in. Summary of what changed and why:
+
+| v0.2.0 position | Post-#100 position | Why |
+|---|---|---|
+| "No new agent/memory skill is required in v1" | New skill at `cnos.core/skills/agent/memory` | Without a named faculty, every session re-derived context. The April-26 receipt-stream pattern (an essay sitting unread in the same repo) made the gap empirical. |
+| Memory architecture is the three surfaces alone | Three surfaces **plus** an entrypoint **plus** a discipline (skill + runbook) | A taxonomy without a recall protocol is undiscoverable. The skill carries the recall + write protocol; this runbook is the single named entrypoint. |
+| `state/conversation.json` rendered alongside reflections as "memory" | `state/conversation.json` is **working continuity, not canonical** | Distinction was implicit in v0.2.0 prose; #100 makes it normative in the contract field shape and in the skill body. |
+| Recall surface is hub threads | Recall surface is hub threads **+ workspace doctrine/design docs** | April-26 evidence point 1 — the highest-leverage gap. |
+| Write triggers implicit in `reflect` / `adhoc-thread` | Write triggers enumerated in the skill, with cnos#386's two-part shape (in-line MCA receipts + structured session-close gate) | cnos#386 named a concrete protocol shape worth folding in at AC5. |
+
+What v0.2.0 got right and #100 preserves:
+
+- Canonical retained memory is `threads/reflections/` + `threads/adhoc/` (not a third surface, not a vector store).
+- `reflect` and `adhoc-thread` remain the practice layer — the memory skill **coordinates** them by name; it does not reach into them.
+- No `threads/memory/INDEX.md`, no embeddings, no knowledge graph in v1 (non-goals preserved).
+
+The v0.2.0 framing of episodic / reflective / working memory mapped onto the three surfaces and is still a useful narrative; #100 keeps it implicit rather than re-declaring it.
+
+The v0.2.0 file's CDD-style frontmatter and Acceptance Criteria sections referred to a design cycle that has since merged; this file's authority is now the runbook, not the historical design.
 
 ---
 
-## CDD Trace
+## §Related
 
-| Step | Artifact | Skills loaded | Decision |
-|------|----------|---------------|----------|
-| 0 Observe | — | — | Current cnos already distinguishes reflections and conversation history, and adhoc-thread already functions as retained memory in practice |
-| 1 Select | — | — | Selected gap: memory architecture is overcomplicating itself before the current surfaces are fully named |
-| 4 Gap | this artifact | — | Named incoherence: memory semantics are implicit and invite unnecessary new layers |
-| 5 Mode | this artifact | cdd/design, eng/evolve, eng/writing | L7 MCA; lean architectural clarification |
-| 6 Artifacts | this artifact | — | Design drafted; no implementation plan included yet |
-
----
-
-## Related
-
-- #100 — Memory as first-class retention faculty (this design supersedes the original spec direction)
-- AGENT-NETWORK.md — agents carry memory when deployed to new workspaces
-- HUB-PLACEMENT-MODELS.md — hub is memory, workspace is workbench
-- #156 — Attached hubs (AC9: agent memory stays in hub, tagged by workspace)
+- `src/packages/cnos.core/skills/agent/memory/SKILL.md` — the discipline this runbook activates
+- `src/packages/cnos.core/skills/agent/reflect/SKILL.md` — owns `threads/reflections/`
+- `src/packages/cnos.core/skills/ops/adhoc-thread/SKILL.md` — owns `threads/adhoc/`
+- `docs/alpha/agent-runtime/RUNTIME-CONTRACT-v2.md` — schema of `cognition.memory`
+- Issue #100 — memory as first-class retention faculty (this runbook closes AC7)
+- Issue #386 — session-receipt mechanism (folded into AC5 as Parts A and B of the write protocol)
+- Issue #35 — adjacent companion: forget / reindex skills (B9c)

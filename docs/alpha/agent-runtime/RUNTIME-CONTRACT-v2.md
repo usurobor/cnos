@@ -34,6 +34,23 @@ Replace the flat three-block contract with a **four-layer vertical self-model**:
 |-------|--------|
 | `installed_packages` | Package inventory with doctrine/mindset/skill counts |
 | `active_overrides` | Hub-local overrides by category |
+| `activation_index` | Skills exposed with declarative triggers |
+| `extensions_installed` | Extension manifest entries with lifecycle state |
+| `memory` | Retention faculty (issue #100): `backend`, `entrypoint`, `surfaces`, `freshness`, `scope` |
+
+#### Memory sub-shape (issue #100)
+
+The `memory` record names how the agent treats persistence as a faculty rather than ad-hoc file probing. The runbook at `docs/alpha/agent-runtime/MEMORY.md` is the canonical `entrypoint` value.
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `backend` | string | Storage backend literal. v1: `git+threads+state` (protocol + discipline over git-native surfaces; open-string so future retrieval backends can populate without contract change). |
+| `entrypoint` | string | Hub-relative path to the canonical restore surface — the single file an agent reads at session start. Default: `.cn/vendor/packages/cnos.core/skills/agent/memory/SKILL.md` (post-B14a / #101 rename: `self/memory/SKILL.md`). |
+| `surfaces` | string list | Hub-relative paths to canonical memory surfaces. v1 defaults: `threads/reflections/`, `threads/adhoc/`, `state/conversation.json`. |
+| `freshness` | string | Most-recent thread mtime across canonical memory directories, rendered as "most-recent: N days ago" / "no memory activity". Doctor consumes the same mtime signal with a 30-day stale threshold. |
+| `scope` | string | What memory is expected to preserve. v1 default: "decisions, learnings, reflections, working continuity". |
+
+Producer: `Cn_runtime_contract.gather` calls `Cn_runtime_contract.memory_state` to derive `freshness` from filesystem mtime and emit the record. Defaults align with the doctor and `cn status` Go-side consumers so the OCaml emitter and Go renderer agree on shape.
 
 ### 2.3 Body — "What can my body do?"
 
@@ -93,6 +110,17 @@ Replaces the flat `workspace` block with **zone-classified paths**:
           "triggers": ["review", "release", "design"]
         }
       ]
+    },
+    "memory": {
+      "backend": "git+threads+state",
+      "entrypoint": ".cn/vendor/packages/cnos.core/skills/agent/memory/SKILL.md",
+      "surfaces": [
+        "threads/reflections/",
+        "threads/adhoc/",
+        "state/conversation.json"
+      ],
+      "freshness": "most-recent: 2 days ago",
+      "scope": "decisions, learnings, reflections, working continuity"
     }
   },
   "body": {
@@ -141,6 +169,12 @@ installed_packages:
   - cnos.core (6 doctrine, 2 mindsets, 0 skills)
   - cnos.eng (0 doctrine, 0 mindsets, 3 skills)
 active_overrides: 0 (none)
+memory:
+  backend: git+threads+state
+  entrypoint: .cn/vendor/packages/cnos.core/skills/agent/memory/SKILL.md
+  surfaces: threads/reflections/, threads/adhoc/, state/conversation.json
+  freshness: most-recent: 2 days ago
+  scope: decisions, learnings, reflections, working continuity
 
 ### Body
 [capabilities block — observe/effect/budgets]
@@ -157,6 +191,14 @@ projection_surface: threads/outbox/
 ## 6. Doctor Validation (v2)
 
 **Structural checks (this issue):** `cn doctor` validates that `state/runtime-contract.json` contains the four top-level keys: `identity`, `cognition`, `body`, `medium`.
+
+**Memory entrypoint check (issue #100 AC6):** `cn doctor` additionally validates the memory entrypoint via `checkMemoryEntrypoint`. Three states:
+
+- `StatusFail` — entrypoint file missing (cnos.core not installed or memory skill missing).
+- `StatusInfo` — entrypoint present but stale: most-recent thread mtime under canonical memory dirs is older than the v1 30-day threshold; or no memory activity yet (legitimate fresh hub).
+- `StatusPass` — entrypoint present and fresh.
+
+The 30-day threshold is hard-coded in v1; the literal is observable in the check value text (`stale (most-recent N days ago; threshold 30d)`). `cn status` projects the same `cognition.memory` block as a Memory section.
 
 **Semantic consistency checks (deferred to #59):** deeper validation that the contract matches live hub state — e.g., profile matches installed packages, lockfile matches vendor, overrides resolve to real files, zone paths match actual directory layout. This is tracked as issue #59 (enhancement, not a #62 blocker).
 
