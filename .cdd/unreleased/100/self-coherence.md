@@ -214,3 +214,28 @@ No claim of "N assertions added" is made — the test runner's PASS lines are th
 - Mutual agreement between skill and runbook on canonical entrypoint — both name the same `.cn/vendor/.../memory/SKILL.md` path
 - Branch is rebased onto origin/main (merge-base == origin/main; verified at sign-off time)
 - Commit author email is `alpha@cdd.cnos` on all four α commits
+
+---
+
+## §Debt
+
+Explicit known debt the cycle does not close, and the reason each is left as debt rather than fixed in-scope:
+
+### In-scope known debt (cycle-internal)
+
+1. **Existing adhoc-thread corpus is not retrofitted.** The skill prescribes typed frontmatter relationships (`relates_to`, `supersedes`, `derived_from`) as a rule going forward; existing adhoc threads stay un-migrated. Reason: scaffold §3 AC2 γ note explicitly scope-guards the cycle to ships-rule, not ship-migration; corpus migration is downstream (candidate B9c / #35).
+2. **Automated EOD transcript extraction not implemented.** AC5 Part B (structured session-close gate) is a manual checklist in v1. Reason: scaffold §3 AC5 γ note + non-goal #1 (no automation backend) — discipline must exist before tooling can enforce it.
+3. **Contradiction detection at write time not implemented.** Reason: scaffold §3 AC5 γ note marks this out of scope; semantic scan is a future MCA candidate.
+4. **Retrieval backend (Memory Palace–style) not implemented.** Reason: scaffold §6.1 + non-goal #1 — no vector index, embedding store, or knowledge graph in v1. The `cognition.memory.backend` field is open-string so future backends can populate without contract change.
+
+### Adjacent debt (pre-existing, surfaced by this cycle)
+
+5. **OCaml dune build had a latent path bug from the abf651b0 refactor (2026-04-11).** `src/ocaml/lib/dune` referenced `../../VERSION` and `../../cn.json` which resolve to `src/VERSION` and `src/cn.json` (these files live at the repo root, not in src/). Without the fix, dune build cannot compile cn_contract.ml at all. **Patched in this cycle** (`../../` → `../../../`) because the type-coherence verification scaffold §6.4 requires `dune build` to actually run. This is a one-line mechanical fix consistent with the refactor's intent; α deliberately did NOT take on the broader OCaml-stack repair (see #6 below). The fix is enclosed in commit `f1ccef25` and called out in the commit message.
+6. **OCaml `test/cmd/dune` references a non-existent extension binary** (`src/agent/extensions/cnos.net.http/host/cnos-ext-http`). Pre-existing dependency drift: the cnos.net.http extension no longer exists in the tree but the test still names it. This blocks `dune runtest test/cmd` (the cn_extension_test library's inline-tests deps cannot resolve). Result: the OCaml-side `cn_runtime_contract_test` (which exercises `gather` / `render_markdown` / `to_json` end-to-end) cannot be run via `dune runtest test/cmd` in this cycle. **Not fixed** here — it is a clear pre-existing breakage unrelated to #100, and the extensions feature appears to have been removed. Type-coherence of the cycle's emitter changes is verified by `dune build` (exit 0) + `dune runtest test/lib` (CG1 + RC1 cover the cognition + memory record-literal compile path); the deeper functional test would land in a follow-up cycle that cleans up `test/cmd/dune`. CI does not run OCaml at all (build.yml is Go-only) so this does not gate the merge.
+7. **OCaml source tree is frozen.** Per the `git log --since='2026-04-11' -- src/ocaml/` query (zero commits since the refactor), the OCaml tree has been unmodified for ~5 weeks. The Go binary is the live runtime per README. The OCaml emitter remains the canonical schema authority — my contract change is correctly placed there — but its runtime emission path is not the live one. β should treat the OCaml change as schema source-of-truth, not as live-runtime verification.
+
+### Voice / authority debt
+
+8. **Skill activation index** — the new `agent/memory` skill will be picked up by `Cn_activation.build_index` automatically (it walks installed package skill dirs). Verified by inspection of `cn_activation.ml`'s walker logic; not exercised by a fresh-hub integration test in this cycle because doing so would require setting up a hub fixture with the cycle's own package installed. Risk: low — the activation path is well-trodden by existing skills.
+
+The first four items are out-of-scope by design (scaffold + non-goals). Items 5–7 are adjacent findings α surfaced during the harness audit; item 5 was patched because the audit required it, items 6–7 were left because the scope of repair is larger than #100. Item 8 is a known integration-test gap.
