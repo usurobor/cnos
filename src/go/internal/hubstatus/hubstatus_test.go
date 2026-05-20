@@ -214,6 +214,84 @@ func TestRunCommandRegistry(t *testing.T) {
 	}
 }
 
+// TestRunMemoryPending: when state/runtime-contract.json is absent
+// the Memory section reports pending — not silent. (#100 AC6 surface.)
+func TestRunMemoryPending(t *testing.T) {
+	hub := t.TempDir()
+	writeManifest(t, hub, "cnos.core", `{
+		"schema": "cn.package.v1",
+		"name": "cnos.core",
+		"version": "3.80.0",
+		"kind": "package",
+		"engines": {"cnos": "3.80.0"}
+	}`)
+
+	var stdout bytes.Buffer
+	if err := Run(hub, "3.80.0", nil, &stdout); err != nil {
+		t.Fatalf("status: %v", err)
+	}
+
+	out := stdout.String()
+	if !strings.Contains(out, "Memory:") {
+		t.Error("expected Memory: header in output")
+	}
+	if !strings.Contains(out, "pending") {
+		t.Error("expected 'pending' in Memory section when contract absent")
+	}
+}
+
+// TestRunMemoryFromContract: when state/runtime-contract.json carries
+// the cognition.memory block (#100 AC1), cn status projects it. This
+// is the AC6 happy-path surface.
+func TestRunMemoryFromContract(t *testing.T) {
+	hub := t.TempDir()
+	writeManifest(t, hub, "cnos.core", `{
+		"schema": "cn.package.v1",
+		"name": "cnos.core",
+		"version": "3.80.0",
+		"kind": "package",
+		"engines": {"cnos": "3.80.0"}
+	}`)
+	if err := os.MkdirAll(filepath.Join(hub, "state"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	contract := `{
+		"schema": "cn.runtime_contract.v2",
+		"cognition": {
+			"memory": {
+				"backend": "git+threads+state",
+				"entrypoint": ".cn/vendor/packages/cnos.core/skills/agent/memory/SKILL.md",
+				"surfaces": ["threads/reflections/", "threads/adhoc/", "state/conversation.json"],
+				"freshness": "most-recent: 2 days ago",
+				"scope": "decisions, learnings, reflections, working continuity"
+			}
+		}
+	}`
+	if err := os.WriteFile(filepath.Join(hub, "state", "runtime-contract.json"),
+		[]byte(contract), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout bytes.Buffer
+	if err := Run(hub, "3.80.0", nil, &stdout); err != nil {
+		t.Fatalf("status: %v", err)
+	}
+
+	out := stdout.String()
+	for _, want := range []string{
+		"Memory:",
+		"git+threads+state",
+		".cn/vendor/packages/cnos.core/skills/agent/memory/SKILL.md",
+		"threads/reflections/",
+		"most-recent: 2 days ago",
+		"decisions, learnings, reflections, working continuity",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("expected %q in Memory section, got:\n%s", want, out)
+		}
+	}
+}
+
 func TestRunSkipsDirsWithoutManifest(t *testing.T) {
 	hub := t.TempDir()
 	// Create a dir without cn.package.json — should be silently skipped.

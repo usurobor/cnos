@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestRunAllHealthyHub(t *testing.T) {
@@ -329,6 +330,127 @@ func TestSkillActivationCheck_WarnsOnTriggerConflict(t *testing.T) {
 // Adding a doctor-level test of the mapping would require platform-
 // specific tricks to produce an unreadable file on linux+root; the
 // coverage cost/benefit doesn't justify it.
+
+// writeMemoryEntrypoint installs the canonical memory skill file
+// at the path doctor's checkMemoryEntrypoint expects.
+func writeMemoryEntrypoint(t *testing.T, hub string) {
+	t.Helper()
+	dir := filepath.Join(hub, ".cn", "vendor", "packages", "cnos.core",
+		"skills", "agent", "memory")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "SKILL.md"),
+		[]byte("---\nname: memory\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// writeMemoryActivity writes a single file under the given hub-relative
+// memory dir with the supplied mtime. ageDays<0 = future (not exercised);
+// 0 = now; positive = N days in the past.
+func writeMemoryActivity(t *testing.T, hub, relDir, name string, ageDays int) {
+	t.Helper()
+	dir := filepath.Join(hub, relDir)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mtime := time.Now().Add(-time.Duration(ageDays) * 24 * time.Hour)
+	if err := os.Chtimes(path, mtime, mtime); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// memoryCheck returns the memory entrypoint check result from a checks
+// slice, or a sentinel if not present.
+func memoryCheck(checks []CheckResult) CheckResult {
+	for _, ch := range checks {
+		if ch.Name == "memory entrypoint" {
+			return ch
+		}
+	}
+	return CheckResult{Name: "memory entrypoint", Status: StatusInfo,
+		Value: "<not present in results>"}
+}
+
+// TestMemoryEntrypoint_Missing covers the AC6 fail path: the skill file
+// is absent (cnos.core not installed yet or memory skill missing).
+func TestMemoryEntrypoint_Missing(t *testing.T) {
+	hub := makeTestHub(t)
+	checks := RunAll(context.Background(), hub, "3.80.0", nil)
+	ch := memoryCheck(checks)
+	if ch.Status != StatusFail {
+		t.Errorf("missing entrypoint: status=%d value=%q, want StatusFail",
+			ch.Status, ch.Value)
+	}
+	if !strings.Contains(ch.Value, "missing") {
+		t.Errorf("expected 'missing' in value, got %q", ch.Value)
+	}
+}
+
+// TestMemoryEntrypoint_PresentNoActivity covers the legitimate-pending
+// state: skill is installed but the hub has no threads yet. This is
+// Info, not Fail — a freshly-set-up hub legitimately has no activity.
+func TestMemoryEntrypoint_PresentNoActivity(t *testing.T) {
+	hub := makeTestHub(t)
+	writeMemoryEntrypoint(t, hub)
+	checks := RunAll(context.Background(), hub, "3.80.0", nil)
+	ch := memoryCheck(checks)
+	if ch.Status != StatusInfo {
+		t.Errorf("no activity: status=%d value=%q, want StatusInfo",
+			ch.Status, ch.Value)
+	}
+	if !strings.Contains(ch.Value, "no memory activity") {
+		t.Errorf("expected 'no memory activity' in value, got %q", ch.Value)
+	}
+}
+
+// TestMemoryEntrypoint_Fresh covers the happy path: skill installed and
+// a recent thread exists.
+func TestMemoryEntrypoint_Fresh(t *testing.T) {
+	hub := makeTestHub(t)
+	writeMemoryEntrypoint(t, hub)
+	writeMemoryActivity(t, hub, "threads/adhoc",
+		"20260520-recent.md", 1)
+	checks := RunAll(context.Background(), hub, "3.80.0", nil)
+	ch := memoryCheck(checks)
+	if ch.Status != StatusPass {
+		t.Errorf("fresh: status=%d value=%q, want StatusPass",
+			ch.Status, ch.Value)
+	}
+	if !strings.Contains(ch.Value, "fresh") {
+		t.Errorf("expected 'fresh' in value, got %q", ch.Value)
+	}
+}
+
+// TestMemoryEntrypoint_Stale covers the AC6 unhappy-path: skill is
+// installed but the most-recent activity is past the 30-day threshold.
+// StatusInfo (visible to operator) — not Fail (stale memory does not
+// gate merges).
+func TestMemoryEntrypoint_Stale(t *testing.T) {
+	hub := makeTestHub(t)
+	writeMemoryEntrypoint(t, hub)
+	writeMemoryActivity(t, hub, "threads/reflections/daily",
+		"20260101-old.md", 60)
+	checks := RunAll(context.Background(), hub, "3.80.0", nil)
+	ch := memoryCheck(checks)
+	if ch.Status != StatusInfo {
+		t.Errorf("stale: status=%d value=%q, want StatusInfo",
+			ch.Status, ch.Value)
+	}
+	if !strings.Contains(ch.Value, "stale") {
+		t.Errorf("expected 'stale' in value, got %q", ch.Value)
+	}
+	// The 30-day threshold literal must be observable in the value
+	// text (#100 AC1 / AC6: hard-coded for v1, surfaced explicitly).
+	if !strings.Contains(ch.Value, "30") {
+		t.Errorf("expected threshold '30' in value, got %q", ch.Value)
+	}
+}
 
 func makeTestHub(t *testing.T) string {
 	t.Helper()

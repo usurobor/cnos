@@ -6,6 +6,7 @@
 package hubstatus
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -47,8 +48,59 @@ func Run(hubPath, version string, commands []CommandInfo, stdout io.Writer) erro
 		return err
 	}
 
+	showMemory(hubPath, stdout)
 	showCommands(commands, stdout)
 	return nil
+}
+
+// showMemory renders the cognition.memory block of the runtime
+// contract (#100 AC6). The OCaml emitter is the authority; this
+// renderer projects the JSON shape it wrote. Absence is rendered
+// as pending (the contract is generated at wake), not failure —
+// fresh hubs legitimately have no contract yet.
+func showMemory(hubPath string, stdout io.Writer) {
+	contractPath := filepath.Join(hubPath, "state", "runtime-contract.json")
+	data, err := os.ReadFile(contractPath)
+	if err != nil {
+		fmt.Fprintf(stdout, "\nMemory:\n  %s pending (no runtime contract; generated at wake)\n",
+			cross)
+		return
+	}
+	var doc struct {
+		Cognition struct {
+			Memory struct {
+				Backend    string   `json:"backend"`
+				Entrypoint string   `json:"entrypoint"`
+				Surfaces   []string `json:"surfaces"`
+				Freshness  string   `json:"freshness"`
+				Scope      string   `json:"scope"`
+			} `json:"memory"`
+		} `json:"cognition"`
+	}
+	if err := json.Unmarshal(data, &doc); err != nil {
+		fmt.Fprintf(stdout, "\nMemory:\n  %s pending (runtime contract unparseable)\n",
+			cross)
+		return
+	}
+	m := doc.Cognition.Memory
+	if m.Backend == "" && m.Entrypoint == "" {
+		fmt.Fprintf(stdout, "\nMemory:\n  %s pending (contract missing cognition.memory; regenerate at next wake)\n",
+			cross)
+		return
+	}
+	fmt.Fprintf(stdout, "\nMemory:\n")
+	fmt.Fprintf(stdout, "  backend.............. %s %s\n", check, m.Backend)
+	fmt.Fprintf(stdout, "  entrypoint........... %s %s\n", check, m.Entrypoint)
+	if len(m.Surfaces) > 0 {
+		fmt.Fprintf(stdout, "  surfaces............. %s %s\n", check,
+			strings.Join(m.Surfaces, ", "))
+	}
+	if m.Freshness != "" {
+		fmt.Fprintf(stdout, "  freshness............ %s %s\n", check, m.Freshness)
+	}
+	if m.Scope != "" {
+		fmt.Fprintf(stdout, "  scope................ %s %s\n", check, m.Scope)
+	}
 }
 
 const (

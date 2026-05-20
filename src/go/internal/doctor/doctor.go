@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/usurobor/cnos/src/go/internal/activation"
 	"github.com/usurobor/cnos/src/go/internal/pkg"
@@ -115,6 +116,12 @@ func RunAll(ctx context.Context, hubPath, version string, commandIssues []Comman
 	// Runtime contract — generated at wake; legitimately pending before
 	// the first wake. A present-but-malformed contract is fatal.
 	checks = append(checks, checkRuntimeContract(hubPath))
+
+	// Memory entrypoint (#100 AC6) — the canonical memory skill at
+	// .cn/vendor/packages/cnos.core/skills/agent/memory/SKILL.md.
+	// Missing = Fail (cnos.core not installed or skill missing);
+	// stale (no thread mtime in 30 days) = Info; otherwise = Pass.
+	checks = append(checks, checkMemoryEntrypoint(hubPath))
 
 	// Git remote — optional by policy: a hub may be local-only, offline,
 	// or have its remote added later. Missing = informational, not fatal.
@@ -324,6 +331,91 @@ func checkRuntimeContract(hubPath string) CheckResult {
 	}
 	return CheckResult{Name: "runtime contract", Status: StatusPass,
 		Value: "valid (identity + cognition + body + medium)"}
+}
+
+// memoryStaleDays is the v1 hard-coded staleness threshold for the
+// memory faculty (#100 AC1 freshness, AC6 doctor check). The threshold
+// is observable in the doctor check value text so the rule is data,
+// not folklore.
+const memoryStaleDays = 30
+
+// memoryEntrypointRel is the hub-relative path to the canonical
+// memory skill — the single restore surface the agent reads at
+// session start. Aligns with the OCaml emitter's
+// cognition.memory.entrypoint default (#100 AC1). Post B14a (#101)
+// the path moves mechanically to self/memory/SKILL.md.
+const memoryEntrypointRel = ".cn/vendor/packages/cnos.core/skills/agent/memory/SKILL.md"
+
+// memoryScanDirs are the canonical memory-content directories whose
+// most-recent file mtime determines freshness. Mirrors the OCaml
+// emitter's [memory_state] in cn_runtime_contract.ml.
+var memoryScanDirs = []string{
+	"threads/reflections/daily",
+	"threads/reflections/weekly",
+	"threads/adhoc",
+}
+
+func checkMemoryEntrypoint(hubPath string) CheckResult {
+	entrypoint := filepath.Join(hubPath, memoryEntrypointRel)
+	if _, err := os.Stat(entrypoint); err != nil {
+		return CheckResult{Name: "memory entrypoint", Status: StatusFail,
+			Value: fmt.Sprintf("missing %s (run 'cn deps restore')",
+				memoryEntrypointRel)}
+	}
+	newest, found := newestMtimeIn(hubPath, memoryScanDirs)
+	if !found {
+		return CheckResult{Name: "memory entrypoint", Status: StatusInfo,
+			Value: "present, no memory activity yet"}
+	}
+	age := time.Since(newest)
+	days := int(age.Hours() / 24)
+	if days > memoryStaleDays {
+		return CheckResult{Name: "memory entrypoint", Status: StatusInfo,
+			Value: fmt.Sprintf("stale (most-recent %d days ago; threshold %dd)",
+				days, memoryStaleDays)}
+	}
+	switch {
+	case days <= 0:
+		return CheckResult{Name: "memory entrypoint", Status: StatusPass,
+			Value: "fresh (most-recent: today)"}
+	case days == 1:
+		return CheckResult{Name: "memory entrypoint", Status: StatusPass,
+			Value: "fresh (most-recent: 1 day ago)"}
+	default:
+		return CheckResult{Name: "memory entrypoint", Status: StatusPass,
+			Value: fmt.Sprintf("fresh (most-recent: %d days ago)", days)}
+	}
+}
+
+// newestMtimeIn returns the newest mtime found among regular files
+// under any of the given hub-relative dirs. Missing dirs are skipped.
+// Used by the memory entrypoint freshness check; same scan set as
+// the OCaml emitter's [memory_state].
+func newestMtimeIn(hubPath string, dirs []string) (time.Time, bool) {
+	var newest time.Time
+	found := false
+	for _, d := range dirs {
+		full := filepath.Join(hubPath, d)
+		entries, err := os.ReadDir(full)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if !e.Type().IsRegular() {
+				continue
+			}
+			info, err := e.Info()
+			if err != nil {
+				continue
+			}
+			m := info.ModTime()
+			if !found || m.After(newest) {
+				newest = m
+				found = true
+			}
+		}
+	}
+	return newest, found
 }
 
 func checkGitRemote(ctx context.Context, hubPath string) CheckResult {
