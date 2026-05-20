@@ -135,3 +135,82 @@ Peers updated:
 - `docs/alpha/agent-runtime/MEMORY.md` rewritten as the runbook (per scaffold §3 AC7 γ recommendation). §0 names the gap; §1 names the three surfaces and the entrypoint; §2 prescribes the ordered reads; §3 carries the write-protocol short form (full form in the skill); §4 names the index discipline; §5 names the freshness signal semantics; §6 enumerates known debt.
 - v0.2.0 design lineage preserved in §Supersession (paired-state table: v0.2.0 position ↔ post-#100 position ↔ why; what v0.2.0 got right and #100 preserves).
 - Mutual reference: memory skill names the runbook as the canonical entrypoint; runbook names the skill as the discipline. Runtime contract's `cognition.memory.entrypoint` points at the skill (the installed file every hub has); the runbook is named in the skill body and in the schema doc. Both surfaces agree on the canonical entrypoint (scaffold §6.3 consistency check).
+
+---
+
+## §Self-check
+
+Did α's work push ambiguity onto β? Is every claim backed by evidence in the diff?
+
+**Schema-bearing harness audit (alpha/SKILL.md §2.4 + scaffold §6.4).** The cognition record is schema-bearing. Enumerated every producer/consumer before claiming closure.
+
+`Cn_contract.cognition` (OCaml record type):
+- Producer: `cn_runtime_contract.ml:gather` (one site, updated).
+- Consumers (code): `cn_runtime_contract.ml:render_markdown` + `to_json` (both updated to handle the new field).
+- Consumers (re-export type-equality mirror): `cn_runtime_contract.ml` (updated with the new field; type equality preserved).
+- Consumers (tests): `test/lib/cn_contract_pure_test.ml` CG1 + RC1 record literals (both updated). `test/cmd/cn_runtime_contract_test.ml` consumes `c.cognition.packages` only (no destructure; not affected by the new field) — confirmed by inspection of the test file.
+- Doc-only references (no record access): `cn_context.ml:150` (prompt text), `cn_activation.ml:9,68` (docstrings). Not affected.
+
+`state/runtime-contract.json` (JSON shape):
+- Producer: `cn_runtime_contract.ml:to_json` (one site, updated to emit `cognition.memory`).
+- Consumers (Go): `doctor.go:checkRuntimeContract` checks top-level keys only (cognition presence, not sub-shape) — not affected by adding sub-keys. New consumer `hubstatus.go:showMemory` reads `cognition.memory` — covered by `TestRunMemoryFromContract`.
+- Consumers (OCaml legacy): `cn_system.ml:199-218` (alternate doctor) — checks top-level keys only; not affected.
+- Consumers (tests): `doctor_test.go` fixtures use `cognition: map[string]any{}` placeholder — sub-shape additions do not break these tests; verified by passing test run.
+
+**Caller-path trace for new modules (alpha/SKILL.md row 12).** Every new function has a non-test caller:
+
+| New module/function | Non-test caller | Call site |
+|---|---|---|
+| `Cn_runtime_contract.memory_state` | `Cn_runtime_contract.gather` | `cn_runtime_contract.ml` (gather threads `memory` into cognition) |
+| `doctor.checkMemoryEntrypoint` | `doctor.RunAll` | `doctor.go` (added after `checkRuntimeContract`) |
+| `doctor.newestMtimeIn` | `doctor.checkMemoryEntrypoint` | `doctor.go` (helper) |
+| `hubstatus.showMemory` | `hubstatus.Run` | `hubstatus.go` (added between `showPackages` and `showCommands`) |
+
+**Peer enumeration (alpha/SKILL.md §2.3).** The cycle touches a family of peers across OCaml + Go + docs. Enumerated in the scaffold §5 code-peer table; verified each was updated or explicitly exempted:
+
+| Peer (scaffold §5) | Status |
+|---|---|
+| `src/ocaml/lib/cn_contract.ml` | Updated — new `memory` record + cognition field |
+| `src/ocaml/cmd/cn_runtime_contract.ml` | Updated — mirror + gather + render + to_json + new helper |
+| `src/go/internal/doctor/doctor.go` | Updated — new check + helper + constants |
+| `src/go/internal/doctor/doctor_test.go` | Updated — 4 new tests + 2 helpers |
+| `src/go/internal/hubstatus/hubstatus.go` | Updated — new Memory section |
+| `src/go/internal/hubstatus/hubstatus_test.go` | Updated — 2 new tests |
+| `src/packages/cnos.core/skills/agent/memory/SKILL.md` | New — AC2-AC5 skill |
+| `docs/alpha/agent-runtime/RUNTIME-CONTRACT-v2.md` | Updated — §2.2 table + §4 JSON + §5 markdown + §6 doctor note |
+| `docs/alpha/agent-runtime/MEMORY.md` | Updated — runbook rewrite + §Supersession |
+| `kata/` content for the new skill | Not required — embedded kata at skill §6 (per meta-skill §2.4 `kata_surface: embedded`) |
+
+Intra-doc repetition check (alpha/SKILL.md §2.3 second clause): grepped for `cognition.memory` across the diff to confirm consistent shape:
+- `cn_contract.ml`: 1 type definition site
+- `cn_runtime_contract.ml`: 1 mirror, 1 helper output, 1 gather construction, 1 render block, 1 to_json block — all five fields consistent
+- `doctor.go`: 1 constant + 1 dir scan + 1 check; entrypoint constant matches OCaml literal
+- `hubstatus.go`: 1 JSON read; field names match emitter
+- `RUNTIME-CONTRACT-v2.md`: 1 sub-shape table + 1 JSON example + 1 markdown example — all five fields consistent
+- `MEMORY.md`: 1 JSON example — all five fields consistent
+
+Same-shape verification: OCaml emitter `memory_state` defaults align field-for-field with `MEMORY.md` §1 example and `RUNTIME-CONTRACT-v2.md` §4 example. The five fields are the contract; downstream renderers (markdown + Go) consume them uniformly.
+
+**Test assertion count from runner output (alpha/SKILL.md row 13).** Verified via `go test -v`:
+
+- `internal/doctor`: 4 new Memory tests, all PASS. Pre-existing 11 tests still PASS.
+- `internal/hubstatus`: 2 new Memory tests, all PASS. Pre-existing 7 tests still PASS.
+- OCaml `test/lib runtest`: exit 0 (CG1 and RC1 record-literal updates verified).
+
+No claim of "N assertions added" is made — the test runner's PASS lines are the authority.
+
+**Skill-class peers (alpha/SKILL.md §2.3 — skill-class enumeration).** The diff adds a new role-adjacent skill at `cnos.core/skills/agent/memory/`. Checked the skill-class corpus:
+
+- Role skills (`alpha/`, `beta/`, `gamma/`, `operator/`) — not modified. The new memory skill is an agent skill, not a role skill; no role contract change rippled.
+- Lifecycle skills (`review/`, `release/`, `post-release/`, `design/`, `plan/`, `issue/`) — not modified. No role-contract changes that would force lifecycle drift.
+- Agent skills (`reflect`, `adhoc-thread`) — explicitly referenced by path; not modified (non-goal #3).
+- Meta-skill (`cnos.core/skills/skill/SKILL.md`) — used as the authoring constraint; not modified.
+
+**Ambiguity check.** Things β should be able to verify mechanically without additional context:
+- AC1 producer/consumer enumeration above
+- AC6 test coverage (happy + unhappy) — explicit
+- Caller-path trace — explicit
+- 30-day threshold literal — observable in `doctor.go:memoryStaleDays` constant + test assertion + value text
+- Mutual agreement between skill and runbook on canonical entrypoint — both name the same `.cn/vendor/.../memory/SKILL.md` path
+- Branch is rebased onto origin/main (merge-base == origin/main; verified at sign-off time)
+- Commit author email is `alpha@cdd.cnos` on all four α commits
