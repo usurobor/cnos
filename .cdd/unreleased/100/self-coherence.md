@@ -239,3 +239,43 @@ Explicit known debt the cycle does not close, and the reason each is left as deb
 8. **Skill activation index** — the new `agent/memory` skill will be picked up by `Cn_activation.build_index` automatically (it walks installed package skill dirs). Verified by inspection of `cn_activation.ml`'s walker logic; not exercised by a fresh-hub integration test in this cycle because doing so would require setting up a hub fixture with the cycle's own package installed. Risk: low — the activation path is well-trodden by existing skills.
 
 The first four items are out-of-scope by design (scaffold + non-goals). Items 5–7 are adjacent findings α surfaced during the harness audit; item 5 was patched because the audit required it, items 6–7 were left because the scope of repair is larger than #100. Item 8 is a known integration-test gap.
+
+---
+
+## §CDD Trace
+
+CDD Trace through step 7 (per alpha/SKILL.md §2.5 minimum contents):
+
+| Step | Artifact | Skills loaded | Decision |
+|---|---|---|---|
+| 0 Observe | γ scaffold §1 ε framing | — | Memory faculty named in `cnos.core/doctrine/KERNEL.md §1.4` but unimplemented for two months; receipt-stream pattern empirically anchored by Σ's 2026-05-20 filing of cnos#386 ahead of checking #100 |
+| 1 Select | issue#100 + γ scaffold | — | Cycle selected by γ; α inherited a fully scaffolded gap. AC1–AC7 are #100 verbatim, mediated by the April-26 evidence comment and the 2026-05-20 cnos#386 fold-in (both incorporated into the scaffold's AC notes, not the AC text) |
+| 2 Mode | γ scaffold §8 | issue/SKILL.md (read via scaffold) | design-and-build (not MCA — no stable DESIGN.md path; not docs-only — new code surface; not split — 7 ACs fit one cycle per scaffold's five-factor heuristic) |
+| 3 Plan | γ scaffold + this file's §ACs implicit ordering | alpha/SKILL.md | Plan: AC1 (OCaml schema + emitter) → AC2-AC5 (skill body) → AC6 (Go doctor + status) → AC7 (runbook + schema doc) → self-coherence + pre-review. Ordering reflects dependency: contract field must exist before doctor + status can render it; skill must exist before runbook can reference it. |
+| 4 Gap | §Gap above + #100 body | — | Memory exists in practice (reflections + adhoc + state/conversation + git history + runtime contract) but is not a named faculty with a recall + write protocol |
+| 5 Artifacts | this file §ACs | meta-skill, eng/{document,go,ocaml} | Implementation lands in 4 commits + 5 self-coherence sections. Diff stats: 13 files, ~1244 insertions / ~350 deletions (most deletions are MEMORY.md v0.2.0 → runbook replacement) |
+| 6 Files | (this section's table below) | — | (see file table) |
+| 7 Coherence | this file (all sections above) | alpha/SKILL.md §2.5 + §2.6 | Self-check + harness audit + peer enumeration + caller-path trace done. Pre-review gate satisfied (see §Review-readiness in a follow-up commit). |
+
+### Files in diff (CDD step 6 enumeration)
+
+Every file in `git diff --stat origin/main..HEAD` is named here (alpha/SKILL.md row 11 — artifact enumeration matches diff):
+
+| File | AC / purpose | Commit |
+|---|---|---|
+| `.cdd/unreleased/100/gamma-scaffold.md` | γ scaffold (inherited; not α-authored) | 3340ca97 |
+| `.cdd/unreleased/100/self-coherence.md` | this file (incremental, multiple commits) | 3ea69b38, a867db2c, 74653e3e, e4c53a1f, 8b4cce5d, (CDD Trace commit) |
+| `.gitignore` | AC2 — negate top-level `memory/` rule for the new skill path | a183cd17 |
+| `docs/alpha/agent-runtime/MEMORY.md` | AC7 — runbook rewrite + §Supersession | a06801c3 |
+| `docs/alpha/agent-runtime/RUNTIME-CONTRACT-v2.md` | AC1 — schema doc update | a06801c3 |
+| `src/go/internal/doctor/doctor.go` | AC6 — `checkMemoryEntrypoint` + helpers + constants | d498c28b |
+| `src/go/internal/doctor/doctor_test.go` | AC6 — 4 new tests + helpers | d498c28b |
+| `src/go/internal/hubstatus/hubstatus.go` | AC6 — `showMemory` + Memory section | d498c28b |
+| `src/go/internal/hubstatus/hubstatus_test.go` | AC6 — 2 new tests | d498c28b |
+| `src/ocaml/cmd/cn_runtime_contract.ml` | AC1 — mirror + `memory_state` + gather/render/to_json threading | f1ccef25 |
+| `src/ocaml/lib/cn_contract.ml` | AC1 — `memory` record type + `cognition` field | f1ccef25 |
+| `src/ocaml/lib/dune` | §Debt #5 adjacent fix — `../../` → `../../../` for VERSION + cn.json | f1ccef25 |
+| `src/packages/cnos.core/skills/agent/memory/SKILL.md` | AC2-AC5 — new skill (326 lines, meta-skill conformant) | a183cd17 |
+| `test/lib/cn_contract_pure_test.ml` | AC1 — CG1 + RC1 record-literal construction sites | f1ccef25 |
+
+13 files in diff; 13 named above. No silent additions.
