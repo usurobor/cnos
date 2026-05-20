@@ -4,6 +4,10 @@ node_modules/
 # Instance-specific directories (belong in hub, not template)
 memory/
 media/
+# Skill source under cnos.core/skills/agent/memory/ is package content,
+# not hub-instance memory (#100 memory faculty).
+!src/packages/cnos.core/skills/agent/memory/
+!src/packages/cnos.core/skills/agent/memory/**
 
 # Databases and logs
 *.db
