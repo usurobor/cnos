@@ -15,6 +15,15 @@ triggers:
   - last time
   - before this
 scope: task-local
+inputs:
+  - runtime contract cognition.memory block (backend, entrypoint, surfaces, freshness, scope)
+  - canonical entrypoint runbook at docs/alpha/agent-runtime/MEMORY.md
+  - current task description and any prior session's close-out artifact
+outputs:
+  - ordered reads at session start (entrypoint → reflections → adhoc → workspace doctrine when relevant)
+  - in-line MCA receipts at decision time (Part A)
+  - structured session-close gate naming artifact_refs / debt_refs / decision_refs / learnings_refs / memory_refs / upstream_pending (Part B)
+  - new adhoc thread entries with typed frontmatter relationships (relates_to / supersedes / derived_from) when applicable
 ---
 
 # Memory
