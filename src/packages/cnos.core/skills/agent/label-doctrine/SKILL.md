@@ -77,10 +77,12 @@ Every `dispatch:cell` issue carries **exactly one** `protocol:{id}` label. The q
 
 | Qualifier | Owner | What its presence asserts |
 |---|---|---|
-| `protocol:cdd` | `cnos.cdd` | runtime = CDD cycle (per cnos.cdd's spec) |
+| `protocol:cds` | `cnos.cds` | runtime = CDS software-cell shape (per cnos.cds's spec) |
 | `protocol:cdr` | `cnos.cdr` | runtime = CDR research-cell shape (per cnos.cdr's spec) |
 | `protocol:cdw` | `cnos.cdw` (when the package exists) | runtime = CDW writing-cell shape (per cnos.cdw's spec) |
 | `protocol:{name}` | future package | each future protocol package registers its own qualifier at install |
+
+**Note on cnos.cdd:** `cnos.cdd` is the generic *cell-runtime framework* — it defines the γ/α/β/δ role contracts, the cell mechanics, and the dispatch protocol that the concrete protocol packages (`cnos.cds`, `cnos.cdr`, `cnos.cdw`, ...) all use under the hood. It does **not** own a `protocol:cdd` qualifier of its own; cells are always labeled with the qualifier of the concrete protocol whose runtime executes them (a software cell carries `protocol:cds`, not `protocol:cdd`).
 
 The qualifier label is created in the repo when the owning package is installed via `cn install {pkg}`. cnos.core does NOT create these labels — that would conflate the layers.
 
@@ -114,7 +116,7 @@ The two layers have distinct owners and distinct install paths.
 | Layer | Owner package | Install responsibility |
 |---|---|---|
 | Generic lifecycle + dispatchability | `cnos.core` (or a future `cnos.agent` sub-package) | `cn install cnos.core` creates `status:backlog`, `status:ready`, `status:todo`, `status:in-progress`, `status:review`, `status:changes`, `status:blocked`, `dispatch:cell` |
-| Per-protocol qualifier | each protocol package | `cn install cnos.cdd` creates `protocol:cdd`; `cn install cnos.cdr` creates `protocol:cdr`; per-package |
+| Per-protocol qualifier | each concrete protocol package | `cn install cnos.cds` creates `protocol:cds`; `cn install cnos.cdr` creates `protocol:cdr`; per-package (cnos.cdd is the framework, not a concrete protocol; it does not create a protocol qualifier) |
 
 Crossing the split is a doctrine violation:
 
@@ -122,7 +124,7 @@ Crossing the split is a doctrine violation:
 - A protocol package MUST NOT create generic lifecycle labels — those are cnos.core-owned
 - A protocol package MAY depend on cnos.core (its install assumes the generic set exists in the repo)
 
-Installs are idempotent on label creation. Repeated `cn install cnos.cdd` runs are no-ops on label state.
+Installs are idempotent on label creation. Repeated `cn install cnos.core` runs are no-ops on generic label state; repeated `cn install cnos.cds` (or `cnos.cdr`, future `cnos.cdw`) runs are no-ops on each concrete protocol's `protocol:{id}` label state.
 
 ---
 
@@ -189,7 +191,7 @@ The skill format:
 
 ## 7. Failure modes
 
-- **Cross-layer label creation.** A package creates a label it does not own (e.g., cnos.cdd creates `status:todo`). _Fix:_ per-package install commands create only labels in the package's owned set; `cn install` checks ownership before write.
+- **Cross-layer label creation.** A package creates a label it does not own (e.g., cnos.cds creates `status:todo`, or cnos.core creates `protocol:cds`). _Fix:_ per-package install commands create only labels in the package's owned set; `cn install` checks ownership before write.
 - **Missing protocol qualifier.** A `dispatch:cell` issue without `protocol:{id}`. _Fix:_ dispatch wakes reject the issue with `degraded_reason: dispatch_protocol_missing` and a repair-instruction comment (per cnos#454 AC9).
 - **Cross-protocol mismatch.** A wake owning `{P}` encounters a cell labeled `protocol:{Q}` where `Q ≠ P`. The handling differs by the wake's entry path:
   - **Scheduled sweep:** the wake passes over the cell silently (it is not eligible under the wake's selector). The matching wake claims it on its own sweep. Not a drift event.
