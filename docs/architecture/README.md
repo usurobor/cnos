@@ -4,7 +4,7 @@
 
 ## System
 
-- [ARCHITECTURE.md](../beta/architecture/ARCHITECTURE.md) — system overview: how the parts relate.
+- [ARCHITECTURE.md](ARCHITECTURE.md) — system overview: how the parts relate.
 - [CAA.md](../reference/runtime/CAA.md) — coherent agent architecture.
 - [INVARIANTS.md](../alpha/architecture/INVARIANTS.md) — architectural invariants.
 
