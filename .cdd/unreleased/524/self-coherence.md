@@ -336,3 +336,157 @@ PATH. The CI environment satisfies this (verified from existing `install-wake-go
 step). For local use, operators must have pyyaml installed.
 
 REVIEW READY: R1
+
+---
+
+## §R2 — W3 implementation self-coherence (α@cdd.cnos, 2026-06-30)
+
+### 1. Gap this cycle addresses
+
+W3 is the source-flip: after W2 proved byte-identical parity between SKILL.md renders and
+JSON+prompt renders, W3 flips the renderer default so `cn install-wake <name>` reads SKILL.md
+by default. The `--parity-check` mode is inverted: it now proves render(JSON+prompt) ==
+render(SKILL.md), rather than the W2 direction. Goldens are unchanged; JSON+prompt files are
+unchanged; live workflows are unchanged. This is a minimal surgical flip — the invariant is
+that the committed goldens remain byte-identical (provable by transitivity from W2 parity).
+
+### 2. Files changed (W3 scope)
+
+| File | Change type | Stop-condition check |
+|---|---|---|
+| `src/packages/cnos.core/commands/install-wake/cn-install-wake` | 6 targeted edits | Source default flipped; parity semantics inverted; doc comments updated; no golden change; no live workflow change |
+| `.github/workflows/install-wake-golden.yml` | Step rename + comment update | "W2 parity check" → "W3 parity check"; run block unchanged; no golden-write; no new step |
+| `.cdd/unreleased/524/gamma-scaffold.md` | Replaced W2 scaffold with W3 scaffold | W3 scope, ACs, implementation contract, β review prompt |
+| `.cdd/unreleased/524/self-coherence.md §R2` | Extended (this section) | Artifact; no code change |
+
+**Files NOT touched (hard constraints):**
+
+| File / surface | Confirmed |
+|---|---|
+| `schemas/skill.cue` | Not touched |
+| `wake-provider.json` (both wakes) | Not touched |
+| `prompt.md` (both wakes) | Not touched |
+| `SKILL.md` (both wakes) | Not touched |
+| `cnos-agent-admin.golden.yml` | Not touched (git diff confirms) |
+| `cnos-cds-dispatch.golden.yml` | Not touched (git diff confirms) |
+| `.github/workflows/cnos-agent-admin.yml` | Not touched |
+| `.github/workflows/cnos-cds-dispatch.yml` | Not touched |
+
+### 3. Core flip verification
+
+**Edit 3.1.A (`cn-install-wake:298`):** `source_type="json"` → `source_type="skill"`.
+The ONLY assignments to `source_type` after initialization are: `--source json/skill` flag
+overrides (lines 392/394) and the parity-check override (line 416). A plain invocation
+(`cn install-wake <name>`) sets no flags, so `source_type` stays `"skill"` and the SKILL.md
+extraction path runs. Correct.
+
+**Edit 3.1.B (`cn-install-wake:415-416`):** The parity override now sets `source_type="json"`.
+When `--parity-check` is passed, source_type becomes "json" — the SKILL.md extraction block
+(`if [ "$source_type" = "skill" ]; then`) is skipped; the JSON path (jq reads from
+`wake-provider.json`) runs. The rendered output is compared against the committed golden (now
+produced from SKILL.md by default). This proves render(JSON+prompt) == render(SKILL.md). Correct.
+
+**Edits 3.1.C–F:** Documentation and message strings updated to reflect flipped semantics.
+No logic changed by these edits.
+
+**CI step (§3.2):** Step name and comment updated. `run:` block is identical — same two
+`--parity-check` invocations. The step continues to run both wakes through the parity check
+and exits 0 on identity, 5 on divergence.
+
+### 4. AC oracle status
+
+| AC | Oracle | Status |
+|---|---|---|
+| AC3 (default reads SKILL.md) | Code inspection (§3 above) + CI re-render → golden unchanged | SATISFIED by construction |
+| AC4 (goldens byte-identical) | git diff confirms no golden change + transitivity from W2 parity | SATISFIED by transitivity |
+| AC6 (refusals preserved) | Refusal gates are in renderer logic, not in source selection; CI smokes use `--manifest` override | SATISFIED — no gate code touched |
+| AC7/AC8 (CI green, no role-decision strings) | No new literal role-decision strings added; audit grep targets unaffected lines | EXPECTED PASS |
+
+### 5. Stop-condition audit (W3)
+
+| Stop condition | Status |
+|---|---|
+| Goldens change after source flip | NOT expected — W2 parity proof; git diff confirms no golden file in diff |
+| Live wake workflow changes | NOT triggered — `cnos-agent-admin.yml` and `cnos-cds-dispatch.yml` not in diff |
+| JSON+prompt files modified | NOT triggered — both `wake-provider.json` and `prompt.md` files untouched |
+| SKILL.md files modified | NOT triggered — both wake SKILL.md files untouched |
+| New role-decision strings in renderer | NOT triggered — only `"json"`/`"skill"` string literals and comment text changed |
+| Any green gate turns red | NOT expected — CI step updated consistently with code semantics |
+
+### 6. Scope compliance
+
+`git diff --stat HEAD` shows exactly 3 files:
+- `.cdd/unreleased/524/gamma-scaffold.md` (replaced W2 with W3)
+- `.github/workflows/install-wake-golden.yml` (parity step renamed)
+- `src/packages/cnos.core/commands/install-wake/cn-install-wake` (6 edits)
+
+No golden files. No live workflow files. No SKILL.md files. No JSON/prompt files. Scope clean.
+
+REVIEW READY: R2
+
+---
+
+## Manual-δ amendment (post-β, operator-directed — W3 AC5 fixture repair, 2026-06-30)
+
+**What W3 exposed.** Flipping `cn-install-wake`'s default source to `SKILL.md` broke the
+AC5 declaration-only refusal smoke in `install-wake-golden.yml`: the test fixture at
+`src/packages/cnos.core/commands/install-wake/test-fixtures/declaration-only/` was
+**JSON-only** (`wake-provider.json` + `prompt.md`, no `SKILL.md`). With `skill` now the
+default source, the renderer looked for a non-existent `SKILL.md` in the fixture dir and
+died `--source skill: SKILL.md not found` (exit 1) instead of reaching the declaration-only
+refusal (exit 3). The original W3 cell missed this (β CONVERGE despite a red gate); the
+golden re-render job was RED.
+
+**Repair (operator chose option 2: add the SKILL.md, not escape to `--source json`).** Added
+`test-fixtures/declaration-only/SKILL.md` — the typed twin of the JSON manifest, carrying
+the same declaration-only wake contract (`role: admin`, `admin_only: true`,
+`activation_state: declaration-only`, `input.triggers: [schedule]`, full admin output
+block). It validates under `#Wake` (I5). The default skill path now synthesizes the
+manifest from this SKILL.md, reaches the activation_state gate, and refuses with **exit 3**;
+the refusal stderr names `declaration-only` and (via the renderer's no-notes fallback line)
+`preconditions`, satisfying the AC5 assertions. AC5 now tests the **actual default
+(SKILL.md) source path**, not the legacy JSON path.
+
+**Boundary preserved.** No renderer/synthesizer change; no golden change; no live-workflow
+change. The JSON twin (`wake-provider.json` + `prompt.md`) is retained for W3 dual-source
+parity and is deleted in W4. (The `activation_state_notes` prose lives in the SKILL.md body
+per design decision 5; the synthesizer does not map it, so the refusal uses its fallback
+"preconditions" line — a faithful mapping of notes into the skill manifest is a possible
+W4-era refinement, deferred.)
+
+**Re-verified (κ, worktree):** AC5 exit 3 + stderr; I5 = 94 SKILL.md, no findings;
+default(skill) render of both wakes byte-identical to goldens; parity exit 0 both;
+negative proof (mutate only JSON → render unchanged; mutate SKILL.md → render changes →
+default reads SKILL.md).
+
+---
+
+## Manual-δ amendment 2 — W3 completion (manual_delta_repair, operator-directed, 2026-06-30)
+
+`run_class: manual_delta_repair`. **The W3 cell shipped install-wake-golden RED and β
+falsely CONVERGE'd it — that earlier "green" claim is NOT preserved.** AC5 was only the
+first of several install-wake-golden steps the source-flip broke: every step that fed a
+**JSON-only synthetic manifest** and expected JSON-default behavior broke once `skill`
+became the default source. Full classification + repair below (operator principle: default
+wake-rendering tests exercise SKILL.md; only JSON-legacy / JSON-schema-failure tests may
+pin `--source json`; `--source json` must not be used merely to dodge the new default).
+
+| install-wake-golden step | what it tests | classification | repair |
+|---|---|---|---|
+| AC5 — declaration-only refusal (exit 3) | activation_state refusal; applies to **either** source | default → SKILL.md | added `test-fixtures/declaration-only/SKILL.md` (amendment 1) |
+| AC4 / cycle-496 — log-writer mis-declaration (exit 4) | activation_log_writer mis-declaration refusal; applies to **either** source | default → SKILL.md | **added `test-fixtures/log-writer-misdeclaration/SKILL.md`** (role:dispatch + admin_only:false + activation_log_writer:true) — skill default now hits exit 4 + `activation_log_writer mis-declaration:` |
+| AC2 — negative malformed manifest (exit 2) | malformed **JSON** missing required `schema` field — no SKILL.md equivalent (SKILL.md is CUE/#Wake-validated) | **JSON-legacy specific** | pinned **`--source json`** on the AC2 step; retire/replace in W4 |
+| AC4 cycle-496 write-fence (positive / negative / R1 / R2 / false-positive) | git write-fence logic; **invokes no renderer** | unaffected | none |
+| W3 parity (both wakes) | render(JSON+prompt) == render(SKILL.md) | parity (implies `--source json` internally) | none (works) |
+
+Two new SKILL.md fixtures (declaration-only, log-writer-misdeclaration) validate under
+`#Wake` (I5 → 95 modules, no findings). The JSON twins remain for W3 dual-source parity and
+are deleted in W4.
+
+**Re-verified (κ, worktree, this amendment):** AC5 exit 3; **AC4/496 exit 4 + precise
+stderr**; **AC2-negative exit 2 + `required field "schema" missing`** (exact CI step replay
+with `set -o pipefail` passes); both goldens byte-identical from the skill default; parity
+exit 0 both; negative drift proof (mutate JSON → render unchanged, mutate SKILL.md → render
+changes); dispatch-repair-preflight green; I5 = 95 no findings. Boundary preserved: no
+renderer/synthesizer logic change, no golden change, no live-workflow change, no
+wake-behavior change, JSON+prompt retained.
