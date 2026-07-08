@@ -252,3 +252,16 @@ now exist on `cycle/626`. δ's next action is to open the cycle-PR, ensure
 `status:review` transition via `cn issues fsm evaluate --issue 626
 --apply` per §9.6 — γ is not requesting that transition itself and is not
 touching issue #626's labels or comments in this pass.
+
+## δ deliverable_evidence (post-PR-open, cnos#524)
+
+```yaml
+deliverable_evidence:
+  pr: "#635 (cycle/626 -> main)"
+  head_sha: "418daa0ad6fcbe936df6a7476dc2abd0e9b3719a"
+  base_sha: "86042ec5be4b5fb45b213c27dfcf635958f60aac"
+  commits_beyond_base: 5
+  closeout_artifacts: [gamma-scaffold.md, self-coherence.md, beta-review.md, alpha-closeout.md, beta-closeout.md, gamma-closeout.md]
+```
+
+PR #635 opened via `cn cell finalize --issue 626` (mechanical finalizer, cnos#591), retitled and marked ready for review by δ. All five closeout-integrity preflight conditions (`cds-dispatch/SKILL.md` §"Closeout integrity preflight") hold: PR exists and references `#626`; `cycle/626` HEAD (`418daa0`) differs from base (`86042ec`, 5 commits); branch exists and diverges from base; all six required artifacts present; this block names the PR + SHA as evidence. δ now requests `status:in-progress -> status:review` via `cn issues fsm evaluate --issue 626 --apply`.
