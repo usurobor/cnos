@@ -33,13 +33,14 @@ package repoinstall
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -47,8 +48,10 @@ import (
 
 	labeldoctor "github.com/usurobor/cnos/packages/cnos.core/commands/label-doctor"
 	"github.com/usurobor/cnos/src/go/internal/binupdate"
+	"github.com/usurobor/cnos/src/go/internal/dispatchrender"
 	"github.com/usurobor/cnos/src/go/internal/hubsetup"
 	"github.com/usurobor/cnos/src/go/internal/pkg"
+	"github.com/usurobor/cnos/src/go/internal/repostate"
 	"github.com/usurobor/cnos/src/go/internal/restore"
 )
 
@@ -318,20 +321,67 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		return nil, err
 	}
 
+	var dispatchErr error
+	rendered := false
 	if opts.Dispatch == "cds" {
 		// Base install (above) has already completed and written its
 		// files (AC1/C1) — the dispatch render layers on top of it, not
 		// instead of it. runDispatchCds prints its own identity/PAT-scope
 		// stdout lines and, today, always ends by surfacing the cnos#493
 		// canonical-label gap as a returned error (AC3) — it does not
-		// silently report success while that obligation is unmet.
-		if err := runDispatchCds(ctx, opts); err != nil {
-			return nil, err
+		// silently report success while that obligation is unmet. The
+		// error is captured (not returned immediately) so the ledger
+		// write below still runs when the render itself succeeded and
+		// only the label step failed — see the ledger-write comment.
+		// `rendered` (not "an error occurred") is what decides whether
+		// THIS run actually produced/overwrote the workflow file — see
+		// canWriteLedger below for why that distinction, not mere file
+		// existence, is load-bearing.
+		rendered, dispatchErr = runDispatchCds(ctx, opts)
+		if dispatchErr == nil {
+			fmt.Fprintf(opts.Stdout, "Dispatch: cds (agent: %s)\n", resolveDispatchAgent(opts.Agent))
 		}
-		fmt.Fprintf(opts.Stdout, "Dispatch: cds (agent: %s)\n", resolveDispatchAgent(opts.Agent))
 	} else {
 		fmt.Fprintf(opts.Stdout, "Dispatch: none (base install only — no .github/workflows/ changes)\n")
 	}
+
+	// cnos#656 P1: write/update the managed-surface ledger once every
+	// write this run performs has landed on disk. This runs even when
+	// dispatchErr is non-nil, as long as the workflow render itself
+	// actually ran THIS run (rendered == true): the ledger describes what
+	// IS on disk, and losing that record because an orthogonal
+	// obligation (cnos#493 label reconciliation) failed would defeat A3's
+	// "backfill on next install" contract for a repo whose base install
+	// (and, for --dispatch cds, workflow render) otherwise succeeded.
+	//
+	// Deliberately gated on `rendered`, NOT on "does dispatchWorkflowPath
+	// exist on disk" — the latter is also true when a PRIOR successful
+	// run rendered the file and THIS run's identity gate failed before
+	// ever calling the renderer (e.g. `--dispatch cds --agent acme` with
+	// no --workflow-pat-secret, on a repo an earlier `sigma` install
+	// already rendered). Writing the ledger in that case would describe
+	// an untouched file using THIS run's (different, possibly invalid)
+	// opts.Agent/opts.WorkflowPatSecret/opts.BotName/opts.BotID — silently
+	// corrupting the render-contract metadata for a file nothing this run
+	// touched. Skipping the ledger write when !rendered leaves any
+	// existing ledger exactly as it was, which is correct: nothing on
+	// disk changed, so nothing about the ledger should either.
+	canWriteLedger := opts.Dispatch != "cds" || rendered
+	if canWriteLedger {
+		if err := writeRepoState(opts, manifest, repo, dlBase, releaseTag); err != nil {
+			fmt.Fprintf(opts.Stderr, "✗ %s\n", err)
+			if dispatchErr == nil {
+				return nil, err
+			}
+		} else {
+			fmt.Fprintf(opts.Stdout, "✓ wrote .cn/repo.state.json\n")
+		}
+	}
+
+	if dispatchErr != nil {
+		return nil, dispatchErr
+	}
+
 	fmt.Fprintf(opts.Stdout, "\n✓ cn repo install complete.\n")
 
 	return &Result{ReleaseTag: releaseTag, Manifest: manifest, DryRun: false}, nil
@@ -416,7 +466,15 @@ func dispatchWorkflowPath(repoRoot string) string {
 //     "origin" remote) or a GitHub token cannot be resolved, or the
 //     GitHub API call itself fails, this surfaces a named, actionable
 //     error once identity resolution + the render themselves succeed.
-func runDispatchCds(ctx context.Context, opts Options) error {
+// runDispatchCds's rendered return value distinguishes "the render itself
+// produced/overwrote the workflow file THIS run" from "runDispatchCds
+// returned an error" — cnos#656's ledger write needs exactly this
+// distinction (see Run's canWriteLedger comment): a stale workflow file
+// left over from a PRIOR successful run must not be mistaken for
+// evidence that THIS run's render happened, or the ledger would be
+// rewritten with this run's (possibly different, possibly invalid)
+// identity/tier fields describing a file nothing here actually touched.
+func runDispatchCds(ctx context.Context, opts Options) (rendered bool, err error) {
 	agent := resolveDispatchAgent(opts.Agent)
 
 	// PAT-secret identity resolution is an AGENT-tier concern only. The
@@ -430,7 +488,7 @@ func runDispatchCds(ctx context.Context, opts Options) error {
 		if agent != "sigma" {
 			err := fmt.Errorf("--workflow-pat-secret is required for --agent %q (no default substrate PAT-secret binding for non-sigma agents); pass --workflow-pat-secret <NAME> naming the GitHub Actions secret that holds this agent's workflow-scoped PAT", agent)
 			fmt.Fprintf(opts.Stderr, "✗ %s\n", err)
-			return err
+			return false, err
 		}
 		// sigma's default substrate PAT binding, mirroring
 		// cn-install-wake's own default (renderer authority; this is
@@ -438,42 +496,25 @@ func runDispatchCds(ctx context.Context, opts Options) error {
 		patSecret = "SIGMA_WORKFLOW_PAT"
 	}
 
-	rendererPath := filepath.Join(pkg.VendorPath(opts.RepoRoot, "cnos.core"), "commands", "install-wake", "cn-install-wake")
-	if _, statErr := os.Stat(rendererPath); statErr != nil {
-		err := fmt.Errorf("dispatch renderer not found at %s (the cnos.core package must be installed for --dispatch cds): %w", rendererPath, statErr)
-		fmt.Fprintf(opts.Stderr, "✗ %s\n", err)
-		return err
-	}
-
 	outPath := dispatchWorkflowPath(opts.RepoRoot)
-
-	args := []string{"cds-dispatch", "--out", outPath, "--agent", agent}
+	tier := repostate.TierAgent
 	if opts.Engine {
-		// Engine tier: the only renderer arg beyond the output path and the
-		// concurrency-group agent name is --tier engine. The identity flags
-		// (workflow-pat-secret / bot-name / bot-id) are deliberately not
-		// forwarded — the engine tier binds nothing to them.
-		args = append(args, "--tier", "engine")
-	} else {
-		if opts.WorkflowPatSecret != "" {
-			args = append(args, "--workflow-pat-secret", opts.WorkflowPatSecret)
-		}
-		if opts.BotName != "" {
-			args = append(args, "--bot-name", opts.BotName)
-		}
-		if opts.BotID != "" {
-			args = append(args, "--bot-id", opts.BotID)
-		}
+		tier = repostate.TierEngine
 	}
-
-	cmd := exec.CommandContext(ctx, rendererPath, args...)
-	cmd.Dir = opts.RepoRoot
-	cmd.Stdout = opts.Stdout
-	cmd.Stderr = opts.Stderr
-	if err := cmd.Run(); err != nil {
-		err = fmt.Errorf("render dispatch workflow: %w", err)
+	if err := dispatchrender.Render(ctx, dispatchrender.Options{
+		RepoRoot:          opts.RepoRoot,
+		RendererPackage:   "cnos.core",
+		Tier:              tier,
+		Agent:             agent,
+		WorkflowPatSecret: opts.WorkflowPatSecret,
+		BotName:           opts.BotName,
+		BotID:             opts.BotID,
+		OutPath:           outPath,
+		Stdout:            opts.Stdout,
+		Stderr:            opts.Stderr,
+	}); err != nil {
 		fmt.Fprintf(opts.Stderr, "✗ %s\n", err)
-		return err
+		return false, err
 	}
 
 	fmt.Fprintf(opts.Stdout, "✓ rendered .github/workflows/cnos-cds-dispatch.yml\n")
@@ -488,11 +529,15 @@ func runDispatchCds(ctx context.Context, opts Options) error {
 	fmt.Fprintf(opts.Stdout, "  This changes .github/workflows/ — the installing token needs `workflow` scope.\n")
 	fmt.Fprintf(opts.Stdout, "  Dispatch never pushes to main (PR-only).\n")
 
+	// The render itself succeeded — rendered is true from here on
+	// regardless of what ensureCanonicalDispatchLabels does below; a
+	// label-reconciliation failure is a distinct, orthogonal obligation
+	// (cnos#493), not evidence the render didn't happen.
 	if err := ensureCanonicalDispatchLabels(ctx, opts); err != nil {
 		fmt.Fprintf(opts.Stderr, "✗ %s\n", err)
-		return err
+		return true, err
 	}
-	return nil
+	return true, nil
 }
 
 // ensureCanonicalDispatchLabels ensures every canonical label in
@@ -571,6 +616,127 @@ func applyInstall(ctx context.Context, opts Options, manifest pkg.Manifest, idxP
 	}
 
 	return nil
+}
+
+// writeRepoState builds and writes .cn/repo.state.json (schema
+// cn.repo.state.v1) — the cnos#656 Phase-1 managed-surface ledger. Called
+// once, at the end of Run's non-dry-run path, after every write this run
+// performs (applyInstall's base install + runDispatchCds's optional
+// workflow render) has already landed on disk. Every managed_files sha256
+// is a content hash of the file read back from opts.RepoRoot, never
+// recomputed from in-memory state — so the ledger is always an accurate
+// description of what is actually on disk, and a same-input rerun (same
+// packages, same release, same dispatch flags) produces byte-identical
+// deps.json/deps.lock.json/gitignore/workflow content and therefore a
+// byte-identical ledger (RepoState.Marshal's own Path-sort makes the
+// managed_files/managed_dirs ORDER deterministic on top of that).
+//
+// Running `cn repo install` again on a repo with no prior
+// .cn/repo.state.json backfills one — this is A3's "backfill on next
+// install" for every lifecycle-write command that exists today (`update`/
+// `repair` do not exist yet; see gamma-scaffold.md "Non-goals").
+func writeRepoState(opts Options, manifest pkg.Manifest, repo, dlBase, releaseTag string) error {
+	source := repostate.Source{Channel: "stable", Release: releaseTag}
+	if opts.IndexPath != "" {
+		source.Channel = "index"
+		source.Index = opts.IndexPath
+	} else {
+		source.Index = fmt.Sprintf("%s/%s/releases/download/%s/index.json", dlBase, repo, releaseTag)
+	}
+
+	var managedFiles []repostate.ManagedFile
+
+	depsJSONSHA, err := sha256File(filepath.Join(opts.RepoRoot, ".cn", "deps.json"))
+	if err != nil {
+		return err
+	}
+	managedFiles = append(managedFiles, repostate.ManagedFile{
+		Path: ".cn/deps.json", Kind: repostate.KindManifest, ID: "deps-manifest", SHA256: depsJSONSHA,
+	})
+
+	depsLockSHA, err := sha256File(filepath.Join(opts.RepoRoot, ".cn", "deps.lock.json"))
+	if err != nil {
+		return err
+	}
+	managedFiles = append(managedFiles, repostate.ManagedFile{
+		Path: ".cn/deps.lock.json", Kind: repostate.KindLockfile, ID: "deps-lockfile", SHA256: depsLockSHA,
+	})
+
+	gitignoreSHA, err := sha256File(filepath.Join(opts.RepoRoot, ".gitignore"))
+	if err != nil {
+		return err
+	}
+	managedFiles = append(managedFiles, repostate.ManagedFile{
+		Path: ".gitignore", Kind: repostate.KindGitignore, ID: "gitignore", SHA256: gitignoreSHA,
+	})
+
+	if opts.Dispatch == "cds" {
+		workflowRel := ".github/workflows/cnos-cds-dispatch.yml"
+		workflowSHA, err := sha256File(dispatchWorkflowPath(opts.RepoRoot))
+		if err != nil {
+			return err
+		}
+		tier := repostate.TierAgent
+		if opts.Engine {
+			tier = repostate.TierEngine
+		}
+		agent := resolveDispatchAgent(opts.Agent)
+		patSecret := opts.WorkflowPatSecret
+		if !opts.Engine && patSecret == "" && agent == "sigma" {
+			patSecret = "SIGMA_WORKFLOW_PAT"
+		}
+		wf := repostate.ManagedFile{
+			Path: workflowRel, Kind: repostate.KindWorkflow, ID: "cnos-cds-dispatch", SHA256: workflowSHA,
+			Tier: tier, Renderer: "cnos.core/install-wake", RendererPackage: "cnos.core",
+			RendererVersionSource: "lock", Agent: agent,
+		}
+		if !opts.Engine {
+			wf.WorkflowPatSecret = patSecret
+			wf.BotName = opts.BotName
+			wf.BotID = opts.BotID
+		}
+		managedFiles = append(managedFiles, wf)
+	}
+
+	managedDirs := make([]repostate.ManagedDir, 0, len(manifest.Packages))
+	for _, dep := range manifest.Packages {
+		managedDirs = append(managedDirs, repostate.ManagedDir{
+			Path: path.Join(".cn", "vendor", "packages", dep.Name), Package: dep.Name,
+		})
+	}
+
+	state := repostate.RepoState{
+		Schema:       repostate.Schema,
+		Profile:      manifestProfile,
+		Source:       source,
+		ManagedFiles: managedFiles,
+		ManagedDirs:  managedDirs,
+		ExternalExpectations: repostate.ExternalExpectations{
+			Labels: repostate.LabelExpectations{
+				Mode: repostate.LabelModeEnsure, Source: "cnos.core/labels.json", DeleteOnUninstall: false,
+			},
+		},
+	}
+
+	data, err := state.Marshal()
+	if err != nil {
+		return fmt.Errorf("repo state: %w", err)
+	}
+	statePath := filepath.Join(opts.RepoRoot, ".cn", "repo.state.json")
+	if err := os.WriteFile(statePath, data, 0644); err != nil {
+		return fmt.Errorf("write repo.state.json: %w", err)
+	}
+	return nil
+}
+
+// sha256File returns the lowercase hex SHA-256 of path's content.
+func sha256File(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("hash %s: %w", path, err)
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:]), nil
 }
 
 // writeManifest writes .cn/deps.json deterministically: stable field
